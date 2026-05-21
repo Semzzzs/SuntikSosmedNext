@@ -1,0 +1,35 @@
+{
+  "name": "suntik-sosmed-next",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --webpack",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.106.0",
+    "@visx/curve": "^3.12.0",
+    "@visx/event": "^3.12.0",
+    "@visx/grid": "^3.12.0",
+    "@visx/responsive": "^3.12.0",
+    "@visx/scale": "^3.12.0",
+    "@visx/shape": "^3.12.0",
+    "clsx": "^2.1.1",
+    "d3-array": "^3.2.4",
+    "lucide-react": "^0.383.0",
+    "motion": "^12.39.0",
+    "next": "^16.2.6",
+    "postcss": "^8.5.15",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-use-measure": "^2.1.7",
+    "tailwind-merge": "^3.6.0"
+  },
+  "devDependencies": {
+    "@types/node": "25.9.0",
+    "eslint": "^8.57.0",
+    "eslint-config-next": "^16.2.6"
+  }
+}
