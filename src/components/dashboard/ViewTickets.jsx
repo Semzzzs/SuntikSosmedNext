@@ -16,15 +16,20 @@ export default function ViewTickets() {
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  const user = typeof window !== 'undefined' ? JSON.parse(sessionStorage.getItem('user') || '{}') : {};
+  // ✅ Fix Critical: email dari session Supabase, bukan sessionStorage yang bisa dimanipulasi
+  const getAuthEmail = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    return session?.user?.email || null;
+  };
 
   const load = async () => {
-    if (!user?.email) return;
+    const email = await getAuthEmail();
+    if (!email) return;
     setLoading(true);
     const { data } = await supabase
       .from('tickets')
       .select('*')
-      .eq('email', user.email)
+      .eq('email', email)
       .order('created_at', { ascending: false });
     setTickets(data || []);
     setLoading(false);
@@ -39,10 +44,13 @@ export default function ViewTickets() {
   const submit = async (e) => {
     e.preventDefault();
     if (!form.subject.trim() || !form.message.trim()) return;
+    // ✅ Fix Critical: ambil email dari session Supabase, bukan sessionStorage
+    const authEmail = await getAuthEmail();
+    if (!authEmail) return;
     const ticket = {
       id: `TKT-${Date.now()}`,
-      email: user.email,
-      name: user.name,
+      email: authEmail,
+      name: authEmail.split('@')[0],
       subject: form.subject.trim(),
       category: form.category,
       message: form.message.trim(),

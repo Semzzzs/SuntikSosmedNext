@@ -1,13 +1,26 @@
 import { useState, useEffect } from 'react';
-import { RefreshCw, DollarSign, Users, MinusCircle, Ban, CheckCircle } from 'lucide-react';
+import { DollarSign, Users, MinusCircle, Ban, CheckCircle } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
-async function getUserBalance(email) {
-    const { data } = await supabase.from('transactions').select('type, amount').eq('email', email);
-    if (!data) return 0;
-    const masuk = data.filter(t => ['deposit', 'bonus', 'refund'].includes(t.type)).reduce((s, t) => s + (t.amount || 0), 0);
-    const keluar = data.filter(t => t.type === 'order').reduce((s, t) => s + (t.amount || 0), 0);
-    return Math.max(0, masuk - keluar);
+// ✅ Single query untuk semua user sekaligus — bukan N query terpisah
+async function getAllBalances(emails) {
+    if (!emails.length) return {};
+    const { data } = await supabase
+        .from('transactions')
+        .select('email, type, amount')
+        .in('email', emails);
+    if (!data) return {};
+    const map = {};
+    for (const email of emails) map[email] = 0;
+    for (const t of data) {
+        if (!t.email) continue;
+        const masuk = ['deposit', 'bonus', 'refund'].includes(t.type) ? (t.amount || 0) : 0;
+        const keluar = t.type === 'order' ? (t.amount || 0) : 0;
+        map[t.email] = (map[t.email] || 0) + masuk - keluar;
+    }
+    // clamp ke 0
+    for (const k of Object.keys(map)) map[k] = Math.max(0, map[k]);
+    return map;
 }
 
 export default function AdminUsers() {
@@ -58,33 +71,44 @@ export default function AdminUsers() {
         setUsers(userList);
         setLoadingUsers(false);
 
-        // Load balances
-        const map = {};
-        await Promise.all(userList.map(async u => {
-            map[u.email] = await getUserBalance(u.email);
-        }));
+        // ✅ Single query untuk semua balance sekaligus
+        const map = await getAllBalances(userList.map(u => u.email).filter(Boolean));
         setBalances(map);
     };
 
-    useEffect(() => { load(); }, []);
+    useEffect(() => {
+        load();
+        const interval = setInterval(load, 60000);
+        return () => clearInterval(interval);
+    }, []);
 
     const toggleBlock = async (email) => {
         const user = users.find(u => u.email === email);
         if (!user) return;
         const newBlocked = !user.blocked;
-        const updated = users.map(u => u.email === email ? { ...u, blocked: newBlocked } : u);
-        setUsers(updated);
-        const blockedEmails = updated.filter(u => u.blocked).map(u => u.email);
+        // Optimistic update UI
+        setUsers(prev => prev.map(u => u.email === email ? { ...u, blocked: newBlocked } : u));
+
+        // ✅ Baca state terbaru dari Supabase dulu — hindari race condition
+        const { data: fresh } = await supabase.from('settings').select('value').eq('key', 'blocked_emails').maybeSingle();
+        const currentBlocked = fresh?.value ? JSON.parse(fresh.value) : [];
+        const updatedBlocked = newBlocked
+            ? [...new Set([...currentBlocked, email])]
+            : currentBlocked.filter(e => e !== email);
+
         await supabase.from('settings').upsert({
             key: 'blocked_emails',
-            value: JSON.stringify(blockedEmails),
+            value: JSON.stringify(updatedBlocked),
             updated_at: new Date().toISOString()
         });
     };
 
     const handleSaldo = async () => {
         const val = parseInt(amount);
-        if (!val || val <= 0) return;
+        // ✅ Validasi lebih ketat
+        if (!val || val <= 0 || !isFinite(val)) return;
+        if (val > 100_000_000) { setMsg('❌ Maksimal top up Rp 100.000.000 per transaksi'); return; }
+
         setLoading(true);
         const curBalance = balances[modal.email] || 0;
         if (modal.type === 'kurang' && val > curBalance) {
@@ -107,10 +131,9 @@ export default function AdminUsers() {
                 ? `✅ +Rp ${val.toLocaleString('id-ID')} berhasil ditambahkan`
                 : `✅ -Rp ${val.toLocaleString('id-ID')} berhasil dikurangi`
             );
-            setBalances(b => ({
-                ...b,
-                [modal.email]: modal.type === 'add' ? curBalance + val : curBalance - val
-            }));
+            // ✅ Refresh balance user ini saja
+            const updated = await getAllBalances([modal.email]);
+            setBalances(prev => ({ ...prev, ...updated }));
         }
         setAmount('');
         setLoading(false);
@@ -124,9 +147,6 @@ export default function AdminUsers() {
                     <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text)', marginBottom: 3 }}>User Management</h1>
                     <p style={{ fontSize: 13.5, color: 'var(--text2)' }}>{users.length} user terdaftar.</p>
                 </div>
-                <button className="btn btn-outline" onClick={load} style={{ height: 38, padding: '0 14px', borderRadius: 9, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <RefreshCw size={13} /> Refresh
-                </button>
             </div>
 
             {modal && (

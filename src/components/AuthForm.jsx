@@ -34,7 +34,7 @@ export default function AuthForm({ type }) {
       redirectTo: `${window.location.origin}/reset-password`,
     });
     setResetLoading(false);
-    if (err) return setError(err.message);
+    if (err) return setError('Gagal mengirim email. Pastikan email terdaftar dan coba lagi.');
     setResetSent(true);
   };
 
@@ -54,7 +54,15 @@ export default function AuthForm({ type }) {
         options: { data: { name: form.name.trim() } },
       });
 
-      if (err) { setLoading(false); return setError(err.message); }
+      // ✅ Fix: jangan expose raw Supabase error ke UI
+      if (err) {
+        setLoading(false);
+        const msg = err.message?.toLowerCase();
+        if (msg?.includes('already registered') || msg?.includes('already exists')) {
+          return setError('Email sudah terdaftar. Silakan login.');
+        }
+        return setError('Registrasi gagal. Coba lagi.');
+      }
 
       const user = data.user || data.session?.user;
       if (!user) {
@@ -62,51 +70,51 @@ export default function AuthForm({ type }) {
         return setError('Cek email kamu untuk konfirmasi akun, lalu login.');
       }
 
+      // ✅ Fix: sessionStorage hanya simpan data non-sensitif untuk UI (nama, initials)
+      // Email/ID untuk operasi database selalu diambil dari supabase.auth.getSession()
       const name = form.name.trim();
       sessionStorage.setItem('user', JSON.stringify({
-        name, email: user.email,
+        name,
         initials: (name[0] + (name.split(' ')[1]?.[0] || '')).toUpperCase(),
-        id: user.id,
       }));
 
-      const users = JSON.parse(localStorage.getItem('admin_users') || '[]');
-      if (!users.find(u => u.email === user.email)) {
-        users.push({ name, email: user.email, createdAt: new Date().toISOString(), id: user.id });
-        localStorage.setItem('admin_users', JSON.stringify(users));
-      }
+      // ✅ Fix: hapus admin_users localStorage — admin panel sudah pakai Supabase langsung
+      // Menyimpan user list di localStorage tidak aman dan tidak akurat
 
       router.push('/login?registered=1');
 
     } else {
-      const { data: blockData } = await supabase.from('settings').select('value').eq('key', 'blocked_emails').maybeSingle();
-      if (blockData?.value) {
-        const blockedEmails = JSON.parse(blockData.value);
-        if (blockedEmails.includes(form.email)) {
-          setLoading(false);
-          return setError('Akun kamu telah diblokir. Hubungi admin untuk informasi lebih lanjut.');
-        }
+      // ✅ Fix Critical: blocked check dipindah ke server-side via /api/auth/login
+      // Client-side check (query Supabase dari browser) mudah di-bypass lewat DevTools/console
+      const loginRes = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: form.email, password: form.password }),
+      });
+      const loginData = await loginRes.json();
+
+      if (!loginRes.ok) {
+        setLoading(false);
+        return setError(loginData.error || 'Email atau password salah.');
       }
 
-      const { data, error: err } = await supabase.auth.signInWithPassword({
-        email: form.email,
-        password: form.password,
-      });
+      // Set Supabase session dari token yang dikembalikan server
+      if (loginData.access_token) {
+        await supabase.auth.setSession({
+          access_token: loginData.access_token,
+          refresh_token: loginData.refresh_token,
+        });
+      }
 
-      if (err) { setLoading(false); return setError('Email atau password salah.'); }
-
-      const user = data.user;
-      const name = user.user_metadata?.name || user.email.split('@')[0];
+      // ✅ Fix: sessionStorage hanya simpan data non-sensitif untuk UI (nama, initials)
+      // Email/ID untuk operasi database selalu dari supabase.auth.getSession()
+      const name = loginData.user?.name || form.email.split('@')[0];
       sessionStorage.setItem('user', JSON.stringify({
-        name, email: user.email,
+        name,
         initials: (name[0] + (name.split(' ')[1]?.[0] || '')).toUpperCase(),
-        id: user.id,
       }));
 
-      const users = JSON.parse(localStorage.getItem('admin_users') || '[]');
-      if (!users.find(u => u.email === user.email)) {
-        users.push({ name, email: user.email, createdAt: user.created_at || new Date().toISOString(), id: user.id });
-        localStorage.setItem('admin_users', JSON.stringify(users));
-      }
+      // ✅ Fix: hapus admin_users localStorage — tidak aman dan tidak akurat
 
       router.push('/dashboard');
     }

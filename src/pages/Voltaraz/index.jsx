@@ -1,11 +1,11 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/router';
 import {
-    Target, LogOut, Moon, Sun, BarChart2, Package, Settings,
-    Users, DollarSign, RefreshCw, ChevronRight, Menu, ChevronLeft,
-    Layers, Activity, AlertCircle, CheckCircle, X, Search,
-    ShoppingCart, TrendingUp, Zap, Globe, Key, ArrowUpRight,
-    Filter, Eye, Clock, Database, Percent, Save, Trash2, MessageSquare, Megaphone
+    Target, LogOut, Moon, Sun, BarChart2, Settings,
+    Users, DollarSign, ChevronRight, Menu, ChevronLeft,
+    Layers, AlertCircle, CheckCircle, X, Search,
+    ShoppingCart, TrendingUp, Zap, ArrowUpRight,
+    Percent, Save, Trash2, MessageSquare, Megaphone
 } from 'lucide-react';
 import { useTheme } from '@/context/ThemeContext';
 import { useApi } from '@/context/ApiContext';
@@ -13,16 +13,17 @@ import { AreaChart, Area, Grid, XAxis, ChartTooltip } from '@/components/ui/area
 import AdminTickets from '@/components/admin/AdminTickets';
 import AdminUsers from '@/components/admin/AdminUsers';
 import AdminDeposits from '@/components/admin/AdminDeposits';
+// supabase dipakai untuk fetchOrders (query transactions dari client dengan anon key)
+// Pastikan RLS aktif di tabel transactions agar admin bisa baca semua row
 import { supabase } from '@/lib/supabase';
 import AdminAnnouncement from '@/components/admin/AdminAnnouncement';
-
-const MARKUP_KEY = 'admin_markup';
 
 export default function AdminPanel() {
     const router = useRouter();
     const { dark, toggle } = useTheme();
     const { apiUrl, apiKey } = useApi();
     const [authed, setAuthed] = useState(false);
+    const [authChecked, setAuthChecked] = useState(false);
     const [adminUser, setAdminUser] = useState('');
     const [adminPass, setAdminPass] = useState('');
     const [passError, setPassError] = useState('');
@@ -45,11 +46,11 @@ export default function AdminPanel() {
     const [markupSaved, setMarkupSaved] = useState(false);
     const [users, setUsers] = useState([]);
     const [chartRange, setChartRange] = useState('30d');
-    const [saldoModal, setSaldoModal] = useState(null);
-    const [saldoAmount, setSaldoAmount] = useState('');
-    const [lastRefresh, setLastRefresh] = useState(null);
-    const [nextRefresh, setNextRefresh] = useState(300);
-    const REFRESH_INTERVAL = 300; // 5 menit
+    const [apiStatus, setApiStatus] = useState('unknown');
+    const [dbOrders, setDbOrders] = useState([]); // orders dari Supabase (akurat, semua user)
+    const [servicePage, setServicePage] = useState(0); // pagination services
+    const SERVICES_PER_PAGE = 100;
+    const rangeDropdownRef = useRef(null); // close-on-outside-click
 
     const RANGE_OPTIONS = [
         { label: 'Last 7 days', value: '7d', days: 7 },
@@ -65,40 +66,23 @@ export default function AdminPanel() {
         const now = new Date();
         const data = [];
 
-        // Ambil order nyata dari session, build per-hari
-        const ordersByDate = {};
-        if (typeof window !== 'undefined') {
-            // Baca order IDs dari localStorage (persistent)
-            let ids = [];
-            for (let i = 0; i < localStorage.length; i++) {
-                const key = localStorage.key(i);
-                if (key && key.startsWith('smm_orders_')) {
-                    try {
-                        const userOrders = JSON.parse(localStorage.getItem(key) || '[]');
-                        ids = [...ids, ...userOrders.map(o => typeof o === 'object' ? o.orderId : o)];
-                    } catch { }
-                }
-            }
-            const sessionIds = JSON.parse(sessionStorage.getItem('smm_order_ids') || '[]');
-            ids = [...new Set([...ids, ...sessionIds])];
-            // orders state sudah ada, gunakan itu
-        }
-
         for (let i = days - 1; i >= 0; i--) {
             const d = new Date(now);
             d.setDate(d.getDate() - i);
             d.setHours(0, 0, 0, 0);
             const dateKey = d.toISOString().slice(0, 10);
 
-            // Hitung order real pada tanggal ini
-            const dayOrders = orders.filter(o => {
-                if (!o.created_at && !o.date) return false;
-                const od = new Date(o.created_at || o.date);
-                return od.toISOString().slice(0, 10) === dateKey;
+            const dayOrders = dbOrders.filter(o => {
+                if (!o.created_at) return false;
+                return new Date(o.created_at).toISOString().slice(0, 10) === dateKey;
             });
-            const dayRevenue = dayOrders.reduce((s, o) => s + Math.round(parseFloat(o.charge || 0) * rate * markup), 0);
+            const dayRevenue = dayOrders.reduce((s, o) => {
+                if (o.charge && parseFloat(o.charge) > 0) {
+                    return s + Math.round(parseFloat(o.charge) * rate * markup);
+                }
+                return s + Math.round(parseFloat(o.amount || 0));
+            }, 0);
 
-            // Hitung user baru pada tanggal ini
             const dayUsers = users.filter(u => {
                 if (!u.createdAt) return false;
                 return new Date(u.createdAt).toISOString().slice(0, 10) === dateKey;
@@ -107,40 +91,58 @@ export default function AdminPanel() {
             data.push({
                 date: d,
                 revenue: dayRevenue,
-                newUsers: dayUsers,
                 _rawUsers: dayUsers,
+                newUsers: dayUsers, // akan dinormalisasi di bawah
             });
         }
+
+        // ✅ Normalisasi newUsers ke skala revenue supaya terlihat di chart
+        // Tooltip tetap pakai _rawUsers (nilai asli)
+        const maxRevenue = Math.max(...data.map(d => d.revenue), 1);
+        const maxUsers = Math.max(...data.map(d => d._rawUsers), 1);
+        const scale = (maxRevenue * 0.6) / maxUsers; // tampilkan max di 60% tinggi chart
+        data.forEach(d => { d.newUsers = Math.round(d._rawUsers * scale); });
+
         return data;
     };
 
+    // ✅ Helper: panggil /api/admin-api dengan JWT token
+    // Didefinisikan di sini agar bisa dipakai loadUsers, fetchOrders, toggleBlock, dll.
+    const adminFetch = (path, options = {}) => {
+        const token = sessionStorage.getItem('admin_token') || '';
+        return fetch(path, {
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`,
+                ...(options.headers || {}),
+            },
+        });
+    };
+
     const loadUsers = async () => {
-        const { data: blockData } = await supabase.from('settings').select('value').eq('key', 'blocked_emails').maybeSingle();
-        const blockedEmails = blockData?.value ? JSON.parse(blockData.value) : [];
-        const { data: txData } = await supabase.from('transactions').select('email, created_at').order('created_at', { ascending: true });
-        const seen = new Set();
-        const userList = (txData || []).filter(t => {
-            if (!t.email || seen.has(t.email)) return false;
-            seen.add(t.email);
-            return true;
-        }).map(t => ({
-            email: t.email,
-            name: t.email?.split('@')[0],
-            createdAt: t.created_at,
-            blocked: blockedEmails.includes(t.email),
-        }));
-        setUsers(userList);
+        // ✅ Tidak lagi direct ke Supabase — lewat server-side API yang verifikasi JWT
+        const res = await adminFetch('/api/admin-api?action=get_users');
+        if (res.status === 401) { logout(); return; }
+        const data = await res.json();
+        if (data.users) setUsers(data.users);
     };
 
     useEffect(() => {
-        if (typeof window !== 'undefined') {
-            if (sessionStorage.getItem('admin_authed') === 'true') setAuthed(true);
+        // ✅ Cek auth di client-side saja — hindari hydration mismatch
+        const isAuthed = sessionStorage.getItem('admin_authed') === 'true' &&
+            !!sessionStorage.getItem('admin_token');
+        setAuthed(isAuthed);
+        setAuthChecked(true);
+        // ✅ Load markup via server-side API (bukan direct Supabase dari client)
+        if (isAuthed) {
+            adminFetch('/api/admin-api?action=get_markup')
+                .then(r => r.json())
+                .then(data => {
+                    if (data?.value) { setMarkup(parseFloat(data.value)); setMarkupInput(data.value); }
+                })
+                .catch(() => { });
         }
-        // Load markup dari Supabase
-        supabase.from('settings').select('value').eq('key', 'markup').maybeSingle()
-            .then(({ data }) => {
-                if (data?.value) { setMarkup(parseFloat(data.value)); setMarkupInput(data.value); }
-            });
     }, []);
 
     useEffect(() => {
@@ -169,62 +171,90 @@ export default function AdminPanel() {
         }
     };
 
-    const logout = () => { sessionStorage.removeItem('admin_authed'); router.push('/'); };
+    const logout = () => {
+        sessionStorage.removeItem('admin_authed');
+        sessionStorage.removeItem('admin_token');
+        router.push('/');
+    };
 
     const fetchBalance = useCallback(async () => {
-        if (!apiUrl) return;
+        // ✅ Fix: hapus guard apiUrl — admin pakai /api/smm yang baca SMM_API_URL dari env server-side
+        // Tidak perlu nunggu apiUrl dari ApiContext yang load async dari Supabase
         setLoadingBalance(true);
         try {
-            const res = await fetch('/api/smm?action=balance', { headers: { 'x-admin-secret': process.env.NEXT_PUBLIC_ADMIN_SECRET || sessionStorage.getItem('admin_token') || '' } });
+            const res = await fetch('/api/smm?action=balance', {
+                headers: { 'Authorization': `Bearer ${sessionStorage.getItem('admin_token') || ''}` }
+            });
             const data = await res.json();
-            if (data.balance !== undefined) setBalance(parseFloat(data.balance));
-        } catch (e) { setOverviewError(e.message); }
+            if (data.balance !== undefined) {
+                setBalance(parseFloat(data.balance));
+                setApiStatus('ok');
+            } else {
+                setApiStatus('error');
+                setOverviewError(prev => data.error || prev || 'Gagal mengambil balance dari provider.');
+            }
+        } catch (e) {
+            setOverviewError(e.message);
+            setApiStatus('error');
+        }
         setLoadingBalance(false);
     }, [apiUrl]);
 
     const fetchServices = useCallback(async () => {
-        if (!apiUrl) return;
+        // ✅ Fix: hapus guard apiUrl — /api/smm sudah baca SMM_API_KEY dari env server-side
         setLoadingServices(true);
         try {
-            const res = await fetch('/api/smm?action=services', { headers: { 'x-admin-secret': sessionStorage.getItem('admin_token') || '' } });
+            const res = await fetch('/api/smm?action=services', { headers: { 'Authorization': `Bearer ${sessionStorage.getItem('admin_token') || ''}` } });
             const data = await res.json();
             if (Array.isArray(data)) setServices(data);
-        } catch (e) { }
+            else setOverviewError('Gagal memuat daftar services dari provider.');
+        } catch (e) {
+            setOverviewError(`Services error: ${e.message}`);
+        }
         setLoadingServices(false);
     }, [apiUrl]);
 
     const fetchOrders = useCallback(async () => {
-        if (!apiUrl) return;
         setLoadingOrders(true);
         try {
-            // Kumpulkan semua order IDs dari semua user (localStorage persistent)
-            let ids = [];
-            if (typeof window !== 'undefined') {
-                // Baca dari semua smm_orders_* keys
-                for (let i = 0; i < localStorage.length; i++) {
-                    const key = localStorage.key(i);
-                    if (key && key.startsWith('smm_orders_')) {
-                        try {
-                            const userOrders = JSON.parse(localStorage.getItem(key) || '[]');
-                            ids = [...ids, ...userOrders.map(o => typeof o === 'object' ? o.orderId : o)];
-                        } catch { }
-                    }
-                }
-                // Backward compat: juga baca dari sessionStorage
-                const sessionIds = JSON.parse(sessionStorage.getItem('smm_order_ids') || '[]');
-                ids = [...new Set([...ids, ...sessionIds])];
+            // ✅ Ambil orders dari Supabase — akurat, semua user, persisten
+            const { data: txData, error: txError } = await supabase
+                .from('transactions')
+                .select('*')
+                // ✅ Hanya ambil SMM orders
+                .eq('type', 'order')
+                .order('created_at', { ascending: false });
+
+            if (!txError && txData) {
+                setDbOrders(txData);
+                // Map ke format orders untuk tabel (gunakan field Supabase)
+                setOrders(txData.map(t => ({
+                    id: t.order_id || t.id,
+                    status: t.status || 'pending',
+                    charge: t.charge || (t.amount_usd) || (t.amount ? t.amount / ((t._rate || 17687) * (t._markup || 1)) : 0),
+                    amount_idr: t.amount || 0,
+                    start_count: t.start_count,
+                    remains: t.remains,
+                    created_at: t.created_at,
+                    email: t.email,
+                    service: t.service_id || t.service || t.description,
+                    description: t.description,
+                })));
             }
-            if (ids.length === 0) { setOrders([]); setLoadingOrders(false); return; }
-            const res = await fetch(`/api/smm?action=status&orders=${ids.slice(0, 100).join(',')}`, { headers: { 'x-admin-secret': sessionStorage.getItem('admin_token') || '' } });
-            const data = await res.json();
-            if (data && typeof data === 'object' && !data.error) {
-                setOrders(Object.entries(data).map(([id, info]) => ({ id, ...info })));
+
+            // ✅ Fallback localStorage dihapus:
+            // Data dari browser storage tidak bisa dipercaya sebagai sumber kebenaran bisnis.
+            // Jika Supabase kosong, tampilkan state kosong. Admin perlu cek langsung ke provider.
+            if (!txData || txData.length === 0) {
+                setOrders([]);
+                setDbOrders([]);
             }
-        } catch (e) { }
+        } catch (e) {
+            setOverviewError(e.message);
+        }
         setLoadingOrders(false);
     }, [apiUrl]);
 
-    const refreshUsers = () => { loadUsers(); };
 
     useEffect(() => {
         if (!authed) return;
@@ -232,23 +262,15 @@ export default function AdminPanel() {
             fetchBalance();
             fetchServices();
             fetchOrders();
-            refreshUsers();
-            setLastRefresh(new Date());
-            setNextRefresh(300);
+            loadUsers();
         };
         doRefresh();
         const interval = setInterval(doRefresh, 300 * 1000);
-        const countdown = setInterval(() => {
-            setNextRefresh(prev => prev > 0 ? prev - 1 : 300);
-        }, 1000);
-        return () => { clearInterval(interval); clearInterval(countdown); };
-    }, [authed]);
+        return () => clearInterval(interval);
+    }, [authed, fetchBalance, fetchServices, fetchOrders]);
 
-    const updateUserSaldo = (email, amount, mode) => {
-        setSaldoModal(null);
-        setSaldoAmount('');
-        loadUsers();
-    };
+    // saldo update dipanggil dari AdminUsers child component — reload users setelah update
+    const onSaldoUpdated = () => { loadUsers(); };
 
     const toggleBlock = async (email) => {
         const user = users.find(u => u.email === email);
@@ -256,10 +278,10 @@ export default function AdminPanel() {
         const updated = users.map(u => u.email === email ? { ...u, blocked: !u.blocked } : u);
         setUsers(updated);
         const blockedEmails = updated.filter(u => u.blocked).map(u => u.email);
-        await supabase.from('settings').upsert({
-            key: 'blocked_emails',
-            value: JSON.stringify(blockedEmails),
-            updated_at: new Date().toISOString()
+        // ✅ Lewat server-side API — bukan direct Supabase
+        await adminFetch('/api/admin-api?action=toggle_block', {
+            method: 'POST',
+            body: JSON.stringify({ email, blocked_emails: blockedEmails }),
         });
     };
 
@@ -267,19 +289,57 @@ export default function AdminPanel() {
         const val = parseFloat(markupInput);
         if (isNaN(val) || val < 1) return;
         setMarkup(val);
-        // Simpan ke Supabase
-        await supabase.from('settings').upsert({ key: 'markup', value: String(val), updated_at: new Date().toISOString() });
+        // ✅ Simpan via server-side API — bukan direct Supabase
+        const res = await adminFetch('/api/admin-api?action=save_markup', {
+            method: 'POST',
+            body: JSON.stringify({ value: val }),
+        });
+        if (res.status === 401) { logout(); return; }
         setMarkupSaved(true);
         setTimeout(() => setMarkupSaved(false), 2000);
     };
 
-    const deleteUser = (email) => {
+    const deleteUser = async (email) => {
+        if (!confirm(`Hapus semua data transaksi user ${email}? Tindakan ini tidak bisa dibatalkan.`)) return;
         const updated = users.filter(u => u.email !== email);
         setUsers(updated);
+        // ✅ Hapus via server-side API — menghapus transactions + Supabase Auth user
+        const res = await adminFetch('/api/admin-api?action=delete_user', {
+            method: 'POST',
+            body: JSON.stringify({ email }),
+        });
+        if (res.status === 401) { logout(); return; }
     };
 
     const fIDR = (usd) => `Rp ${Math.round((usd || 0) * rate).toLocaleString('id-ID')}`;
     const fIDRMarkup = (usd) => `Rp ${Math.round((usd || 0) * rate * markup).toLocaleString('id-ID')}`;
+
+    // ✅ Export CSV helper
+    const exportCSV = (data, filename) => {
+        if (!data.length) return;
+        const keys = Object.keys(data[0]);
+        const csv = [
+            keys.join(','),
+            ...data.map(row => keys.map(k => `"${String(row[k] ?? '').replace(/"/g, '""')}"`).join(','))
+        ].join('\n');
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = filename; a.click();
+        URL.revokeObjectURL(url);
+    };
+
+    // ✅ Close range dropdown on click-outside
+    useEffect(() => {
+        if (!rangeDropdownOpen) return;
+        const handler = (e) => {
+            if (rangeDropdownRef.current && !rangeDropdownRef.current.contains(e.target)) {
+                setRangeDropdownOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handler);
+        return () => document.removeEventListener('mousedown', handler);
+    }, [rangeDropdownOpen]);
 
     const totalSpentUSD = orders.reduce((s, o) => s + parseFloat(o.charge || 0), 0);
     const totalRevenueIDR = Math.round(totalSpentUSD * rate * markup);
@@ -307,6 +367,10 @@ export default function AdminPanel() {
         { id: 'Settings', icon: <Settings size={16} />, color: 'var(--text3)' },
     ];
 
+
+    // ── LOADING (auth check belum selesai) ──
+    // Penting: server dan client harus render hal yang sama saat hydration
+    if (!authChecked) return null;
 
     // ── LOGIN ──
     if (!authed) {
@@ -356,7 +420,7 @@ export default function AdminPanel() {
                         <div style={{ fontSize: 14, fontWeight: 800, color: '#fff' }}>Full Access</div>
                         <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 5 }}>
                             <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#4ADE80' }} />
-                            <span style={{ fontSize: 11, color: 'rgba(255,255,255,.7)', fontWeight: 600 }}>smmsoc.com</span>
+                            <span style={{ fontSize: 11, color: 'rgba(255,255,255,.7)', fontWeight: 600 }}>{apiUrl ? new URL(apiUrl).hostname : 'smmsoc.com'}</span>
                         </div>
                     </div>
                 </div>
@@ -404,30 +468,10 @@ export default function AdminPanel() {
                     <ChevronRight size={13} style={{ color: 'var(--text3)' }} />
                     <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>{menu}</span>
                     <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--green)', background: 'var(--green-l)', padding: '4px 12px', borderRadius: 20, display: 'flex', alignItems: 'center', gap: 5 }}>
-                            <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--green)' }} /> API Connected
+                        <div style={{ fontSize: 12, fontWeight: 700, color: apiStatus === 'error' ? 'var(--red)' : apiStatus === 'ok' ? 'var(--green)' : 'var(--text3)', background: apiStatus === 'error' ? 'var(--red-l)' : apiStatus === 'ok' ? 'var(--green-l)' : 'var(--bg2)', padding: '4px 12px', borderRadius: 20, display: 'flex', alignItems: 'center', gap: 5 }}>
+                            <div style={{ width: 6, height: 6, borderRadius: '50%', background: apiStatus === 'error' ? 'var(--red)' : apiStatus === 'ok' ? 'var(--green)' : 'var(--text3)' }} />
+                            {apiStatus === 'error' ? 'API Error' : apiStatus === 'ok' ? 'API Connected' : 'Checking...'}
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            {/* Countdown ring */}
-                            <div style={{ width: 30, height: 30, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                <svg viewBox="0 0 30 30" style={{ position: 'absolute', inset: 0, transform: 'rotate(-90deg)' }}>
-                                    <circle cx="15" cy="15" r="12" fill="none" stroke="var(--border)" strokeWidth="2.5" />
-                                    <circle cx="15" cy="15" r="12" fill="none" stroke="var(--blue)" strokeWidth="2.5"
-                                        strokeDasharray={`${2 * Math.PI * 12}`}
-                                        strokeDashoffset={`${2 * Math.PI * 12 * (nextRefresh / 300)}`}
-                                        strokeLinecap="round"
-                                        style={{ transition: 'stroke-dashoffset 1s linear' }} />
-                                </svg>
-                                <RefreshCw size={11} style={{ color: 'var(--blue)', position: 'relative', zIndex: 1 }} />
-                            </div>
-                            <span style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--text3)', minWidth: 30, fontFamily: "'JetBrains Mono',monospace" }}>
-                                {Math.floor(nextRefresh / 60)}:{String(nextRefresh % 60).padStart(2, '0')}
-                            </span>
-                        </div>
-                        <button onClick={() => { fetchBalance(); fetchServices(); fetchOrders(); refreshUsers(); setLastRefresh(new Date()); setNextRefresh(300); }}
-                            style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 8, padding: '6px 12px', cursor: 'pointer', color: 'var(--text3)', display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600, fontFamily: "'Plus Jakarta Sans',sans-serif" }}>
-                            <RefreshCw size={12} /> Refresh
-                        </button>
                     </div>
                 </div>
 
@@ -441,12 +485,19 @@ export default function AdminPanel() {
                                 <p style={{ fontSize: 13.5, color: 'var(--text2)' }}>Data real-time dari smmsoc.com API.</p>
                             </div>
 
-                            {/* Stat cards — sama style dengan user dashboard */}
+                            {/* ✅ Error banner */}
+                            {overviewError && (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: 'var(--red-l)', border: '1px solid rgba(239,68,68,.25)', borderRadius: 10, marginBottom: 16, fontSize: 13, color: 'var(--red)', fontWeight: 600 }}>
+                                    <AlertCircle size={15} style={{ flexShrink: 0 }} />
+                                    {overviewError}
+                                    <button onClick={() => setOverviewError('')} style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--red)' }}><X size={14} /></button>
+                                </div>
+                            )}
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16, marginBottom: 20 }}>
                                 {[
-                                    { label: 'Provider Balance', value: balance !== null ? `$${balance?.toFixed(2)}` : '...', sub: balance !== null ? fIDR(balance) : 'Loading...', icon: <DollarSign size={20} />, iconBg: 'var(--blue-l)', iconColor: 'var(--blue)', badge: '+0%' },
-                                    { label: 'Total Services', value: services.length || '...', sub: `${[...new Set(services.map(s => s.category))].length} kategori`, icon: <Layers size={20} />, iconBg: 'var(--green-l)', iconColor: 'var(--green)', badge: `${services.length} services` },
-                                    { label: 'Session Orders', value: orders.length, sub: `${orders.filter(o => o.status?.toLowerCase() === 'completed').length} completed`, icon: <ShoppingCart size={20} />, iconBg: 'var(--yellow-l)', iconColor: 'var(--yellow)', badge: '0 active' },
+                                    { label: 'Provider Balance', value: loadingBalance ? '...' : balance !== null ? `$${balance?.toFixed(2)}` : '—', sub: loadingBalance ? 'Memuat...' : balance !== null ? fIDR(balance) : 'Gagal memuat', icon: <DollarSign size={20} />, iconBg: 'var(--blue-l)', iconColor: 'var(--blue)', badge: apiStatus === 'ok' ? 'Live' : apiStatus === 'error' ? 'Error' : '...' },
+                                    { label: 'Total Services', value: services.length || '...', sub: `${[...new Set(services.map(s => s.category))].length} kategori`, icon: <Layers size={20} />, iconBg: 'var(--green-l)', iconColor: 'var(--green)', badge: `${services.length} layanan` },
+                                    { label: 'Total Orders', value: orders.length, sub: `${orders.filter(o => o.status?.toLowerCase() === 'completed').length} completed`, icon: <ShoppingCart size={20} />, iconBg: 'var(--yellow-l)', iconColor: 'var(--yellow)', badge: `${orders.filter(o => o.status?.toLowerCase() === 'processing').length} aktif` },
                                     { label: 'Markup Aktif', value: `${markup}x`, sub: `+${Math.round((markup - 1) * 100)}% keuntungan`, icon: <Percent size={20} />, iconBg: 'rgba(233,30,99,.1)', iconColor: '#E91E63', badge: 'Persistent' },
                                 ].map((s, i) => (
                                     <div key={s.label} className="card" style={{ padding: 20 }}>
@@ -463,7 +514,7 @@ export default function AdminPanel() {
 
                             {/* Revenue Summary */}
                             <div className="card" style={{ padding: 22, marginBottom: 20 }}>
-                                <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text)', marginBottom: 16 }}>Revenue Summary (Session)</div>
+                                <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text)', marginBottom: 16 }}>Revenue Summary (Semua Order)</div>
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14 }}>
                                     {[
                                         { l: 'Modal (Harga Provider)', v: `$${totalSpentUSD.toFixed(4)}`, v2: fIDR(totalSpentUSD), c: 'var(--red)' },
@@ -486,7 +537,7 @@ export default function AdminPanel() {
                                     {[
                                         { l: 'Services Loaded', v: services.length, c: 'var(--blue)' },
                                         { l: 'Categories', v: [...new Set(services.map(s => s.category))].length, c: 'var(--blue)' },
-                                        { l: 'Orders This Session', v: orders.length, c: 'var(--text)' },
+                                        { l: 'Total Orders', v: orders.length, c: 'var(--text)' },
                                         { l: 'Completed Orders', v: orders.filter(o => o.status?.toLowerCase() === 'completed').length, c: 'var(--green)' },
                                         { l: 'Active Orders', v: orders.filter(o => o.status?.toLowerCase() === 'processing').length, c: 'var(--yellow)' },
                                     ].map(r => (
@@ -524,24 +575,37 @@ export default function AdminPanel() {
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                                 <div>
                                     <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text)', marginBottom: 3 }}>Orders</h1>
-                                    <p style={{ fontSize: 13.5, color: 'var(--text2)' }}>{orders.length} order di session ini.</p>
+                                    <p style={{ fontSize: 13.5, color: 'var(--text2)' }}>{orders.length} total order · semua user.</p>
                                 </div>
-                                <button className="btn btn-outline" onClick={fetchOrders} disabled={loadingOrders} style={{ height: 38, padding: '0 14px', borderRadius: 9, fontSize: 13 }}>
-                                    <RefreshCw size={13} style={{ animation: loadingOrders ? 'spin .7s linear infinite' : 'none' }} /> Refresh
-                                </button>
+                                <div style={{ display: 'flex', gap: 8 }}>
+                                    {orders.length > 0 && (
+                                        <button className="btn btn-outline" onClick={() => exportCSV(orders.map(o => ({
+                                            order_id: o.id,
+                                            email: o.email || '—',
+                                            status: o.status || 'pending',
+                                            start_count: o.start_count || '',
+                                            remains: o.remains || '',
+                                            charge_usd: parseFloat(o.charge || 0).toFixed(4),
+                                            harga_user_idr: Math.round(parseFloat(o.charge || 0) * rate * markup),
+                                            created_at: o.created_at || '',
+                                        })), `orders_${new Date().toISOString().slice(0, 10)}.csv`)} style={{ height: 30, padding: '0 10px', borderRadius: 7, fontSize: 12 }}>
+                                            <ArrowUpRight size={12} /> CSV
+                                        </button>
+                                    )}
+                                </div>
                             </div>
                             {orders.length === 0 ? (
                                 <div className="card" style={{ padding: 56, textAlign: 'center' }}>
                                     <ShoppingCart size={40} style={{ color: 'var(--text3)', marginBottom: 14 }} />
-                                    <p style={{ fontWeight: 700, fontSize: 15, color: 'var(--text)', marginBottom: 6 }}>Belum ada order di session ini</p>
-                                    <p style={{ fontSize: 13, color: 'var(--text3)' }}>Order yang dibuat via dashboard user akan muncul di sini.</p>
+                                    <p style={{ fontWeight: 700, fontSize: 15, color: 'var(--text)', marginBottom: 6 }}>Belum ada order</p>
+                                    <p style={{ fontSize: 13, color: 'var(--text3)' }}>Order dari semua user akan tampil di sini (dari Supabase).</p>
                                 </div>
                             ) : (
                                 <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
                                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                                         <thead>
                                             <tr style={{ background: 'var(--bg2)', borderBottom: '1px solid var(--border)' }}>
-                                                {['Order ID', 'Status', 'Start Count', 'Remains', 'Modal (USD)', 'Harga User (IDR)'].map(h => (
+                                                {['Order ID', 'Email', 'Layanan', 'Status', 'Harga User (IDR)', 'Tanggal'].map(h => (
                                                     <th key={h} style={{ padding: '11px 14px', textAlign: 'left', fontWeight: 700, color: 'var(--text2)', fontSize: 12 }}>{h}</th>
                                                 ))}
                                             </tr>
@@ -549,14 +613,22 @@ export default function AdminPanel() {
                                         <tbody>
                                             {orders.map((o, i) => (
                                                 <tr key={o.id} style={{ borderBottom: i < orders.length - 1 ? '1px solid var(--border)' : 'none' }}>
-                                                    <td style={{ padding: '11px 14px', fontWeight: 700, color: 'var(--blue)', fontFamily: "'JetBrains Mono',monospace" }}>#{o.id}</td>
+                                                    <td style={{ padding: '11px 14px', fontWeight: 700, color: 'var(--blue)', fontFamily: "'JetBrains Mono',monospace", fontSize: 12 }}>
+                                                        {o.order_id ? `#${o.order_id}` : `${String(o.id).slice(0, 8)}...`}
+                                                    </td>
+                                                    <td style={{ padding: '11px 14px', color: 'var(--text2)', fontSize: 12 }}>{o.email || '—'}</td>
+                                                    <td style={{ padding: '11px 14px', color: 'var(--text)', fontSize: 12, maxWidth: 220 }}>
+                                                        <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.description || o.service || '—'}</div>
+                                                    </td>
                                                     <td style={{ padding: '11px 14px' }}>
                                                         <span style={{ fontSize: 11.5, fontWeight: 700, color: statusColor(o.status), background: `${statusColor(o.status)}18`, padding: '3px 8px', borderRadius: 20, textTransform: 'capitalize' }}>{o.status || 'pending'}</span>
                                                     </td>
-                                                    <td style={{ padding: '11px 14px', color: 'var(--text2)' }}>{o.start_count || '—'}</td>
-                                                    <td style={{ padding: '11px 14px', color: 'var(--text2)' }}>{o.remains || '—'}</td>
-                                                    <td style={{ padding: '11px 14px', fontFamily: "'JetBrains Mono',monospace", color: 'var(--red)', fontWeight: 600 }}>${parseFloat(o.charge || 0).toFixed(4)}</td>
-                                                    <td style={{ padding: '11px 14px', fontWeight: 700, color: 'var(--green)' }}>{fIDRMarkup(parseFloat(o.charge || 0))}</td>
+                                                    <td style={{ padding: '11px 14px', fontWeight: 700, color: 'var(--green)' }}>
+                                                        {o.amount_idr ? `Rp ${o.amount_idr.toLocaleString('id-ID')}` : fIDRMarkup(parseFloat(o.charge || 0))}
+                                                    </td>
+                                                    <td style={{ padding: '11px 14px', color: 'var(--text3)', fontSize: 12, whiteSpace: 'nowrap' }}>
+                                                        {o.created_at ? new Date(o.created_at).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}
+                                                    </td>
                                                 </tr>
                                             ))}
                                         </tbody>
@@ -574,16 +646,28 @@ export default function AdminPanel() {
                                     <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text)', marginBottom: 3 }}>Services</h1>
                                     <p style={{ fontSize: 13.5, color: 'var(--text2)' }}>{services.length} layanan · markup {markup}x aktif</p>
                                 </div>
-                                <button className="btn btn-outline" onClick={fetchServices} disabled={loadingServices} style={{ height: 38, padding: '0 14px', borderRadius: 9, fontSize: 13 }}>
-                                    <RefreshCw size={13} style={{ animation: loadingServices ? 'spin .7s linear infinite' : 'none' }} /> Refresh
-                                </button>
+                                <div style={{ display: 'flex', gap: 8 }}>
+                                    {services.length > 0 && (
+                                        <button className="btn btn-outline" onClick={() => exportCSV(services.map(s => ({
+                                            id: s.service,
+                                            nama: s.name,
+                                            kategori: s.category,
+                                            harga_modal_idr: Math.round(parseFloat(s.rate || 0) * rate),
+                                            harga_user_idr: Math.round(parseFloat(s.rate || 0) * rate * markup),
+                                            min: s.min,
+                                            max: s.max,
+                                        })), `services_${new Date().toISOString().slice(0, 10)}.csv`)} style={{ height: 30, padding: '0 10px', borderRadius: 7, fontSize: 12 }}>
+                                            <ArrowUpRight size={12} /> CSV
+                                        </button>
+                                    )}
+                                </div>
                             </div>
                             <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
                                 <div style={{ position: 'relative', flex: 1 }}>
                                     <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text3)' }} />
-                                    <input className="inp" style={{ paddingLeft: 36 }} placeholder="Cari service..." value={serviceSearch} onChange={e => setServiceSearch(e.target.value)} />
+                                    <input className="inp" style={{ paddingLeft: 36 }} placeholder="Cari service..." value={serviceSearch} onChange={e => { setServiceSearch(e.target.value); setServicePage(0); }} />
                                 </div>
-                                <select className="inp" style={{ width: 220 }} value={serviceFilter} onChange={e => setServiceFilter(e.target.value)}>
+                                <select className="inp" style={{ width: 220 }} value={serviceFilter} onChange={e => { setServiceFilter(e.target.value); setServicePage(0); }}>
                                     {cats.map(c => <option key={c} value={c}>{c === 'All' ? 'Semua Kategori' : c}</option>)}
                                 </select>
                             </div>
@@ -597,11 +681,12 @@ export default function AdminPanel() {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {filteredSvc.slice(0, 200).map((s, i) => {
+                                        {/* ✅ Real pagination */}
+                                        {filteredSvc.slice(servicePage * SERVICES_PER_PAGE, (servicePage + 1) * SERVICES_PER_PAGE).map((s, i) => {
                                             const modalIDR = Math.round(parseFloat(s.rate || 0) * rate);
                                             const userIDR = Math.round(parseFloat(s.rate || 0) * rate * markup);
                                             return (
-                                                <tr key={s.service} style={{ borderBottom: i < filteredSvc.length - 1 ? '1px solid var(--border)' : 'none' }}>
+                                                <tr key={s.service} style={{ borderBottom: '1px solid var(--border)' }}>
                                                     <td style={{ padding: '9px 12px', fontFamily: "'JetBrains Mono',monospace", color: 'var(--text3)', fontWeight: 600, fontSize: 11.5 }}>{s.service}</td>
                                                     <td style={{ padding: '9px 12px', color: 'var(--text)', maxWidth: 280 }}>
                                                         <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12.5 }}>{s.name}</div>
@@ -616,9 +701,31 @@ export default function AdminPanel() {
                                         })}
                                     </tbody>
                                 </table>
-                                {filteredSvc.length > 200 && (
-                                    <div style={{ padding: '11px 14px', textAlign: 'center', fontSize: 12, color: 'var(--text3)', borderTop: '1px solid var(--border)' }}>
-                                        Menampilkan 200 dari {filteredSvc.length} service. Gunakan filter untuk mempersempit.
+                                {/* ✅ Pagination controls */}
+                                {filteredSvc.length > SERVICES_PER_PAGE && (
+                                    <div style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid var(--border)' }}>
+                                        <span style={{ fontSize: 12, color: 'var(--text3)' }}>
+                                            Menampilkan {servicePage * SERVICES_PER_PAGE + 1}–{Math.min((servicePage + 1) * SERVICES_PER_PAGE, filteredSvc.length)} dari {filteredSvc.length} service
+                                        </span>
+                                        <div style={{ display: 'flex', gap: 6 }}>
+                                            <button onClick={() => setServicePage(p => Math.max(0, p - 1))} disabled={servicePage === 0}
+                                                style={{ padding: '5px 12px', borderRadius: 7, border: '1px solid var(--border)', background: servicePage === 0 ? 'var(--bg2)' : 'var(--white)', color: servicePage === 0 ? 'var(--text3)' : 'var(--text)', cursor: servicePage === 0 ? 'not-allowed' : 'pointer', fontSize: 12, fontWeight: 600, fontFamily: "'Plus Jakarta Sans',sans-serif" }}>
+                                                ← Prev
+                                            </button>
+                                            {Array.from({ length: Math.ceil(filteredSvc.length / SERVICES_PER_PAGE) }, (_, idx) => idx)
+                                                .filter(idx => Math.abs(idx - servicePage) <= 2)
+                                                .map(idx => (
+                                                    <button key={idx} onClick={() => setServicePage(idx)}
+                                                        style={{ padding: '5px 10px', borderRadius: 7, border: `1px solid ${idx === servicePage ? 'var(--blue)' : 'var(--border)'}`, background: idx === servicePage ? 'var(--blue)' : 'var(--white)', color: idx === servicePage ? '#fff' : 'var(--text)', cursor: 'pointer', fontSize: 12, fontWeight: 700, fontFamily: "'Plus Jakarta Sans',sans-serif" }}>
+                                                        {idx + 1}
+                                                    </button>
+                                                ))
+                                            }
+                                            <button onClick={() => setServicePage(p => Math.min(Math.ceil(filteredSvc.length / SERVICES_PER_PAGE) - 1, p + 1))} disabled={servicePage >= Math.ceil(filteredSvc.length / SERVICES_PER_PAGE) - 1}
+                                                style={{ padding: '5px 12px', borderRadius: 7, border: '1px solid var(--border)', background: servicePage >= Math.ceil(filteredSvc.length / SERVICES_PER_PAGE) - 1 ? 'var(--bg2)' : 'var(--white)', color: servicePage >= Math.ceil(filteredSvc.length / SERVICES_PER_PAGE) - 1 ? 'var(--text3)' : 'var(--text)', cursor: servicePage >= Math.ceil(filteredSvc.length / SERVICES_PER_PAGE) - 1 ? 'not-allowed' : 'pointer', fontSize: 12, fontWeight: 600, fontFamily: "'Plus Jakarta Sans',sans-serif" }}>
+                                                Next →
+                                            </button>
+                                        </div>
                                     </div>
                                 )}
                             </div>
@@ -673,8 +780,8 @@ export default function AdminPanel() {
                                                 </div>
                                                 <div style={{ fontSize: 11.5, color: 'var(--text3)' }}>Total periode ini</div>
                                             </div>
-                                            {/* Dropdown Range Selector */}
-                                            <div style={{ position: 'relative' }}>
+                                            {/* ✅ Dropdown Range Selector — close on outside click */}
+                                            <div ref={rangeDropdownRef} style={{ position: 'relative' }}>
                                                 <button onClick={() => setRangeDropdownOpen(v => !v)}
                                                     style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 9, border: '1.5px solid var(--border)', background: 'var(--white)', cursor: 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif", fontWeight: 600, fontSize: 13, color: 'var(--text2)' }}>
                                                     {RANGE_OPTIONS.find(o => o.value === chartRange)?.label}

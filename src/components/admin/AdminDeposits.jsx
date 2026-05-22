@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { DollarSign, RefreshCw } from 'lucide-react';
+import { DollarSign } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
 export default function AdminDeposits() {
@@ -17,9 +17,23 @@ export default function AdminDeposits() {
         setLoading(false);
     };
 
-    useEffect(() => { load(); }, []);
+    // ✅ Auto-refresh setiap 60 detik
+    useEffect(() => {
+        load();
+        const interval = setInterval(load, 60000);
+        return () => clearInterval(interval);
+    }, []);
 
-    const totalDeposit = deposits.reduce((s, t) => s + (t.amount || 0), 0);
+    const totalDeposit = deposits.filter(t => t.status === 'success').reduce((s, t) => s + (t.amount || 0), 0);
+    const totalPending = deposits.filter(t => t.status === 'pending').length;
+
+    const exportCSV = () => {
+        if (!deposits.length) return;
+        const keys = ['id', 'email', 'amount', 'description', 'status', 'created_at'];
+        const csv = [keys.join(','), ...deposits.map(row => keys.map(k => `"${String(row[k] ?? '').replace(/"/g, '""')}"`).join(','))].join('\n');
+        const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(new Blob([csv], { type: 'text/csv' })), download: `deposits_${new Date().toISOString().slice(0, 10)}.csv` });
+        a.click();
+    };
 
     return (
         <div>
@@ -28,16 +42,19 @@ export default function AdminDeposits() {
                     <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text)', marginBottom: 3 }}>Riwayat Deposit</h1>
                     <p style={{ fontSize: 13.5, color: 'var(--text2)' }}>{deposits.length} transaksi deposit.</p>
                 </div>
-                <button className="btn btn-outline" onClick={load} style={{ height: 38, padding: '0 14px', borderRadius: 9, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <RefreshCw size={13} /> Refresh
-                </button>
+                {/* ✅ Hanya tombol Export CSV, lebih kecil */}
+                {deposits.length > 0 && (
+                    <button onClick={exportCSV} style={{ height: 30, padding: '0 10px', borderRadius: 7, fontSize: 12, display: 'flex', alignItems: 'center', gap: 5, background: 'var(--bg2)', border: '1px solid var(--border)', color: 'var(--text2)', fontWeight: 600, cursor: 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif" }}>
+                        ↓ CSV
+                    </button>
+                )}
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 20 }}>
                 {[
-                    { l: 'Total Deposit', v: `Rp ${totalDeposit.toLocaleString('id-ID')}`, c: 'var(--green)' },
+                    { l: 'Total Deposit (Sukses)', v: `Rp ${totalDeposit.toLocaleString('id-ID')}`, c: 'var(--green)' },
                     { l: 'Jumlah Transaksi', v: deposits.length, c: 'var(--blue)' },
-                    { l: 'Rata-rata Deposit', v: deposits.length ? `Rp ${Math.round(totalDeposit / deposits.length).toLocaleString('id-ID')}` : 'Rp 0', c: 'var(--yellow)' },
+                    { l: 'Menunggu Konfirmasi', v: totalPending, c: 'var(--yellow)' },
                 ].map(s => (
                     <div key={s.l} className="card" style={{ padding: 20 }}>
                         <div style={{ fontSize: 12, color: 'var(--text3)', fontWeight: 600, marginBottom: 6 }}>{s.l}</div>
@@ -77,7 +94,13 @@ export default function AdminDeposits() {
                                     <td style={{ padding: '11px 14px', color: 'var(--text2)', fontSize: 12 }}>{t.description || '-'}</td>
                                     <td style={{ padding: '11px 14px', fontWeight: 700, color: 'var(--green)' }}>+Rp {(t.amount || 0).toLocaleString('id-ID')}</td>
                                     <td style={{ padding: '11px 14px' }}>
-                                        <span style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--green)', background: 'var(--green-l)', padding: '3px 9px', borderRadius: 20 }}>Sukses</span>
+                                        {(() => {
+                                            const s = t.status;
+                                            const color = s === 'success' ? 'var(--green)' : s === 'pending' ? 'var(--yellow)' : 'var(--red)';
+                                            const bg = s === 'success' ? 'var(--green-l)' : s === 'pending' ? 'var(--yellow-l)' : 'var(--red-l)';
+                                            const label = s === 'success' ? 'Sukses' : s === 'pending' ? 'Pending' : s === 'failed' ? 'Gagal' : s || 'Pending';
+                                            return <span style={{ fontSize: 11.5, fontWeight: 700, color, background: bg, padding: '3px 9px', borderRadius: 20 }}>{label}</span>;
+                                        })()}
                                     </td>
                                 </tr>
                             ))}

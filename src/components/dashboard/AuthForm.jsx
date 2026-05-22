@@ -17,14 +17,8 @@ export default function AuthForm({ type }) {
         if (window.location.search.includes('registered=1')) setRegisterSuccess(true);
     }, []);
 
-    const checkBlocked = async (email) => {
-        const { data } = await supabase.from('settings').select('value').eq('key', 'blocked_emails').maybeSingle();
-        if (data?.value) {
-            const blocked = JSON.parse(data.value);
-            return blocked.includes(email);
-        }
-        return false;
-    };
+    // ✅ Fix 1: checkBlocked dihapus dari client.
+    // Pengecekan dilakukan server-side di /api/auth/login — tidak bisa di-bypass via console.
 
     const submit = async (e) => {
         e.preventDefault();
@@ -32,17 +26,25 @@ export default function AuthForm({ type }) {
         setLoading(true);
         try {
             if (type === 'login') {
-                const isBlocked = await checkBlocked(form.email);
-                if (isBlocked) {
-                    setError('Akun kamu telah diblokir. Hubungi admin untuk informasi lebih lanjut.');
+                // ✅ Fix 1: login lewat server-side API yang verifikasi block sebelum auth
+                const loginRes = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: form.email, password: form.password }),
+                });
+                const loginData = await loginRes.json();
+                if (!loginRes.ok) {
+                    setError(loginData.error || 'Email atau password salah.');
                     setLoading(false);
                     return;
                 }
-                const { error: err } = await supabase.auth.signInWithPassword({
-                    email: form.email,
-                    password: form.password,
-                });
-                if (err) { setError('Email atau password salah.'); setLoading(false); return; }
+                // Set Supabase session dari token yang dikembalikan server
+                if (loginData.access_token) {
+                    await supabase.auth.setSession({
+                        access_token: loginData.access_token,
+                        refresh_token: loginData.refresh_token,
+                    });
+                }
                 router.push('/dashboard');
             } else {
                 const { error: err } = await supabase.auth.signUp({
@@ -50,7 +52,16 @@ export default function AuthForm({ type }) {
                     password: form.password,
                     options: { data: { full_name: form.name } },
                 });
-                if (err) { setError(err.message); setLoading(false); return; }
+                // ✅ Fix 2: jangan expose raw Supabase error ke UI
+                if (err) {
+                    setLoading(false);
+                    const msg = err.message?.toLowerCase();
+                    if (msg?.includes('already registered') || msg?.includes('already exists')) {
+                        return setError('Email sudah terdaftar. Silakan login.');
+                    }
+                    if (msg?.includes('password')) return setError('Password minimal 6 karakter.');
+                    return setError('Registrasi gagal. Coba lagi.');
+                }
                 router.push('/login?registered=1');
             }
         } catch {

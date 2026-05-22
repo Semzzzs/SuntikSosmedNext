@@ -24,11 +24,21 @@ export default async function handler(req: any, res: any) {
         return res.status(401).json({ error: 'Missing signature headers.' });
     }
 
+    // ✅ Validasi timestamp — tolak request lebih dari 5 menit (cegah replay attack)
+    const tsMs = parseInt(timestamp as string) * 1000;
+    if (isNaN(tsMs) || Math.abs(Date.now() - tsMs) > 5 * 60 * 1000) {
+        return res.status(401).json({ error: 'Request expired or invalid timestamp.' });
+    }
+
     const rawBody = JSON.stringify(req.body);
     const expected = crypto.createHmac('sha256', WEBHOOK_SECRET)
         .update(timestamp + '.' + rawBody).digest('hex');
 
-    if (!crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(signature as string))) {
+    const sigBuf = Buffer.from(signature as string, 'hex');
+    const expBuf = Buffer.from(expected, 'hex');
+
+    // ✅ Cek panjang dulu — timingSafeEqual throw Error kalau beda panjang
+    if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(expBuf, sigBuf)) {
         console.error('[Webhook] Invalid signature');
         return res.status(401).json({ error: 'Invalid signature' });
     }
@@ -58,19 +68,37 @@ export default async function handler(req: any, res: any) {
             if (reference_id && reference_id.includes('_')) {
                 const parts = reference_id.split('_');
                 if (parts[0] && parts[0].includes('@')) {
-                    email = parts[0];
+                    email = parts[0].toLowerCase().trim();
                 }
             }
 
+            // ✅ Validasi: email harus terdaftar di sistem sebelum saldo dikreditkan
+            // Mencegah penyerang menyisipkan email arbitrary di reference_id
+            let verifiedEmail = '';
+            if (email) {
+                const { data: profile } = await supabaseAdmin
+                    .from('profiles')
+                    .select('email')
+                    .eq('email', email)
+                    .maybeSingle();
+                verifiedEmail = profile?.email || '';
+            }
+
+            // Kalau email tidak terdaftar -> pending_webhook untuk review manual
+            const status = verifiedEmail ? 'success' : 'pending_webhook';
+
             await supabaseAdmin.from('transactions').insert({
-                email,
+                email: verifiedEmail,
                 type: 'deposit',
                 amount: Math.round(amount),
                 description: `Top up QRIS - Ref: ${reference_id} - TrxID: ${trx_id}`,
-                status: email ? 'success' : 'pending_webhook',
+                status,
             });
 
-            console.log(`[Webhook] Payment saved: ${trx_id} - Rp ${amount} - email: ${email || 'unknown'}`);
+            if (!verifiedEmail && email) {
+                console.warn(`[Webhook] Email '${email}' dari reference_id tidak terdaftar. Transaksi disimpan sebagai pending_webhook untuk review manual.`);
+            }
+            console.log(`[Webhook] Payment saved: ${trx_id} - Rp ${amount} - email: ${verifiedEmail || 'unknown'} - status: ${status}`);
         }
     }
 

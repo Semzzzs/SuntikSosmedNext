@@ -149,15 +149,17 @@ export default function ViewNewOrder({ user, setMenu }) {
     fetch('/api/rate').then(r => r.json()).then(d => { if (d.rate) setRate(d.rate); }).catch(() => { });
   }, []);
 
-  // Load markup + API config dari Supabase settings
+  // Load markup + smm_api_url dari Supabase settings
+  // ✅ Fix: smm_api_key TIDAK diambil ke client — key ada di server env (SMM_API_KEY)
+  // /api/smm sudah baca langsung dari process.env.SMM_API_KEY
   useEffect(() => {
     const loadSettings = async () => {
-      const { data } = await supabase.from('settings').select('key, value');
+      const { data } = await supabase.from('settings').select('key, value')
+        .in('key', ['markup', 'smm_api_url']);
       if (!data) return;
       data.forEach(row => {
         if (row.key === 'markup') setMarkup(parseFloat(row.value));
         if (row.key === 'smm_api_url' && row.value) setConfig(row.value);
-        if (row.key === 'smm_api_key' && row.value) setApiKeyLocal(row.value);
       });
     };
     loadSettings();
@@ -167,12 +169,14 @@ export default function ViewNewOrder({ user, setMenu }) {
   useEffect(() => {
     const loadBalance = async () => {
       try {
-        const sess = JSON.parse(sessionStorage.getItem('user') || 'null');
-        if (!sess?.email) { setBalance(0); return; }
+        // ✅ Fix: email dari session Supabase, bukan sessionStorage yang bisa dimanipulasi
+        const { data: { session } } = await supabase.auth.getSession();
+        const authEmail = session?.user?.email;
+        if (!authEmail) { setBalance(0); return; }
         const { data } = await supabase
           .from('transactions')
           .select('type, amount')
-          .eq('email', sess.email);
+          .eq('email', authEmail);
         if (!data) { setBalance(0); return; }
         const masuk = data.filter(t => ['deposit', 'bonus', 'refund'].includes(t.type)).reduce((s, t) => s + (t.amount || 0), 0);
         const keluar = data.filter(t => t.type === 'order').reduce((s, t) => s + (t.amount || 0), 0);
@@ -182,16 +186,17 @@ export default function ViewNewOrder({ user, setMenu }) {
     loadBalance();
   }, []);
 
-  // Services — fetch dari API (terpisah dari balance)
+  // Services — fetch via /api/smm proxy (server punya API key)
+  // ✅ Fix: hapus guard apiUrl/effectiveApiKey — /api/smm baca SMM_API_KEY dari env server
+  // Client tidak perlu tahu API key, cukup kirim auth token user
   useEffect(() => {
-    if (!apiUrl || !effectiveApiKey) return;
     setLoadingServices(true);
     setError('');
     api.getServices()
       .then(svcs => { setServices(Array.isArray(svcs) ? svcs : []); })
       .catch(e => { setError(e.message); })
       .finally(() => { setLoadingServices(false); });
-  }, [apiUrl, apiKey]);
+  }, []);
 
   const handleOrder = async () => {
     if (!selectedService || !link || !qty) { setError('Lengkapi semua field terlebih dahulu.'); return; }
@@ -230,7 +235,11 @@ export default function ViewNewOrder({ user, setMenu }) {
           user_id: user?.id || null,
           type: 'order',
           amount: totalIDR,
-          description: `Order #${res.order} - ${selectedService.name?.slice(0, 40)}`,
+          // ✅ Simpan order_id dan service_id supaya muncul di admin Orders
+          order_id: String(res.order),
+          service_id: String(selectedService.service),
+          charge: parseFloat(selectedService.rate || 0) * parseInt(qty) / 1000,
+          description: `Order #${res.order} - ${selectedService.name?.slice(0, 60)}`,
           status: 'success',
         });
         // Update balance state langsung tanpa reload
@@ -261,6 +270,20 @@ export default function ViewNewOrder({ user, setMenu }) {
             sessionStorage.setItem('smm_order_ids', JSON.stringify(existing.slice(0, 100)));
           }
         }
+        // ✅ Simpan bulk order ke Supabase
+        const svc = services.find(s => String(s.service) === String(serviceId));
+        const totalIDR = svc ? Math.round(parseInt(orderQty) * parseFloat(svc.rate || 0) / 1000 * (rate || 17687) * markup) : 0;
+        await supabase.from('transactions').insert({
+          email: user?.email || '',
+          user_id: user?.id || null,
+          type: 'order',
+          amount: totalIDR,
+          order_id: String(res.order),
+          service_id: String(serviceId),
+          charge: svc ? parseFloat(svc.rate || 0) * parseInt(orderQty) / 1000 : 0,
+          description: `Order #${res.order} - ${svc?.name?.slice(0, 60) || serviceId}`,
+          status: 'success',
+        });
         results.push({ line, status: 'success', msg: `Order #${res.order} berhasil!` });
       } catch (e) {
         results.push({ line, status: 'error', msg: e.message });
@@ -312,7 +335,7 @@ export default function ViewNewOrder({ user, setMenu }) {
       {/* Stat cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 20 }} className="stat-grid">
         {[
-          { icon: <CreditCard size={20} />, iconBg: 'var(--blue-l)', iconColor: 'var(--blue)', label: 'Saldo Akun', value: balance !== null ? `Rp ${(typeof balance === 'number' ? balance : Math.round(parseFloat(balance || 0) * rate)).toLocaleString('id-ID')}` : (apiUrl ? '...' : '—'), action: 'Tambah Saldo', actionColor: 'var(--blue)', actionBg: 'var(--blue-l)', target: 'Add Funds', fullWidth: true },
+          { icon: <CreditCard size={20} />, iconBg: 'var(--blue-l)', iconColor: 'var(--blue)', label: 'Saldo Akun', value: balance !== null ? `Rp ${(typeof balance === 'number' ? balance : Math.round(parseFloat(balance || 0) * rate)).toLocaleString('id-ID')}` : '...', action: 'Tambah Saldo', actionColor: 'var(--blue)', actionBg: 'var(--blue-l)', target: 'Add Funds', fullWidth: true },
           { icon: <Package size={20} />, iconBg: 'var(--green-l)', iconColor: 'var(--green)', label: 'Total Layanan', value: services.length > 0 ? services.length : (loadingServices ? '...' : '—'), action: 'Buat Order', actionColor: 'var(--green)', actionBg: 'var(--green-l)', target: 'New Order' },
           { icon: <Activity size={20} />, iconBg: 'var(--red-l)', iconColor: 'var(--red)', label: 'Pesanan Saya', value: '—', action: 'Lihat Pesanan', actionColor: 'var(--red)', actionBg: 'var(--red-l)', target: 'My Orders' },
         ].map((s, i) => (
@@ -543,7 +566,7 @@ export default function ViewNewOrder({ user, setMenu }) {
                 })()}
               </span>
             </div>
-            <button className="btn btn-blue" onClick={handleOrder} disabled={orderLoading || !apiKey} style={{ width: '100%', padding: 12, borderRadius: 10, fontSize: 14, opacity: !effectiveApiKey ? 0.5 : 1 }}>
+            <button className="btn btn-blue" onClick={handleOrder} disabled={orderLoading} style={{ width: '100%', padding: 12, borderRadius: 10, fontSize: 14 }}>
               {orderLoading ? <><span style={{ width: 15, height: 15, border: '2px solid rgba(255,255,255,.4)', borderTop: '2px solid #fff', borderRadius: '50%' }} className="spin" /> Processing...</> : <><ShoppingCart size={15} /> Place Order</>}
             </button>
           </div>
@@ -632,7 +655,7 @@ export default function ViewNewOrder({ user, setMenu }) {
                 ))}
               </div>
             )}
-            <button className="btn btn-blue" onClick={handleBulkOrder} disabled={bulkLoading || !effectiveApiKey} style={{ width: '100%', marginTop: 12, padding: 12, borderRadius: 10, fontSize: 14, opacity: !effectiveApiKey ? 0.5 : 1 }}>
+            <button className="btn btn-blue" onClick={handleBulkOrder} disabled={bulkLoading} style={{ width: '100%', marginTop: 12, padding: 12, borderRadius: 10, fontSize: 14 }}>
               {bulkLoading ? <><span style={{ width: 15, height: 15, border: '2px solid rgba(255,255,255,.4)', borderTop: '2px solid #fff', borderRadius: '50%' }} className="spin" /> Processing {bulkResults.length}/{bulkText.trim().split('\n').filter(l => l.trim()).length}...</> : <><ShoppingCart size={15} /> Submit Bulk Order</>}
             </button>
           </div>

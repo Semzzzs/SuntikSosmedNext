@@ -103,17 +103,21 @@ export default function ViewAddFunds({ user, balance: balanceProp = null }) {
       setProcessing(true);
       setQrisError('');
       try {
-        const sess = JSON.parse(sessionStorage.getItem('user') || '{}');
-        const refId = `SSM-${Date.now()}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
+        // ✅ Fix Critical: ambil session dari Supabase Auth, bukan sessionStorage
+        // customer_email di server akan di-override dengan user.email dari session JWT
+        // (sudah diimplementasikan di /api/payment) — ini hanya untuk reference_id
+        const { data: { session: paySession } } = await supabase.auth.getSession();
+        const refId = `${paySession?.user?.id?.slice(0, 8) || 'USR'}-${Date.now()}`;
         const resp = await fetch('/api/payment', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${paySession?.access_token || ''}`,
+          },
           body: JSON.stringify({
             action: 'create_qris',
             reference_id: refId,
-            amount: Math.round(totalIDR), // total including fee
-            customer_name: sess.name || 'User',
-            customer_email: sess.email || 'user@suntiksos.com',
+            amount: Math.round(totalIDR),
           }),
         });
         const data = await resp.json();
@@ -153,18 +157,9 @@ export default function ViewAddFunds({ user, balance: balanceProp = null }) {
       const status = data.data?.status || data.status;
       setQrisStatus(status);
       if (status === 'paid') {
-        // Simpan deposit ke Supabase
-        const sess = JSON.parse(sessionStorage.getItem('user') || '{}');
-        if (sess.email) {
-          await supabase.from('transactions').insert({
-            email: sess.email,
-            user_id: sess.id || null,
-            type: 'deposit',
-            amount: qrisData.amount,
-            description: `Top up QRIS - Ref: ${qrisData.reference_id}`,
-            status: 'success',
-          });
-        }
+        // ✅ Fix Critical: TIDAK insert deposit dari client.
+        // Saldo dikreditkan exclusively oleh webhook server-side (/api/webhook/paymenku).
+        // Client hanya update UI — tidak boleh menulis ke database payment.
         setDone(true);
       }
     } catch { }

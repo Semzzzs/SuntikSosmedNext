@@ -26,14 +26,18 @@ export default function AdminAnnouncement() {
         setLoading(false);
     };
 
-    useEffect(() => { load(); }, []);
+    useEffect(() => {
+        load();
+        const interval = setInterval(load, 120000);
+        return () => clearInterval(interval);
+    }, []);
 
     const save = async () => {
         if (!form.title.trim() || !form.content.trim()) return;
         if (editId) {
             await supabase.from('announcements').update({ ...form, updated_at: new Date().toISOString() }).eq('id', editId);
         } else {
-            await supabase.from('announcements').insert({ ...form });
+            await supabase.from('announcements').insert({ ...form, updated_at: new Date().toISOString() });
         }
         setForm(emptyForm); setEditId(null);
         setSaved(true); setTimeout(() => setSaved(false), 2000);

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Search, Package, CheckCircle, Clock, Loader } from 'lucide-react';
 import { useApi } from '@/context/ApiContext';
+import { supabase } from '@/lib/supabase';
 
 const STATUS_CONFIG = {
   'Completed': { label: 'Selesai', color: '#059669', bg: '#d1fae5', icon: <CheckCircle size={12} /> },
@@ -21,16 +22,20 @@ export default function ViewMyOrders() {
   const [filterStatus, setFilterStatus] = useState('Semua');
   const { apiUrl, apiKey } = useApi();
 
-  const user = typeof window !== 'undefined'
-    ? JSON.parse(sessionStorage.getItem('user') || '{}')
-    : {};
+  // ✅ Fix: email dari supabase.auth.getSession(), bukan sessionStorage
+  // sessionStorage tidak lagi menyimpan email sejak fix sebelumnya
+  const [authEmail, setAuthEmail] = useState('');
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setAuthEmail(session?.user?.email || '');
+    });
+  }, []);
 
-  // Load order data per user dari localStorage
+  // getOrderData untuk baca metadata lokal (serviceName, link, qty) dari localStorage
   const getOrderData = useCallback(() => {
-    if (typeof window === 'undefined') return { ids: [], meta: {} };
-    const key = getOrderKey(user);
+    if (typeof window === 'undefined' || !authEmail) return { ids: [], meta: {} };
+    const key = getOrderKey({ email: authEmail });
     const local = JSON.parse(localStorage.getItem(key) || '[]');
-    const sessionIds = JSON.parse(sessionStorage.getItem('smm_order_ids') || '[]');
 
     const metaMap = {};
     const ids = [];
@@ -41,22 +46,68 @@ export default function ViewMyOrders() {
         if (typeof item === 'object') metaMap[id] = item;
       }
     });
-    sessionIds.forEach(id => {
-      const sid = String(id);
-      if (!ids.includes(sid)) ids.push(sid);
-    });
-
     return { ids, meta: metaMap };
-  }, [user?.email]);
+  }, [authEmail]);
 
   const fetchOrders = useCallback(async () => {
-    const { ids, meta } = getOrderData();
-    if (!apiUrl || !apiKey || ids.length === 0) { setOrders([]); return; }
-
+    if (!authEmail) { setOrders([]); return; }
     setLoading(true);
     setError('');
     try {
-      const res = await fetch(`/api/smm?action=status&orders=${ids.slice(0, 100).join(',')}`);
+      // Baca orders dari Supabase — akurat & persisten lintas device
+      const { data: txData, error: txError } = await supabase
+        .from('transactions')
+        .select('*')
+        .eq('email', authEmail)
+        .eq('type', 'order')
+        .order('created_at', { ascending: false });
+
+      // Baca metadata dari localStorage sebagai tambahan (serviceName, link, qty)
+      const { meta } = getOrderData();
+
+      if (!txError && txData && txData.length > 0) {
+        // Kumpulkan order_id yang ada untuk fetch live status
+        const orderIds = txData.filter(t => t.order_id).map(t => t.order_id);
+
+        let liveStatus = {};
+        // Fetch live status dari SMM API kalau ada order_id
+        if (apiUrl && apiKey && orderIds.length > 0) {
+          try {
+            const res = await fetch(`/api/smm?action=status&orders=${orderIds.slice(0, 100).join(',')}`);
+            const data = await res.json();
+            if (!data.error) liveStatus = data;
+          } catch { /* pakai status dari Supabase */ }
+        }
+
+        const parsed = txData.map(t => {
+          const live = t.order_id ? liveStatus[t.order_id] : null;
+          const localMeta = meta[t.order_id] || {};
+          return {
+            id: t.order_id || t.id,
+            status: live?.status || t.status || 'Pending',
+            charge: live?.charge || t.charge,
+            startCount: live?.start_count,
+            remains: live?.remains,
+            error: live?.error,
+            serviceName: localMeta.serviceName || t.description?.replace(/^Order #\d+ - /, '') || '—',
+            link: localMeta.link || '—',
+            qty: localMeta.qty || '—',
+            createdAt: t.created_at,
+            amountIDR: t.amount,
+          };
+        });
+        setOrders(parsed);
+        setLoading(false);
+        return;
+      }
+
+      // Fallback: baca dari localStorage (backward compat)
+      const { ids, meta: metaFallback } = getOrderData();
+      if (!apiUrl || !apiKey || ids.length === 0) { setOrders([]); setLoading(false); return; }
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`/api/smm?action=status&orders=${ids.slice(0, 100).join(',')}`, {
+        headers: { 'Authorization': `Bearer ${session?.access_token || ''}` }
+      });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
       const parsed = Object.entries(data).map(([id, info]) => ({
@@ -66,20 +117,18 @@ export default function ViewMyOrders() {
         startCount: info.start_count,
         remains: info.remains,
         error: info.error,
-        // Ambil meta dari localStorage (nama service, link, qty)
-        serviceName: meta[id]?.serviceName || '—',
-        link: meta[id]?.link || '—',
-        qty: meta[id]?.qty || '—',
-        createdAt: meta[id]?.createdAt || null,
+        serviceName: metaFallback[id]?.serviceName || '—',
+        link: metaFallback[id]?.link || '—',
+        qty: metaFallback[id]?.qty || '—',
+        createdAt: metaFallback[id]?.createdAt || null,
       }));
-      // Sort terbaru dulu
       parsed.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
       setOrders(parsed);
     } catch (e) {
       setError(e.message);
     }
     setLoading(false);
-  }, [apiUrl, apiKey, getOrderData]);
+  }, [authEmail, getOrderData]);
 
   useEffect(() => {
     fetchOrders();
@@ -94,8 +143,7 @@ export default function ViewMyOrders() {
     return matchSearch && matchStatus;
   });
 
-  const { ids } = getOrderData();
-  const noOrders = !loading && ids.length === 0;
+  const noOrders = !loading && orders.length === 0;
 
   const completedCount = orders.filter(o => o.status === 'Completed').length;
   const activeCount = orders.filter(o => ['In progress', 'Processing', 'Pending'].includes(o.status)).length;
@@ -193,7 +241,7 @@ export default function ViewMyOrders() {
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                 <thead>
                   <tr style={{ background: 'var(--bg2)', borderBottom: '1px solid var(--border)' }}>
-                    {['Order ID', 'Layanan', 'Link / Target', 'Qty', 'Tgl Order', 'Progress', 'Status'].map(h => (
+                    {['Order ID', 'Layanan', 'Link / Target', 'Qty', 'Harga', 'Tgl Order', 'Progress', 'Status'].map(h => (
                       <th key={h} style={{ padding: '11px 16px', textAlign: 'left', fontWeight: 700, color: 'var(--text2)', fontSize: 12, whiteSpace: 'nowrap' }}>{h}</th>
                     ))}
                   </tr>
@@ -214,6 +262,9 @@ export default function ViewMyOrders() {
                           <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12 }} title={o.link}>{o.link}</div>
                         </td>
                         <td style={{ padding: '13px 16px', color: 'var(--text2)', whiteSpace: 'nowrap' }}>{o.qty !== '—' ? Number(o.qty).toLocaleString('id-ID') : '—'}</td>
+                        <td style={{ padding: '13px 16px', fontWeight: 700, color: 'var(--green)', whiteSpace: 'nowrap', fontSize: 12.5 }}>
+                          {o.amountIDR ? `Rp ${Number(o.amountIDR).toLocaleString('id-ID')}` : '—'}
+                        </td>
                         <td style={{ padding: '13px 16px', color: 'var(--text3)', fontSize: 12, whiteSpace: 'nowrap' }}>{formatDate(o.createdAt)}</td>
                         <td style={{ padding: '13px 16px', minWidth: 120 }}>
                           {progress !== null ? (
@@ -231,6 +282,7 @@ export default function ViewMyOrders() {
                         <td style={{ padding: '13px 16px', whiteSpace: 'nowrap' }}>
                           {o.error ? (
                             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11.5, fontWeight: 700, color: 'var(--red)', background: 'var(--red-l)', padding: '4px 10px', borderRadius: 20 }}>
+                              Error
                             </span>
                           ) : (
                             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11.5, fontWeight: 700, color: cfg.color, background: cfg.bg, padding: '4px 10px', borderRadius: 20 }}>

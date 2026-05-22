@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { BarChart2, TrendingUp, ShoppingCart, CreditCard, RefreshCw } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
 
 export default function ViewAnalytics({ user }) {
   const [orders, setOrders] = useState([]);

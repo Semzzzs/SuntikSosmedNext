@@ -1,16 +1,38 @@
 /**
  * API Proxy untuk smmsoc.com
  * - User biasa: wajib Supabase session token
- * - Admin: wajib ADMIN_SECRET header
+ * - Admin: wajib JWT Bearer token (di-sign pakai ADMIN_SECRET)
+ *
+ * PERUBAHAN:
+ *   1. Admin auth dulu pakai x-admin-secret = ADMIN_SECRET mentah.
+ *      Sekarang pakai Authorization: Bearer <JWT> — sama seperti /api/admin-api.
+ *      index.jsx sudah mengirim JWT via adminFetch(), tidak perlu ubah di sana.
+ *   2. SMM_API_KEY dan SMM_API_URL dihapus prefix NEXT_PUBLIC_.
+ *      Update juga di .env.local: NEXT_PUBLIC_SMM_API_KEY -> SMM_API_KEY
+ *                                 NEXT_PUBLIC_SMM_API_URL -> SMM_API_URL
  */
+import jwt from 'jsonwebtoken';
 import { createClient } from '@supabase/supabase-js';
+
+// ✅ Verifikasi JWT admin — sama persis dengan verifyAdminToken di admin-api.js
+function verifyAdminJWT(authHeader) {
+    if (!authHeader?.startsWith('Bearer ')) return false;
+    const token = authHeader.split(' ')[1];
+    const secret = process.env.ADMIN_SECRET;
+    if (!secret) return false;
+    try {
+        const payload = jwt.verify(token, secret, { issuer: 'smm-admin' });
+        return payload.role === 'admin';
+    } catch {
+        return false;
+    }
+}
 
 export default async function handler(req, res) {
     const authHeader = req.headers.authorization;
-    const adminSecret = req.headers['x-admin-secret'];
 
-    // ✅ Cek apakah request dari admin panel
-    const isAdmin = adminSecret && adminSecret === process.env.ADMIN_SECRET;
+    // ✅ Admin: verifikasi JWT (bukan raw ADMIN_SECRET)
+    const isAdmin = verifyAdminJWT(authHeader);
 
     // ✅ Kalau bukan admin, cek Supabase user token
     if (!isAdmin) {
@@ -29,8 +51,9 @@ export default async function handler(req, res) {
         }
     }
 
-    const apiUrl = process.env.NEXT_PUBLIC_SMM_API_URL || 'https://smmsoc.com';
-    const apiKey = process.env.NEXT_PUBLIC_SMM_API_KEY;
+    // ✅ Tanpa NEXT_PUBLIC_ — key tidak masuk ke browser bundle
+    const apiUrl = process.env.SMM_API_URL || 'https://smmsoc.com';
+    const apiKey = process.env.SMM_API_KEY;
 
     if (!apiKey) {
         return res.status(400).json({ error: 'API Key belum dikonfigurasi.' });

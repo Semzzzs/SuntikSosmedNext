@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { Sun, Moon, User, Mail, Phone, Globe, Camera, Smartphone, Trash2, CheckCircle, Lock, Eye, EyeOff, AlertCircle } from 'lucide-react';
 import { useTheme } from '@/context/ThemeContext';
+import { supabase } from '@/lib/supabase';
 
 const NOTIF_KEY = 'user_notif_prefs';
-const PROFILE_KEY = 'user_profile_extra';
+// ✅ Fix: PROFILE_KEY dihapus — phone & website sekarang disimpan ke Supabase profiles
 
 export default function ViewSettings({ user, onLogout }) {
   const { dark, toggle } = useTheme();
@@ -29,19 +30,35 @@ export default function ViewSettings({ user, onLogout }) {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    // Load saved profile extras
-    const saved = JSON.parse(localStorage.getItem(PROFILE_KEY) || '{}');
-    if (saved.phone) setPhone(saved.phone);
-    if (saved.website) setWebsite(saved.website);
-    // Load notification prefs
+    // ✅ Fix High: load phone & website dari Supabase profiles, bukan localStorage
+    // localStorage tidak terikat akun dan tidak terhapus saat logout
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session?.user?.id) return;
+      supabase.from('profiles')
+        .select('phone, website')
+        .eq('id', session.user.id)
+        .maybeSingle()
+        .then(({ data }) => {
+          if (data?.phone) setPhone(data.phone);
+          if (data?.website) setWebsite(data.website);
+        });
+    });
+    // Notification prefs tetap di localStorage (device-local preference, tidak sensitif)
     const savedNotifs = JSON.parse(localStorage.getItem(NOTIF_KEY) || 'null');
     if (savedNotifs) setNotifs(savedNotifs);
   }, []);
 
-  const handleSaveProfile = () => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(PROFILE_KEY, JSON.stringify({ phone, website }));
-    }
+  const handleSaveProfile = async () => {
+    // ✅ Fix High: simpan ke Supabase profiles, bukan localStorage
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user?.id) return;
+    const { error } = await supabase.from('profiles').upsert({
+      id: session.user.id,
+      phone: phone.trim(),
+      website: website.trim(),
+      updated_at: new Date().toISOString(),
+    });
+    if (error) { console.error('[ViewSettings] gagal simpan profil:', error.message); return; }
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
   };
@@ -59,17 +76,26 @@ export default function ViewSettings({ user, onLogout }) {
     if (pw.new.length < 6) return setPwMsg({ type: 'error', text: 'Password baru minimal 6 karakter.' });
     if (pw.new !== pw.con) return setPwMsg({ type: 'error', text: 'Konfirmasi password tidak cocok.' });
 
-    // ✅ Verifikasi password lama via Supabase re-auth
-    const { supabase } = await import('@/lib/supabase');
+    // ✅ Fix Medium: ambil email dari session Supabase, bukan prop user
+    // Prop user berasal dari sessionStorage yang bisa dimanipulasi
+    const { data: { session } } = await supabase.auth.getSession();
+    const authEmail = session?.user?.email;
+    if (!authEmail) return setPwMsg({ type: 'error', text: 'Sesi tidak valid. Silakan login ulang.' });
+
+    // Verifikasi password lama via Supabase re-auth
     const { error: signInErr } = await supabase.auth.signInWithPassword({
-      email: user?.email,
+      email: authEmail,
       password: pw.cur,
     });
     if (signInErr) return setPwMsg({ type: 'error', text: 'Password saat ini salah.' });
 
-    // ✅ Update password via Supabase
+    // Update password via Supabase
     const { error: updateErr } = await supabase.auth.updateUser({ password: pw.new });
-    if (updateErr) return setPwMsg({ type: 'error', text: updateErr.message });
+    // ✅ Fix Medium: jangan expose raw error Supabase ke UI
+    if (updateErr) {
+      console.error('[ViewSettings] updateUser error:', updateErr.message);
+      return setPwMsg({ type: 'error', text: 'Gagal memperbarui password. Coba lagi.' });
+    }
 
     setPw({ cur: '', new: '', con: '' });
     setPwMsg({ type: 'success', text: 'Password berhasil diperbarui!' });
@@ -242,12 +268,47 @@ export default function ViewSettings({ user, onLogout }) {
 
           <div className="card" style={{ padding: 20, border: '1.5px solid rgba(239,68,68,.2)', background: 'var(--red-l)' }}>
             <div style={{ fontWeight: 700, fontSize: 13.5, color: 'var(--red)', marginBottom: 6 }}>Danger Zone</div>
-            <p style={{ fontSize: 13, color: 'var(--red)', opacity: .8, marginBottom: 14, lineHeight: 1.6 }}>
-              Deleting your account is permanent and cannot be undone.
-            </p>
-            <button onClick={onLogout} className="btn" style={{ background: 'var(--red)', color: '#fff', border: 'none', borderRadius: 9, padding: '9px 16px', fontSize: 13 }}>
-              <Trash2 size={14} /> Delete Account
-            </button>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {/* Sign out */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', marginBottom: 2 }}>Sign Out</div>
+                  <div style={{ fontSize: 12, color: 'var(--text3)' }}>Keluar dari sesi ini.</div>
+                </div>
+                <button onClick={onLogout} className="btn" style={{ background: 'transparent', color: 'var(--red)', border: '1.5px solid var(--red)', borderRadius: 9, padding: '8px 14px', fontSize: 13, flexShrink: 0 }}>
+                  Sign Out
+                </button>
+              </div>
+              {/* ✅ Fix High: "Delete Account" sekarang benar-benar request hapus akun */}
+              <div style={{ borderTop: '1px solid rgba(239,68,68,.2)', paddingTop: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--red)', marginBottom: 2 }}>Hapus Akun</div>
+                  <div style={{ fontSize: 12, color: 'var(--text3)', maxWidth: 220, lineHeight: 1.5 }}>Permanen dan tidak bisa dibatalkan. Semua data akan dihapus.</div>
+                </div>
+                <button
+                  onClick={async () => {
+                    const confirmed = window.confirm('Yakin ingin menghapus akun? Semua data transaksi akan dihapus permanen dan tidak bisa dikembalikan.');
+                    if (!confirmed) return;
+                    const emailInput = window.prompt('Ketik email kamu untuk konfirmasi:');
+                    const { data: { session } } = await supabase.auth.getSession();
+                    if (!emailInput || emailInput.trim() !== session?.user?.email) {
+                      alert('Email tidak cocok. Penghapusan dibatalkan.');
+                      return;
+                    }
+                    const token = session?.access_token || '';
+                    const res = await fetch('/api/admin-api?action=delete_user', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                      body: JSON.stringify({ email: session.user.email }),
+                    });
+                    if (res.ok) { alert('Akun berhasil dihapus.'); onLogout(); }
+                    else { alert('Gagal menghapus akun. Hubungi admin.'); }
+                  }}
+                  className="btn" style={{ background: 'var(--red)', color: '#fff', border: 'none', borderRadius: 9, padding: '8px 14px', fontSize: 13, flexShrink: 0 }}>
+                  <Trash2 size={14} /> Hapus Akun
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

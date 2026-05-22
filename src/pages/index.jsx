@@ -1,5 +1,5 @@
 import { useRouter } from 'next/router';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Target, Moon, Sun, ArrowRight, UserPlus, Wallet, ShoppingCart,
   Instagram, Youtube, Twitter, Facebook, Play, Star, Sparkles,
@@ -7,28 +7,98 @@ import {
 } from 'lucide-react';
 import { useTheme } from '@/context/ThemeContext';
 
+// ── Easing curves ──────────────────────────────────────────────
+const EASE = {
+  out: 'cubic-bezier(0.16, 1, 0.3, 1)',       // expo-out — snappy masuk, smooth keluar
+  spring: 'cubic-bezier(0.34, 1.56, 0.64, 1)', // spring — sedikit overshoot
+  smooth: 'cubic-bezier(0.4, 0, 0.2, 1)',      // material — halus
+};
 
-
-function RevealSection({ children, delay = 0, className = '' }) {
+// ── RevealSection: animasi saat masuk viewport ─────────────────
+// variant: 'up' | 'down' | 'left' | 'right' | 'scale' | 'fade'
+// stagger: jarak delay antar direct children (ms)
+function RevealSection({ children, delay = 0, duration = 700, variant = 'up', stagger = 0, className = '', style = {} }) {
   const ref = useRef(null);
+
+  const getInit = () => {
+    switch (variant) {
+      case 'up': return 'opacity:0;transform:translateY(36px)';
+      case 'down': return 'opacity:0;transform:translateY(-24px)';
+      case 'left': return 'opacity:0;transform:translateX(40px)';
+      case 'right': return 'opacity:0;transform:translateX(-40px)';
+      case 'scale': return 'opacity:0;transform:scale(0.92)';
+      case 'fade': return 'opacity:0';
+      default: return 'opacity:0;transform:translateY(36px)';
+    }
+  };
+  const getFinal = () => variant === 'scale' ? 'opacity:1;transform:scale(1)' : 'opacity:1;transform:none';
+
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    el.style.opacity = '0';
-    el.style.transform = 'translateY(28px)';
-    el.style.transition = `opacity 0.55s ease ${delay}ms, transform 0.55s ease ${delay}ms`;
+
+    // Set initial state
+    const initStyles = getInit().split(';');
+    initStyles.forEach(s => {
+      const [prop, val] = s.split(':');
+      if (prop && val) el.style[prop.trim()] = val.trim();
+    });
+
     const obs = new IntersectionObserver(([e]) => {
-      if (e.isIntersecting) { el.style.opacity = '1'; el.style.transform = 'none'; obs.unobserve(el); }
-    }, { threshold: 0.08 });
+      if (!e.isIntersecting) return;
+      obs.unobserve(el);
+
+      if (stagger > 0) {
+        // Stagger animasi per child langsung
+        const children = Array.from(el.children);
+        children.forEach((child, i) => {
+          const childDelay = delay + i * stagger;
+          child.style.opacity = '0';
+          child.style.transform = variant === 'left' ? 'translateX(30px)'
+            : variant === 'right' ? 'translateX(-30px)'
+              : variant === 'scale' ? 'scale(0.93)'
+                : 'translateY(28px)';
+          child.style.transition = `opacity ${duration}ms ${EASE.out} ${childDelay}ms, transform ${duration}ms ${EASE.out} ${childDelay}ms`;
+          requestAnimationFrame(() => {
+            child.style.opacity = '1';
+            child.style.transform = 'none';
+          });
+        });
+        // Reset parent
+        el.style.opacity = '1';
+        el.style.transform = 'none';
+      } else {
+        el.style.transition = `opacity ${duration}ms ${EASE.out} ${delay}ms, transform ${duration}ms ${EASE.out} ${delay}ms`;
+        const finalStyles = getFinal().split(';');
+        finalStyles.forEach(s => {
+          const [prop, val] = s.split(':');
+          if (prop && val) el.style[prop.trim()] = val.trim();
+        });
+      }
+    }, { threshold: 0.06, rootMargin: '0px 0px -40px 0px' });
+
     obs.observe(el);
     return () => obs.disconnect();
   }, []);
-  return <div ref={ref} className={className}>{children}</div>;
+
+  return <div ref={ref} className={className} style={style}>{children}</div>;
+}
+
+// ── useNavbarScroll: navbar solid saat scroll ──────────────────
+function useNavbarScroll() {
+  const [scrolled, setScrolled] = useState(false);
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 40);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+  return scrolled;
 }
 
 export default function Landing() {
   const router = useRouter();
   const { dark, toggle } = useTheme();
+  const navScrolled = useNavbarScroll();
 
   const services = [
     { id: '197', icon: <Instagram size={16} style={{ color: '#E1306C' }} />, iconBg: 'rgba(225,48,108,.1)', name: 'Instagram Followers — High Quality / Instant', min: '10', max: '10,000', price: 'Rp 875' },
@@ -101,7 +171,19 @@ export default function Landing() {
 
       {/* ── NAVBAR ── */}
       <nav style={{ position: 'relative', zIndex: 50, maxWidth: 1160, margin: '0 auto', padding: '18px 24px 0' }}>
-        <div style={{ background: dark ? 'rgba(15,15,20,.95)' : 'rgba(255,255,255,.92)', backdropFilter: 'blur(20px)', border: dark ? '1px solid var(--border)' : '1px solid rgba(37,99,235,.12)', borderRadius: 14, padding: '8px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: dark ? '0 4px 24px rgba(37,99,235,.08)' : '0 4px 24px rgba(37,99,235,.12), 0 1px 0 rgba(255,255,255,.8)' }}>
+        <div style={{
+          background: dark ? 'rgba(15,15,20,.97)' : 'rgba(255,255,255,.96)',
+          backdropFilter: 'blur(20px)',
+          border: dark ? '1px solid var(--border)' : '1px solid rgba(37,99,235,.12)',
+          borderRadius: 14,
+          padding: '8px 12px',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          overflow: 'hidden',
+          boxShadow: navScrolled
+            ? (dark ? '0 8px 32px rgba(0,0,0,.4)' : '0 8px 40px rgba(37,99,235,.18), 0 1px 0 rgba(255,255,255,.8)')
+            : (dark ? '0 4px 24px rgba(37,99,235,.08)' : '0 4px 24px rgba(37,99,235,.12), 0 1px 0 rgba(255,255,255,.8)'),
+          transition: 'box-shadow 0.3s ease, background 0.3s ease',
+        }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontWeight: 800, fontSize: 16, color: 'var(--text)', flexShrink: 0 }}>
             <img src="/logo.png" alt="SS" style={{ width: 26, height: 26, borderRadius: 6, objectFit: 'cover', flexShrink: 0 }} />
             <span>Suntik<span style={{ background: 'var(--blue)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Sosmed</span></span>
@@ -118,12 +200,16 @@ export default function Landing() {
                 style={{ color: 'var(--text2)', textDecoration: 'none', padding: '7px 14px', borderRadius: 9, background: 'transparent', transition: 'background .15s', cursor: 'pointer' }}>{label}</a>
             ))}
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
             <button onClick={toggle} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text2)', display: 'flex', padding: '4px', flexShrink: 0 }}>
               {dark ? <Sun size={16} /> : <Moon size={16} />}
             </button>
-            <button onClick={() => router.push('/login')} style={{ background: 'none', border: '1.5px solid var(--border)', cursor: 'pointer', fontWeight: 700, fontSize: 11.5, color: 'var(--text2)', fontFamily: "'Plus Jakarta Sans',sans-serif", padding: '6px 10px', borderRadius: 8, flexShrink: 0 }}>Masuk</button>
-            <button className="hero-btn-main navbar-btn" onClick={() => router.push('/register')} style={{ padding: '6px 10px', fontSize: '11.5px', borderRadius: '8px', boxShadow: 'none', minHeight: 'unset' }}>Daftar</button>
+            <button onClick={() => router.push('/login')} style={{ background: 'none', border: '1.5px solid var(--border)', cursor: 'pointer', fontWeight: 700, fontSize: 12, color: 'var(--text2)', fontFamily: "'Plus Jakarta Sans',sans-serif", padding: '6px 12px', borderRadius: 9, whiteSpace: 'nowrap', transition: 'all .15s' }}>
+              Masuk
+            </button>
+            <button onClick={() => router.push('/register')} style={{ background: 'var(--blue)', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 12, color: '#fff', fontFamily: "'Plus Jakarta Sans',sans-serif", padding: '6px 12px', borderRadius: 9, whiteSpace: 'nowrap', transition: 'all .15s', display: 'flex', alignItems: 'center', gap: 4 }}>
+              Daftar
+            </button>
           </div>
         </div>
       </nav>
@@ -216,10 +302,10 @@ export default function Landing() {
           </p>
 
           <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginBottom: 24, flexWrap: 'wrap' }}>
-            <button className="hero-btn-main" onClick={() => router.push('/register')} style={{ padding: '10px 20px', fontSize: 13, width: 'fit-content' }}>
-              Daftar Sekarang Gratis! <UserPlus size={14} />
+            <button onClick={() => router.push('/register')} style={{ background: 'var(--blue)', border: 'none', borderRadius: 50, padding: '10px 20px', fontSize: 13.5, fontWeight: 800, color: '#fff', cursor: 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif", display: 'inline-flex', alignItems: 'center', gap: 7, boxShadow: '0 8px 24px rgba(37,99,235,.35)', transition: 'transform .2s, box-shadow .2s', width: 'fit-content' }}>
+              Daftar Sekarang Gratis! <UserPlus size={13} />
             </button>
-            <button onClick={() => router.push('/login')} style={{ background: 'var(--white)', border: '1.5px solid var(--border)', borderRadius: 50, padding: '10px 20px', fontSize: 13, fontWeight: 700, cursor: 'pointer', color: 'var(--text)', fontFamily: "'Plus Jakarta Sans',sans-serif", boxShadow: 'var(--shadow)', width: 'fit-content' }}>
+            <button onClick={() => router.push('/login')} style={{ background: 'var(--white)', border: '1.5px solid var(--border)', borderRadius: 50, padding: '10px 20px', fontSize: 13.5, fontWeight: 700, cursor: 'pointer', color: 'var(--text)', fontFamily: "'Plus Jakarta Sans',sans-serif", boxShadow: 'var(--shadow)', width: 'fit-content', display: 'inline-flex', alignItems: 'center' }}>
               Masuk
             </button>
           </div>
@@ -267,7 +353,7 @@ export default function Landing() {
 
 
       {/* ── FEATURES ── */}
-      <RevealSection>
+      <RevealSection variant="up" duration={600}>
         <div style={{ position: 'relative', zIndex: 10, maxWidth: 1160, margin: '0 auto', padding: '0 16px 60px' }}>
           <div style={{ textAlign: 'center', marginBottom: 48 }}>
             <div style={{ display: 'inline-block', background: 'var(--blue)', border: 'none', borderRadius: 50, padding: '5px 16px', fontSize: 12.5, fontWeight: 700, color: '#fff', marginBottom: 14 }}>KENAPA SUNTIK SOSMED</div>
@@ -276,7 +362,7 @@ export default function Landing() {
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 18 }}>
             {features.map((f, i) => (
-              <RevealSection key={i} delay={i * 100}>
+              <RevealSection key={i} delay={i * 120} variant="scale" duration={650}>
                 <div className="feature-card">
                   <div style={{ width: 52, height: 52, borderRadius: 16, background: f.iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 18, boxShadow: '0 6px 20px rgba(0,0,0,.15)' }}>{f.icon}</div>
                   <div style={{ fontWeight: 800, fontSize: 15.5, color: 'var(--text)', marginBottom: 8 }}>{f.title}</div>
@@ -289,7 +375,7 @@ export default function Landing() {
 
       </RevealSection>
 
-      <RevealSection>
+      <RevealSection variant="fade" duration={500}>
         <div id="panduan" style={{ position: 'relative', zIndex: 10, background: dark ? 'rgba(255,255,255,.02)' : 'rgba(37,99,235,.03)', borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)', padding: '48px 16px' }}>
           <div style={{ maxWidth: 1160, margin: '0 auto' }}>
             <div style={{ textAlign: 'center', marginBottom: 52 }}>
@@ -301,7 +387,7 @@ export default function Landing() {
               {/* connector line */}
               <div style={{ position: 'absolute', top: 44, left: '18%', right: '18%', height: 2, background: `linear-gradient(90deg, var(--blue), #10B981, #8B5CF6)`, borderRadius: 2, zIndex: 0, opacity: 0.3 }} />
               {steps.map((s, i) => (
-                <RevealSection key={i} delay={i * 150}>
+                <RevealSection key={i} delay={i * 160} variant="up" duration={680}>
                   <div style={{ background: 'var(--white)', border: `1.5px solid ${s.color}22`, borderRadius: 22, padding: '32px 26px', position: 'relative', zIndex: 1, boxShadow: 'var(--shadow)', transition: 'transform .2s, box-shadow .2s' }}
                     onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.boxShadow = '0 16px 40px rgba(0,0,0,.1)'; }}
                     onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = 'var(--shadow)'; }}>
@@ -336,7 +422,7 @@ export default function Landing() {
 
 
       {/* ── SERVICES TABLE ── */}
-      <RevealSection>
+      <RevealSection variant="up" duration={700}>
         <div style={{ position: 'relative', zIndex: 10, maxWidth: 1160, margin: '0 auto', padding: '48px 16px' }}>
           <div style={{ textAlign: 'center', marginBottom: 40 }}>
             <div style={{ display: 'inline-block', background: 'rgba(245,158,11,.1)', border: '1px solid rgba(245,158,11,.2)', borderRadius: 50, padding: '5px 16px', fontSize: 12.5, fontWeight: 700, color: '#F59E0B', marginBottom: 14 }}>LAYANAN POPULER</div>
@@ -471,6 +557,18 @@ export default function Landing() {
           @keyframes scrollUp35 { 0% { transform: translateY(0); } 100% { transform: translateY(-50%); } }
           @keyframes scrollUp50 { 0% { transform: translateY(0); } 100% { transform: translateY(-50%); } }
           @keyframes scrollUp42 { 0% { transform: translateY(0); } 100% { transform: translateY(-50%); } }
+          @keyframes blobFloat {
+            0%, 100% { transform: translateY(0) scale(1); }
+            33% { transform: translateY(-18px) scale(1.03); }
+            66% { transform: translateY(10px) scale(0.97); }
+          }
+          html { scroll-behavior: smooth; }
+          .hero-btn-main:hover { transform: translateY(-2px) scale(1.03); box-shadow: 0 12px 32px rgba(37,99,235,.45) !important; }
+          .feature-card { 
+            background: var(--white); border: 1px solid var(--border); border-radius: 20px; padding: 28px 24px;
+            transition: transform 0.3s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.3s ease, border-color 0.3s ease;
+          }
+          .feature-card:hover { transform: translateY(-6px) scale(1.01); box-shadow: 0 20px 48px rgba(37,99,235,.12); border-color: rgba(37,99,235,.2); }
         `}</style>
         </div>
 
@@ -478,7 +576,7 @@ export default function Landing() {
 
       </RevealSection>
 
-      <RevealSection>
+      <RevealSection variant="scale" delay={50} duration={750}>
         <div style={{ position: 'relative', zIndex: 10, maxWidth: 1160, margin: '0 auto', padding: '0 16px 60px' }}>
           <div style={{ background: 'var(--blue)', borderRadius: 28, padding: 'clamp(32px, 6vw, 64px) clamp(20px, 5vw, 48px)', textAlign: 'center', position: 'relative', overflow: 'hidden' }}>
             {/* inner deco */}

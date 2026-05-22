@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { MessageSquare, RefreshCw } from 'lucide-react';
+import { MessageSquare } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
 const STATUS_COLOR = { open: 'var(--blue)', inprogress: 'var(--yellow)', closed: 'var(--green)' };
@@ -39,14 +39,9 @@ export default function AdminTickets() {
 
     return (
         <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                <div>
-                    <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text)', marginBottom: 3 }}>Support Tickets</h1>
-                    <p style={{ fontSize: 13.5, color: 'var(--text2)' }}>{tickets.length} tiket masuk.</p>
-                </div>
-                <button className="btn btn-outline" onClick={load} style={{ height: 38, padding: '0 14px', borderRadius: 9, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <RefreshCw size={13} /> Refresh
-                </button>
+            <div style={{ marginBottom: 20 }}>
+                <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text)', marginBottom: 3 }}>Support Tickets</h1>
+                <p style={{ fontSize: 13.5, color: 'var(--text2)' }}>{tickets.length} tiket masuk.</p>
             </div>
 
             {loading ? (

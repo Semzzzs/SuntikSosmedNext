@@ -34,6 +34,15 @@ export default function ViewTransactions({ user }) {
   const totalDeposit = transactions.filter(t => ['deposit', 'bonus', 'refund'].includes(t.type)).reduce((s, t) => s + (t.amount || 0), 0);
   const totalOrder = transactions.filter(t => t.type === 'order').reduce((s, t) => s + (t.amount || 0), 0);
 
+
+  const STATUS_CONFIG_TRX = {
+    success: { label: 'Sukses', color: 'var(--green)', bg: 'var(--green-l)' },
+    pending_webhook: { label: 'Pending', color: 'var(--yellow)', bg: 'var(--yellow-l)' },
+    pending: { label: 'Pending', color: 'var(--yellow)', bg: 'var(--yellow-l)' },
+    failed: { label: 'Gagal', color: 'var(--red)', bg: 'var(--red-l)' },
+  };
+  const getTrxStatus = (s) => STATUS_CONFIG_TRX[s] || STATUS_CONFIG_TRX.success;
+
   return (
     <div className="fu">
       <div style={{ marginBottom: 22 }}>
@@ -100,7 +109,12 @@ export default function ViewTransactions({ user }) {
                         {cfg.sign}Rp {(t.amount || 0).toLocaleString('id-ID')}
                       </td>
                       <td style={{ padding: '12px 16px' }}>
-                        <span style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--green)', background: 'var(--green-l)', padding: '3px 9px', borderRadius: 20 }}>Sukses</span>
+                        {/* ✅ Fix Medium: render status dari data, bukan hardcoded "Sukses" */}
+                        {(() => {
+                          const st = getTrxStatus(t.status); return (
+                            <span style={{ fontSize: 11.5, fontWeight: 700, color: st.color, background: st.bg, padding: '3px 9px', borderRadius: 20 }}>{st.label}</span>
+                          );
+                        })()}
                       </td>
                     </tr>
                   );
@@ -130,7 +144,12 @@ export default function ViewTransactions({ user }) {
                     <span style={{ fontSize: 11.5, color: 'var(--text3)' }}>
                       {new Date(t.created_at).toLocaleString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                     </span>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--green)', background: 'var(--green-l)', padding: '2px 8px', borderRadius: 20 }}>Sukses</span>
+                    {/* ✅ Fix Medium: render status dari data di mobile card */}
+                    {(() => {
+                      const st = getTrxStatus(t.status); return (
+                        <span style={{ fontSize: 11, fontWeight: 700, color: st.color, background: st.bg, padding: '2px 8px', borderRadius: 20 }}>{st.label}</span>
+                      );
+                    })()}
                   </div>
                 </div>
               );

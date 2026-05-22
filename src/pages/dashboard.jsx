@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, lazy, Suspense } from 'react';
+import { useState, useEffect, useRef, useMemo, lazy, Suspense } from 'react';
 import { useRouter } from 'next/router';
 import {
   ShoppingCart, Package, CreditCard,
@@ -11,7 +11,6 @@ import { useApi } from '@/context/ApiContext';
 import { useAuth } from '@/context/AuthContext';
 import { useNotifications } from '@/hooks/useNotifications';
 
-// Lazy load semua view — hanya di-load saat pertama kali dibuka
 const ViewNewOrder = lazy(() => import('@/components/dashboard/ViewNewOrder'));
 const ViewMyOrders = lazy(() => import('@/components/dashboard/ViewMyOrders'));
 const ViewAddFunds = lazy(() => import('@/components/dashboard/ViewAddFunds'));
@@ -22,6 +21,8 @@ const ViewAnalytics = lazy(() => import('@/components/dashboard/ViewAnalytics'))
 const ViewTransactions = lazy(() => import('@/components/dashboard/ViewTransactions'));
 const ViewSettings = lazy(() => import('@/components/dashboard/ViewSettings'));
 const ViewAnnouncements = lazy(() => import('@/components/dashboard/ViewAnnouncements'));
+// Fix: ViewFAQ tidak ada — file yang benar adalah ViewNotifications
+const ViewFAQ = lazy(() => import('@/components/dashboard/ViewNotifications'));
 
 // Skeleton saat view sedang di-load
 function ViewSkeleton() {
@@ -53,7 +54,6 @@ export default function DashboardPage() {
   const { notifications, unreadCount, markAllRead, markRead } = useNotifications(user);
   const [notifOpen, setNotifOpen] = useState(false);
   const [toast, setToast] = useState(null);
-  const prevUnread = useState(0);
 
   useEffect(() => {
     if (unreadCount > 0 && notifications.length > 0) {
@@ -102,13 +102,15 @@ export default function DashboardPage() {
     }
 
     const userData = {
-      id: authUser.id,
+      // ✅ Jangan simpan id di sessionStorage — cukup untuk display
       email: authUser.email,
       name: authUser.user_metadata?.full_name || authUser.email?.split('@')[0] || 'User',
       initials: ((authUser.user_metadata?.full_name || authUser.email || 'U').charAt(0)).toUpperCase(),
     };
     setUser(userData);
-    sessionStorage.setItem('user', JSON.stringify(userData));
+    // ✅ Simpan minimal — tidak ada id/sensitive data
+    // sessionStorage hanya untuk data UI — email/id selalu dari supabase.auth.getSession()
+    sessionStorage.setItem('user', JSON.stringify({ name: userData.name, initials: userData.initials }));
   }, [authUser, authLoading]);
 
   useEffect(() => {
@@ -134,8 +136,18 @@ export default function DashboardPage() {
   }, []);
 
   const logout = async () => {
+    const logoutEmail = authUser?.email;
     await supabase.auth.signOut();
-    if (typeof window !== 'undefined') sessionStorage.removeItem('user');
+    if (typeof window !== 'undefined') {
+      // Bersihkan semua session & local data saat logout
+      sessionStorage.removeItem('user');
+      sessionStorage.removeItem('dashboard_menu');
+      sessionStorage.removeItem('smm_order_ids');
+      sessionStorage.removeItem('admin_authed');
+      sessionStorage.removeItem('admin_token');
+      // Hapus smm_orders agar data order tidak tersisa di device setelah logout
+      if (logoutEmail) localStorage.removeItem('smm_orders_' + logoutEmail);
+    }
     router.push('/');
   };
 
@@ -154,7 +166,8 @@ export default function DashboardPage() {
     { id: 'Settings', icon: <Settings size={17} /> },
   ];
 
-  const views = {
+  // ✅ useMemo — views tidak re-create tiap render
+  const views = useMemo(() => ({
     'New Order': <ViewNewOrder user={user} setMenu={setMenu} />,
     'My Orders': <ViewMyOrders />,
     'Add Funds': <ViewAddFunds user={user} balance={balance} />,
@@ -163,9 +176,9 @@ export default function DashboardPage() {
     'Pengumuman': <ViewAnnouncements />,
     'Tickets': <ViewTickets />,
     'Contact': <ViewContact />,
-    'FAQ': <ViewNotifications />,
+    'FAQ': <ViewFAQ />,
     'Settings': <ViewSettings user={user} onLogout={logout} />,
-  };
+  }), [user, balance]);
 
   const SideLink = ({ item }) => (
     <button onClick={() => { setMenuAndSave(item.id); if (typeof window !== 'undefined' && window.innerWidth < 1024) setSideOpen(false); }}
@@ -210,7 +223,7 @@ export default function DashboardPage() {
         {balance !== null && (
           <div style={{ margin: '0 12px 10px', background: 'var(--blue)', borderRadius: 12, padding: '12px 14px' }}>
             <div style={{ fontSize: 10, color: 'rgba(255,255,255,.7)', fontWeight: 600, marginBottom: 2 }}>SALDO SAYA</div>
-            <div style={{ fontSize: 18, fontWeight: 800, color: '#fff' }}>Rp {(typeof balance === 'number' ? balance : Math.round(parseFloat(balance || 0) * rate)).toLocaleString('id-ID')}</div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: '#fff' }}>Rp {Math.round(balance || 0).toLocaleString('id-ID')}</div>
             <button onClick={() => setMenuAndSave('Add Funds')} style={{ marginTop: 8, background: 'rgba(255,255,255,.2)', border: 'none', borderRadius: 7, padding: '5px 10px', fontSize: 11, fontWeight: 700, color: '#fff', cursor: 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif" }}>+ Add Funds</button>
           </div>
         )}
