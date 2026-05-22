@@ -32,6 +32,9 @@ export default function Document() {
         <meta httpEquiv="X-Content-Type-Options" content="nosniff" />
         <meta httpEquiv="X-XSS-Protection" content="1; mode=block" />
 
+        {/* ✅ Google Search Console */}
+        <meta name="google-site-verification" content="e1LldDJ8ItgQUcLStZOtTdyFfib-7gjgPUDQGK6iGO8" />
+
         {/* ✅ Favicon */}
         <link rel="icon" href="/favicon.ico" />
       </Head>
