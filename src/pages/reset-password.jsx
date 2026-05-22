@@ -31,7 +31,8 @@ export default function ResetPassword() {
         setLoading(true);
         const { error: err } = await supabase.auth.updateUser({ password });
         setLoading(false);
-        if (err) return setError(err.message);
+        // ✅ Jangan expose raw Supabase error ke UI
+        if (err) return setError('Gagal menyimpan password. Link mungkin sudah kadaluarsa, minta reset ulang.');
         setDone(true);
         setTimeout(() => router.push('/login'), 3000);
     };
