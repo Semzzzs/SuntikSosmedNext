@@ -35,7 +35,9 @@ export default async function handler(req, res) {
     const isAdmin = verifyAdminJWT(authHeader);
 
     // ✅ Kalau bukan admin, cek Supabase user token
-    if (!isAdmin) {
+    // Kecuali action=services — boleh tanpa login (untuk landing page)
+    const publicAction = req.query.action === 'services';
+    if (!isAdmin && !publicAction) {
         if (!authHeader || !authHeader.startsWith('Bearer ')) {
             return res.status(401).json({ error: 'Unauthorized. Silakan login terlebih dahulu.' });
         }

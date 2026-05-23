@@ -54,19 +54,29 @@ export default function AuthForm({ type }) {
         options: { data: { name: form.name.trim() } },
       });
 
-      // ✅ Fix: jangan expose raw Supabase error ke UI
       if (err) {
         setLoading(false);
+        console.error('[Register error]', err.message, err.status);
         const msg = err.message?.toLowerCase();
-        if (msg?.includes('already registered') || msg?.includes('already exists')) {
+        if (msg?.includes('already registered') || msg?.includes('already exists') || msg?.includes('user already')) {
           return setError('Email sudah terdaftar. Silakan login.');
         }
-        return setError('Registrasi gagal. Coba lagi.');
+        if (msg?.includes('rate limit') || msg?.includes('too many')) {
+          return setError('Terlalu banyak percobaan. Tunggu beberapa menit.');
+        }
+        if (msg?.includes('invalid email')) {
+          return setError('Format email tidak valid.');
+        }
+        if (msg?.includes('weak password') || msg?.includes('password')) {
+          return setError('Password terlalu lemah. Gunakan minimal 8 karakter.');
+        }
+        return setError('Registrasi gagal: ' + err.message);
       }
 
       const user = data.user || data.session?.user;
       if (!user) {
         setLoading(false);
+        // Email confirmation required
         return setError('Cek email kamu untuk konfirmasi akun, lalu login.');
       }
 
