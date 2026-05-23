@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { CreditCard, Bitcoin, Wallet, Building2, ArrowRight, ShieldCheck, Lock, CheckCircle, Zap, Clock, Star, AlertCircle, RefreshCw } from 'lucide-react';
+import { CreditCard, Bitcoin, Wallet, Building2, ArrowRight, ShieldCheck, Lock, CheckCircle, Zap, Clock, Star, AlertCircle, RefreshCw, MessageCircle } from 'lucide-react';
 import { useApi } from '@/context/ApiContext';
 import { supabase } from '@/lib/supabase';
 
@@ -17,6 +17,20 @@ const METHODS = [
     desc: 'Scan QR dari semua bank & e-wallet',
     fee: 'Fee Rp 200 + 0.7%',
     time: 'Instan',
+  },
+  {
+    id: 'manual',
+    label: 'Transfer Manual',
+    icon: <MessageCircle size={22} />,
+    color: '#25D366',
+    bg: 'rgba(37,211,102,.08)',
+    border: 'rgba(37,211,102,.2)',
+    badge: 'Via WhatsApp',
+    badgeColor: '#25D366',
+    badgeBg: 'rgba(37,211,102,.1)',
+    desc: 'Transfer QRIS lalu konfirmasi ke admin',
+    fee: 'No fee',
+    time: '< 5 menit',
   },
   {
     id: 'crypto',
@@ -46,19 +60,115 @@ const formatIDR = (num) => {
 export default function ViewAddFunds({ user, balance: balanceProp = null }) {
   const { apiUrl, apiKey } = useApi();
   const [method, setMethod] = useState('qris');
+  const handleMethodChange = (m) => {
+    setMethod(m);
+    const min = m === 'qris' ? 10000 : 5000;
+    if (parseFloat(amountIDR) < min) setAmountIDR('');
+  };
   const [amountIDR, setAmountIDR] = useState('');
   const [balanceIDRUser, setBalanceIDRUser] = useState(balanceProp);
   const [rate, setRate] = useState(null);
   const [rateUpdated, setRateUpdated] = useState(null);
   const [rateSource, setRateSource] = useState(null);
   const [loadingRate, setLoadingRate] = useState(true);
-  const [step, setStep] = useState(1);
+  const [step, setStepRaw] = useState(1);
   const [processing, setProcessing] = useState(false);
   const [done, setDone] = useState(false);
-  const [qrisData, setQrisData] = useState(null);   // { qr_url, trx_id, amount, expiry }
+  const [qrisData, setQrisDataRaw] = useState(null);
   const [qrisChecking, setQrisChecking] = useState(false);
-  const [qrisStatus, setQrisStatus] = useState(null); // 'paid'|'expired'|'pending'
+  const [qrisStatus, setQrisStatusRaw] = useState(null);
   const [qrisError, setQrisError] = useState('');
+  const [showBackConfirm, setShowBackConfirm] = useState(false);
+
+  // Simpan/hapus QR ke Supabase
+  const saveQrisToDB = async (data) => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const email = session?.user?.email;
+      if (!email || !data) return;
+      await supabase.from('transactions').update({
+        qr_url: data.qr_url || null,
+        qr_string: data.qr_string || null,
+        qr_trx_id: data.trx_id || null,
+        qr_expiry: data.expiry || null,
+        qr_total: data.totalAmount || null,
+        qr_amount: data.amount || null,
+        qr_ref: data.reference_id || null,
+      }).eq('description', `QRIS_PENDING_${data.trx_id}`).eq('email', email);
+    } catch { }
+  };
+
+  const setQrisData = (data) => {
+    setQrisDataRaw(data);
+    try {
+      if (data) sessionStorage.setItem('qris_data', JSON.stringify(data));
+      else sessionStorage.removeItem('qris_data');
+    } catch { }
+  };
+
+  const setQrisStatus = (status) => {
+    setQrisStatusRaw(status);
+    try {
+      if (status) sessionStorage.setItem('qris_status', status);
+      else sessionStorage.removeItem('qris_status');
+    } catch { }
+  };
+
+  const setStep = (v) => {
+    setStepRaw(v);
+    if (v !== 3) {
+      try { sessionStorage.removeItem('qris_data'); sessionStorage.removeItem('qris_status'); } catch { }
+    }
+  };
+
+  // Restore QR dari sessionStorage atau Supabase saat mount
+  useEffect(() => {
+    const restore = async () => {
+      // Coba dari sessionStorage dulu (cepat)
+      try {
+        const cached = sessionStorage.getItem('qris_data');
+        const cachedStatus = sessionStorage.getItem('qris_status');
+        if (cached) {
+          setQrisDataRaw(JSON.parse(cached));
+          setQrisStatusRaw(cachedStatus || 'pending');
+          setStepRaw(3);
+          return;
+        }
+      } catch { }
+
+      // Fallback: restore dari Supabase
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const email = session?.user?.email;
+        if (!email) return;
+        const { data } = await supabase
+          .from('transactions')
+          .select('*')
+          .eq('email', email)
+          .eq('status', 'pending_webhook')
+          .not('qr_trx_id', 'is', null)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (data?.qr_trx_id) {
+          const restored = {
+            qr_url: data.qr_url,
+            qr_string: data.qr_string,
+            trx_id: data.qr_trx_id,
+            expiry: data.qr_expiry,
+            totalAmount: data.qr_total,
+            amount: data.qr_amount,
+            reference_id: data.qr_ref,
+          };
+          setQrisDataRaw(restored);
+          setQrisStatusRaw('pending');
+          setStepRaw(3);
+          try { sessionStorage.setItem('qris_data', JSON.stringify(restored)); } catch { }
+        }
+      } catch { }
+    };
+    restore();
+  }, []);
 
   const fetchRate = async () => {
     setLoadingRate(true);
@@ -84,6 +194,7 @@ export default function ViewAddFunds({ user, balance: balanceProp = null }) {
   }, [balanceProp]);
 
   const numIDR = parseFloat(String(amountIDR).replace(/\./g, '').replace(',', '.')) || 0;
+  const minAmount = method === 'qris' ? 10000 : 5000;
   const numUSD = rate ? numIDR / rate : 0;
   const balanceIDR = balanceIDRUser;
   const feeIDR = method === 'qris' ? (200 + numIDR * 0.007) : method === 'card' ? numIDR * 0.025 : 0;
@@ -98,6 +209,7 @@ export default function ViewAddFunds({ user, balance: balanceProp = null }) {
   };
 
   const handleConfirm = async () => {
+    if (numIDR < minAmount) return;
     // QRIS via Paymenku
     if (method === 'qris') {
       setProcessing(true);
@@ -107,7 +219,7 @@ export default function ViewAddFunds({ user, balance: balanceProp = null }) {
         // customer_email di server akan di-override dengan user.email dari session JWT
         // (sudah diimplementasikan di /api/payment) — ini hanya untuk reference_id
         const { data: { session: paySession } } = await supabase.auth.getSession();
-        const refId = `${paySession?.user?.id?.slice(0, 8) || 'USR'}-${Date.now()}`;
+        const refId = `${paySession?.user?.email || 'user'}_${Date.now()}`;
         const resp = await fetch('/api/payment', {
           method: 'POST',
           headers: {
@@ -122,17 +234,36 @@ export default function ViewAddFunds({ user, balance: balanceProp = null }) {
         });
         const data = await resp.json();
         if (data.status === 'success' && data.data) {
-          setQrisData({
+          const qrisPayload = {
             qr_url: data.data.payment_info?.qr_url,
             qr_string: data.data.payment_info?.qr_string,
             trx_id: data.data.trx_id,
             reference_id: refId,
-            amount: numIDR,        // saldo diterima user
-            totalAmount: Math.round(totalIDR), // total yang dibayar (inc. fee)
+            amount: numIDR,
+            totalAmount: Math.round(totalIDR),
             expiry: data.data.payment_info?.expiration_date,
-          });
+          };
+          setQrisData(qrisPayload);
           setQrisStatus('pending');
-          setStep(3); // QR display step
+          setStep(3);
+          // Simpan ke Supabase untuk restore lintas device/tab
+          try {
+            const { data: { session: s } } = await supabase.auth.getSession();
+            await supabase.from('transactions').insert({
+              email: s?.user?.email,
+              type: 'qris_pending',
+              amount: numIDR,
+              description: `QRIS_PENDING_${data.data.trx_id}`,
+              status: 'pending_webhook',
+              qr_url: qrisPayload.qr_url || null,
+              qr_string: qrisPayload.qr_string || null,
+              qr_trx_id: qrisPayload.trx_id || null,
+              qr_expiry: qrisPayload.expiry || null,
+              qr_total: qrisPayload.totalAmount || null,
+              qr_amount: qrisPayload.amount || null,
+              qr_ref: qrisPayload.reference_id || null,
+            });
+          } catch { }
         } else {
           setQrisError(data.message || 'Gagal membuat transaksi QRIS. Coba lagi.');
         }
@@ -140,6 +271,18 @@ export default function ViewAddFunds({ user, balance: balanceProp = null }) {
         setQrisError('Koneksi gagal: ' + e.message);
       }
       setProcessing(false);
+      return;
+    }
+    // Transfer Manual via WhatsApp
+    if (method === 'manual') {
+      const email = user?.email || '';
+      const msg = encodeURIComponent(
+        `Halo admin, saya ingin konfirmasi top up manual.\n\n` +
+        `Email: ${email}\n` +
+        `Jumlah: ${formatIDR(numIDR)}\n\n` +
+        `Saya sudah transfer via QRIS. Mohon dikonfirmasi. 🙏`
+      );
+      window.open(`https://wa.me/6283843306230?text=${msg}`, '_blank');
       return;
     }
     // Other methods — placeholder
@@ -152,7 +295,10 @@ export default function ViewAddFunds({ user, balance: balanceProp = null }) {
     if (!qrisData?.trx_id) return;
     setQrisChecking(true);
     try {
-      const resp = await fetch(`/api/payment?action=check_status&order_id=${qrisData.trx_id}`);
+      const { data: { session } } = await supabase.auth.getSession();
+      const resp = await fetch(`/api/payment?action=check_status&order_id=${qrisData.trx_id}`, {
+        headers: { 'Authorization': `Bearer ${session?.access_token || ''}` }
+      });
       const data = await resp.json();
       const status = data.data?.status || data.status;
       setQrisStatus(status);
@@ -171,7 +317,10 @@ export default function ViewAddFunds({ user, balance: balanceProp = null }) {
     if (step !== 3 || !qrisData || qrisStatus === 'paid' || qrisStatus === 'expired') return;
     const interval = setInterval(async () => {
       try {
-        const resp = await fetch(`/api/payment?action=check_status&order_id=${qrisData.trx_id}`);
+        const { data: { session: pollSession } } = await supabase.auth.getSession();
+        const resp = await fetch(`/api/payment?action=check_status&order_id=${qrisData.trx_id}`, {
+          headers: { 'Authorization': `Bearer ${pollSession?.access_token || ''}` }
+        });
         const data = await resp.json();
         const status = data.data?.status || data.status;
         if (status === 'paid') {
@@ -245,7 +394,60 @@ export default function ViewAddFunds({ user, balance: balanceProp = null }) {
         ))}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'min(320px, 100%) 1fr', gap: 20, alignItems: 'start' }} className="addfunds-grid">
+      {step === 3 && qrisData && (
+        <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+          {/* QR CENTER */}
+          <div className="card" style={{ flex: '0 0 auto', padding: 28, textAlign: 'center', minWidth: 300 }}>
+            <div style={{ fontWeight: 800, fontSize: 17, color: 'var(--text)', marginBottom: 4 }}>Scan QR Code</div>
+            <div style={{ fontSize: 13, color: 'var(--text3)', marginBottom: 20 }}>
+              Bayar <strong style={{ color: '#E91E63' }}>Rp {(qrisData.totalAmount || Math.round(qrisData.amount)).toLocaleString('id-ID')}</strong> via QRIS
+              {qrisData.totalAmount && qrisData.totalAmount !== qrisData.amount && (
+                <span style={{ fontSize: 11.5, display: 'block', marginTop: 3 }}>(Saldo diterima: Rp {Math.round(qrisData.amount).toLocaleString('id-ID')})</span>
+              )}
+              {qrisData.expiry && new Date(qrisData.expiry).getTime() > 0 && <span style={{ display: 'block', marginTop: 2 }}>Berlaku s/d {new Date(qrisData.expiry).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>}
+            </div>
+            <div style={{ display: 'inline-block', padding: 16, background: '#fff', borderRadius: 16, border: '2px solid var(--border)', marginBottom: 20, boxShadow: '0 4px 20px rgba(0,0,0,.08)' }}>
+              {qrisData.qr_string
+                ? <img src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(qrisData.qr_string)}`} alt="QRIS" style={{ width: 220, height: 220, display: 'block', borderRadius: 8 }} />
+                : qrisData.qr_url
+                  ? <img src={qrisData.qr_url} alt="QRIS" style={{ width: 220, height: 220, display: 'block', borderRadius: 8 }} />
+                  : <div style={{ width: 220, height: 220, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, background: 'var(--bg2)', borderRadius: 10 }}>
+                    <div style={{ fontSize: 56 }}>▦</div>
+                    <div style={{ fontSize: 12, color: 'var(--text3)', fontWeight: 600, textAlign: 'center' }}>ID: {qrisData.trx_id}</div>
+                  </div>
+              }
+            </div>
+            <div style={{ marginBottom: 18 }}>
+              {qrisStatus === 'pending' && <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'var(--yellow-l)', color: 'var(--yellow)', padding: '8px 18px', borderRadius: 20, fontSize: 13, fontWeight: 700 }}><div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--yellow)' }} />Menunggu pembayaran...</div>}
+              {qrisStatus === 'paid' && <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'var(--green-l)', color: 'var(--green)', padding: '8px 18px', borderRadius: 20, fontSize: 13, fontWeight: 700 }}><CheckCircle size={14} /> Pembayaran berhasil!</div>}
+              {qrisStatus === 'expired' && <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'var(--red-l)', color: 'var(--red)', padding: '8px 18px', borderRadius: 20, fontSize: 13, fontWeight: 700 }}>✕ QR kedaluwarsa</div>}
+            </div>
+            <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
+              <button onClick={() => setShowBackConfirm(true)} style={{ flex: 1, padding: '11px 0', borderRadius: 11, border: '1.5px solid var(--border)', background: 'transparent', color: 'var(--text2)', fontWeight: 700, fontSize: 14, cursor: 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif" }}>Kembali</button>
+              <button onClick={checkQrisStatus} disabled={qrisChecking || qrisStatus === 'paid' || qrisStatus === 'expired'} style={{ flex: 2, padding: '11px 0', borderRadius: 11, border: 'none', background: '#E91E63', color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif", display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, opacity: qrisStatus === 'paid' || qrisStatus === 'expired' ? 0.5 : 1 }}>
+                {qrisChecking ? <><RefreshCw size={14} style={{ animation: 'spin .7s linear infinite' }} /> Mengecek...</> : <><RefreshCw size={14} /> Cek Status Bayar</>}
+              </button>
+            </div>
+            <div style={{ fontSize: 11.5, color: 'var(--text3)' }}>Ref: {qrisData.reference_id} · Setelah bayar klik tombol cek di atas</div>
+          </div>
+          {/* INFO SIDEBAR */}
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 14, minWidth: 260 }}>
+            <div style={{ background: 'linear-gradient(135deg, var(--blue), #1D4ED8)', borderRadius: 18, padding: '22px 20px', color: '#fff' }}>
+              <div style={{ fontSize: 11, color: 'rgba(255,255,255,.65)', fontWeight: 600, marginBottom: 4 }}>SALDO SAAT INI</div>
+              <div style={{ fontSize: 28, fontWeight: 800, marginBottom: 4 }}>{balanceIDR !== null ? formatIDR(balanceIDR) : '—'}</div>
+              <div style={{ fontSize: 12.5, color: 'rgba(255,255,255,.8)', display: 'flex', alignItems: 'center', gap: 6 }}><ArrowRight size={13} />Setelah top up: <strong>{formatIDR((balanceIDR || 0) + qrisData.amount)}</strong></div>
+            </div>
+            <div className="card" style={{ padding: 16, background: 'var(--blue-l)', border: '1.5px solid var(--border2)' }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--blue)', marginBottom: 8 }}>Detail Pembayaran</div>
+              {[{ l: 'Jumlah Top Up', v: formatIDR(qrisData.amount) }, { l: 'Biaya QRIS', v: `+${formatIDR(qrisData.totalAmount - qrisData.amount)}` }, { l: 'Total Bayar', v: formatIDR(qrisData.totalAmount) }].map(r => (
+                <div key={r.l} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, marginBottom: 5 }}><span style={{ color: 'var(--text3)' }}>{r.l}</span><span style={{ fontWeight: 700, color: 'var(--text)' }}>{r.v}</span></div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div style={{ display: step === 3 ? 'block' : 'grid', gridTemplateColumns: 'min(420px, 100%) 1fr', gap: 24, alignItems: 'start' }} className="addfunds-grid">
 
         {/* LEFT */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -257,7 +459,7 @@ export default function ViewAddFunds({ user, balance: balanceProp = null }) {
                 <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text)', marginBottom: 14 }}>Metode Pembayaran</div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
                   {METHODS.map(m => (
-                    <button key={m.id} onClick={() => !m.coming_soon && setMethod(m.id)}
+                    <button key={m.id} onClick={() => !m.coming_soon && handleMethodChange(m.id)}
                       style={{ padding: '14px 16px', borderRadius: 14, border: `2px solid ${method === m.id ? m.color : 'var(--border)'}`, background: method === m.id ? m.bg : 'var(--bg2)', cursor: m.coming_soon ? 'not-allowed' : 'pointer', textAlign: 'left', transition: 'all .18s', position: 'relative', overflow: 'hidden', fontFamily: "'Plus Jakarta Sans',sans-serif", opacity: m.coming_soon ? 0.6 : 1 }}>
                       {/* Coming Soon overlay */}
                       {m.coming_soon && (
@@ -282,7 +484,7 @@ export default function ViewAddFunds({ user, balance: balanceProp = null }) {
               <div className="card" style={{ padding: 22 }}>
                 <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text)', marginBottom: 14 }}>Jumlah Top Up (IDR)</div>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
-                  {PRESETS_IDR.map(p => (
+                  {PRESETS_IDR.filter(p => p >= minAmount).map(p => (
                     <button key={p} onClick={() => setAmountIDR(String(p))}
                       style={{ padding: '8px 14px', borderRadius: 9, border: `1.5px solid ${amountIDR === String(p) ? 'var(--blue)' : 'var(--border)'}`, background: amountIDR === String(p) ? 'var(--blue)' : 'transparent', color: amountIDR === String(p) ? '#fff' : 'var(--text2)', fontWeight: 700, fontSize: 12.5, cursor: 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif", transition: 'all .18s' }}>
                       {formatIDR(p)}
@@ -328,15 +530,14 @@ export default function ViewAddFunds({ user, balance: balanceProp = null }) {
                 )}
 
                 <button className="btn btn-blue" onClick={() => setStep(2)}
-                  disabled={!numIDR || (method === 'qris' && numIDR < 5000) || (method === 'crypto' && numIDR < 10000) || selectedMethod?.coming_soon}
-                  style={{ width: '100%', padding: 13, borderRadius: 11, fontSize: 14.5, opacity: (!numIDR || (method === 'qris' && numIDR < 5000) || (method === 'crypto' && numIDR < 10000) || selectedMethod?.coming_soon) ? 0.5 : 1 }}>
+                  disabled={!numIDR || (method === 'qris' && numIDR < 10000) || (method === 'crypto' && numIDR < 10000) || selectedMethod?.coming_soon}
+                  style={{ width: '100%', padding: 13, borderRadius: 11, fontSize: 14.5, opacity: (!numIDR || (method === 'qris' && numIDR < 10000) || (method === 'crypto' && numIDR < 10000) || selectedMethod?.coming_soon) ? 0.5 : 1 }}>
                   Lanjut ke Pembayaran <ArrowRight size={16} />
                 </button>
-                {numIDR > 0 && method === 'qris' && numIDR < 5000 && (
-                  <p style={{ textAlign: 'center', fontSize: 12, color: 'var(--red)', marginTop: 8, fontWeight: 600 }}>Minimum top up QRIS Rp 5.000</p>
-                )}
-                {numIDR > 0 && method === 'crypto' && numIDR < 10000 && (
-                  <p style={{ textAlign: 'center', fontSize: 12, color: 'var(--red)', marginTop: 8, fontWeight: 600 }}>Minimum top up Crypto Rp 10.000</p>
+                {numIDR > 0 && numIDR < minAmount && (
+                  <p style={{ textAlign: 'center', fontSize: 12, color: 'var(--red)', marginTop: 8, fontWeight: 600 }}>
+                    Minimum top up {method === 'qris' ? 'QRIS Rp 10.000' : method === 'manual' ? 'Transfer Manual Rp 5.000' : 'Rp 10.000'}
+                  </p>
                 )}
               </div>
             </>
@@ -366,27 +567,39 @@ export default function ViewAddFunds({ user, balance: balanceProp = null }) {
                 ))}
               </div>
 
-              <div style={{ background: 'var(--yellow-l)', border: '1px solid rgba(245,158,11,.2)', borderRadius: 10, padding: '10px 14px', marginBottom: 18, fontSize: 12.5, color: 'var(--yellow)', fontWeight: 600, display: 'flex', gap: 8, alignItems: 'center' }}>
-                <AlertCircle size={13} style={{ flexShrink: 0 }} />
-                Payment gateway sedang dalam integrasi. Ini adalah preview alur pembayaran.
-              </div>
+              {method === 'manual' && (
+                <div style={{ background: 'rgba(37,211,102,.08)', border: '1.5px solid rgba(37,211,102,.25)', borderRadius: 12, padding: '14px 16px', marginBottom: 18 }}>
+                  <div style={{ fontWeight: 700, fontSize: 13, color: '#25D366', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <MessageCircle size={14} /> Cara Transfer Manual
+                  </div>
+                  <ol style={{ fontSize: 12.5, color: 'var(--text2)', lineHeight: 2, margin: 0, paddingLeft: 18 }}>
+                    <li>Scan QRIS admin via aplikasi bank/e-wallet kamu</li>
+                    <li>Transfer sejumlah <strong style={{ color: 'var(--text)' }}>{formatIDR(numIDR)}</strong></li>
+                    <li>Klik tombol di bawah untuk konfirmasi ke WhatsApp admin</li>
+                    <li>Saldo akan ditambahkan dalam &lt; 5 menit</li>
+                  </ol>
+                </div>
+              )}
+
 
               {qrisError && (
                 <div style={{ background: 'var(--red-l)', border: '1.5px solid var(--red)', borderRadius: 10, padding: '10px 14px', fontSize: 13, color: 'var(--red)', fontWeight: 600, marginBottom: 12 }}>
                   ⚠️ {qrisError}
                 </div>
               )}
-              <button className="btn btn-blue" onClick={handleConfirm} disabled={processing} style={{ width: '100%', padding: 13, borderRadius: 11, fontSize: 14.5, background: method === 'qris' ? '#E91E63' : 'var(--blue)' }}>
+              <button className="btn btn-blue" onClick={handleConfirm} disabled={processing || numIDR < minAmount} style={{ width: '100%', padding: 13, borderRadius: 11, fontSize: 14.5, background: method === 'manual' ? '#25D366' : method === 'qris' ? '#E91E63' : 'var(--blue)', opacity: numIDR < minAmount ? 0.5 : 1 }}>
                 {processing
                   ? <><span style={{ width: 16, height: 16, border: '2px solid rgba(255,255,255,.4)', borderTop: '2px solid #fff', borderRadius: '50%' }} className="spin" /> Memproses...</>
-                  : <><Zap size={16} /> Konfirmasi & Bayar {formatIDR(totalIDR)}</>}
+                  : method === 'manual'
+                    ? <><MessageCircle size={16} /> Konfirmasi via WhatsApp</>
+                    : <><Zap size={16} /> Konfirmasi & Bayar {formatIDR(totalIDR)}</>}
               </button>
             </div>
           )}
         </div>
 
         {/* RIGHT SIDEBAR */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div style={{ display: step === 3 ? 'none' : 'flex', flexDirection: 'column', gap: 14 }}>
           {/* Balance */}
           <div className="addfunds-sidebar-balance" style={{ background: 'linear-gradient(135deg, var(--blue), #1D4ED8)', borderRadius: 18, padding: '22px 20px', color: '#fff' }}>
             <div style={{ fontSize: 11, color: 'rgba(255,255,255,.65)', fontWeight: 600, marginBottom: 4, letterSpacing: '.06em' }}>SALDO SAAT INI</div>
@@ -403,71 +616,6 @@ export default function ViewAddFunds({ user, balance: balanceProp = null }) {
               </div>
             )}
           </div>
-
-          {/* Step 3: QRIS QR Display */}
-          {step === 3 && qrisData && (
-            <div className="card" style={{ padding: 28, textAlign: 'center' }}>
-              <div style={{ fontWeight: 800, fontSize: 17, color: 'var(--text)', marginBottom: 4 }}>Scan QR Code</div>
-              <div style={{ fontSize: 13, color: 'var(--text3)', marginBottom: 20 }}>
-                Bayar <strong style={{ color: '#E91E63' }}>Rp {(qrisData.totalAmount || Math.round(qrisData.amount)).toLocaleString('id-ID')}</strong> via QRIS
-                {qrisData.totalAmount && qrisData.totalAmount !== qrisData.amount && (
-                  <span style={{ fontSize: 11.5, display: 'block', marginTop: 3 }}>
-                    (Saldo diterima: Rp {Math.round(qrisData.amount).toLocaleString('id-ID')})
-                  </span>
-                )}
-                {qrisData.expiry && <span> · Berlaku s/d {new Date(qrisData.expiry).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</span>}
-              </div>
-
-              <div style={{ display: 'inline-block', padding: 16, background: '#fff', borderRadius: 16, border: '2px solid var(--border)', marginBottom: 20, boxShadow: '0 4px 20px rgba(0,0,0,.08)' }}>
-                {qrisData.qr_url ? (
-                  <img src={qrisData.qr_url} alt="QRIS" style={{ width: 220, height: 220, display: 'block', borderRadius: 8 }} />
-                ) : (
-                  <div style={{ width: 220, height: 220, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, background: 'var(--bg2)', borderRadius: 10 }}>
-                    <div style={{ fontSize: 56 }}>▦</div>
-                    <div style={{ fontSize: 12, color: 'var(--text3)', fontWeight: 600, textAlign: 'center', lineHeight: 1.5 }}>
-                      QR tersedia di dashboard Paymenku<br />
-                      <span style={{ fontFamily: 'monospace', fontSize: 11 }}>ID: {qrisData.trx_id}</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div style={{ marginBottom: 18 }}>
-                {qrisStatus === 'pending' && (
-                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'var(--yellow-l)', color: 'var(--yellow)', padding: '8px 18px', borderRadius: 20, fontSize: 13, fontWeight: 700 }}>
-                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--yellow)' }} />
-                    Menunggu pembayaran...
-                  </div>
-                )}
-                {qrisStatus === 'paid' && (
-                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'var(--green-l)', color: 'var(--green)', padding: '8px 18px', borderRadius: 20, fontSize: 13, fontWeight: 700 }}>
-                    <CheckCircle size={14} /> Pembayaran berhasil!
-                  </div>
-                )}
-                {qrisStatus === 'expired' && (
-                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'var(--red-l)', color: 'var(--red)', padding: '8px 18px', borderRadius: 20, fontSize: 13, fontWeight: 700 }}>
-                    ✕ QR kedaluwarsa
-                  </div>
-                )}
-              </div>
-
-              <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
-                <button onClick={() => { setStep(2); setQrisData(null); setQrisStatus(null); setQrisError(''); }}
-                  style={{ flex: 1, padding: '11px 0', borderRadius: 11, border: '1.5px solid var(--border)', background: 'transparent', color: 'var(--text2)', fontWeight: 700, fontSize: 14, cursor: 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif" }}>
-                  Kembali
-                </button>
-                <button onClick={checkQrisStatus} disabled={qrisChecking || qrisStatus === 'paid' || qrisStatus === 'expired'}
-                  style={{ flex: 2, padding: '11px 0', borderRadius: 11, border: 'none', background: '#E91E63', color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif", display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, opacity: qrisStatus === 'paid' || qrisStatus === 'expired' ? 0.5 : 1 }}>
-                  {qrisChecking
-                    ? <><RefreshCw size={14} style={{ animation: 'spin .7s linear infinite' }} /> Mengecek...</>
-                    : <><RefreshCw size={14} /> Cek Status Bayar</>}
-                </button>
-              </div>
-              <div style={{ fontSize: 11.5, color: 'var(--text3)' }}>
-                Ref: {qrisData.reference_id} · Setelah bayar klik tombol cek di atas
-              </div>
-            </div>
-          )}
 
           {/* Crypto bonus */}
           <div style={{ background: 'linear-gradient(135deg, rgba(247,147,26,.12), rgba(247,147,26,.04))', border: '1.5px solid rgba(247,147,26,.25)', borderRadius: 16, padding: '18px 18px' }}>
@@ -502,7 +650,7 @@ export default function ViewAddFunds({ user, balance: balanceProp = null }) {
           <div className="card" style={{ padding: 16, background: 'var(--blue-l)', border: '1.5px solid var(--border2)' }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--blue)', marginBottom: 8 }}>Info Deposit</div>
             {[
-              { l: 'Minimum top up QRIS', v: 'Rp 5.000' },
+              { l: `Minimum top up ${method === 'qris' ? 'QRIS' : method === 'manual' ? 'Manual' : ''}`, v: method === 'qris' ? 'Rp 10.000' : 'Rp 5.000' },
               { l: 'Maksimum top up', v: 'Rp 100.000.000' },
             ].map(r => (
               <div key={r.l} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, marginBottom: 5 }}>
@@ -513,6 +661,27 @@ export default function ViewAddFunds({ user, balance: balanceProp = null }) {
           </div>
         </div>
       </div>
+      {/* Modal konfirmasi Kembali */}
+      {showBackConfirm && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: 'var(--bg)', borderRadius: 16, padding: 28, width: 380, maxWidth: '90vw', boxShadow: '0 20px 60px rgba(0,0,0,.3)' }}>
+            <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--text)', marginBottom: 10 }}>Batalkan Pembayaran?</div>
+            <p style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.6, marginBottom: 20 }}>
+              QR code masih aktif. Kalau kamu kembali, QR ini bisa dibuka lagi nanti selama belum expired. Yakin mau kembali?
+            </p>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button onClick={() => setShowBackConfirm(false)}
+                style={{ flex: 1, padding: '10px 0', borderRadius: 9, border: '1.5px solid var(--border)', background: 'transparent', color: 'var(--text)', fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif" }}>
+                Tetap di sini
+              </button>
+              <button onClick={() => { setShowBackConfirm(false); setStep(1); setQrisData(null); setQrisStatus(null); setQrisError(''); }}
+                style={{ flex: 1, padding: '10px 0', borderRadius: 9, border: 'none', background: 'var(--red)', color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif" }}>
+                Ya, Kembali
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

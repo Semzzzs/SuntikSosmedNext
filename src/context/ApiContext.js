@@ -37,9 +37,16 @@ export async function smmRequest(params) {
     Object.entries(params).filter(([k]) => ALLOWED_PARAMS.has(k))
   );
 
-  // Ambil session token dari Supabase
-  const { data: { session } } = await supabase.auth.getSession();
-  const token = session?.access_token;
+  // Ambil session token dari Supabase — retry kalau belum ready (production delay)
+  let { data: { session } } = await supabase.auth.getSession();
+  let token = session?.access_token;
+
+  if (!token) {
+    // Tunggu sebentar lalu coba lagi (session mungkin belum restore)
+    await new Promise(r => setTimeout(r, 800));
+    const { data: { session: s2 } } = await supabase.auth.getSession();
+    token = s2?.access_token;
+  }
 
   if (!token) throw new Error('Silakan login terlebih dahulu.');
 
@@ -56,7 +63,7 @@ export async function smmRequest(params) {
   // ✅ Fix: jangan bocorkan raw response text ke UI — log saja ke console
   const text = await res.text();
   if (!res.ok) {
-    console.error(`[smmRequest] HTTP ${res.status}:`, text);
+    console.error(`[suntiksosmedRequest] HTTP ${res.status}:`, text);
     throw new Error(`Permintaan gagal (${res.status}). Coba lagi.`);
   }
 
@@ -66,7 +73,7 @@ export async function smmRequest(params) {
     return data;
   } catch {
     // ✅ Fix: log raw response untuk debugging, lempar pesan generik ke UI
-    console.error('[smmRequest] Response tidak valid:', text);
+    console.error('[suntiksosmedRequest] Response tidak valid:', text);
     throw new Error('Response dari server tidak valid.');
   }
 }

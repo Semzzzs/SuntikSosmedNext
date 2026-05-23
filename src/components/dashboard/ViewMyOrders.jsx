@@ -55,28 +55,39 @@ export default function ViewMyOrders() {
     setError('');
     try {
       // Baca orders dari Supabase — akurat & persisten lintas device
-      const { data: txData, error: txError } = await supabase
+      const { data: txRaw, error: txError } = await supabase
         .from('transactions')
         .select('*')
         .eq('email', authEmail)
         .eq('type', 'order')
         .order('created_at', { ascending: false });
 
+      // Filter hanya order SMM asli (punya order_id numerik atau deskripsi "Order #...")
+      const txData = txRaw?.filter(t =>
+        (t.order_id && /^\d+$/.test(String(t.order_id))) ||
+        (t.description && t.description.startsWith('Order #'))
+      );
+
       // Baca metadata dari localStorage sebagai tambahan (serviceName, link, qty)
       const { meta } = getOrderData();
 
       if (!txError && txData && txData.length > 0) {
-        // Kumpulkan order_id yang ada untuk fetch live status
-        const orderIds = txData.filter(t => t.order_id).map(t => t.order_id);
+        // Kumpulkan order_id numerik yang valid untuk fetch live status ke SMMSOC
+        const orderIds = txData
+          .filter(t => t.order_id && /^\d+$/.test(String(t.order_id)))
+          .map(t => String(t.order_id));
 
         let liveStatus = {};
         // Fetch live status dari SMM API kalau ada order_id
-        if (apiUrl && apiKey && orderIds.length > 0) {
+        if (orderIds.length > 0) {
           try {
-            const res = await fetch(`/api/smm?action=status&orders=${orderIds.slice(0, 100).join(',')}`);
+            const { data: { session } } = await supabase.auth.getSession();
+            const res = await fetch(`/api/smm?action=status&orders=${orderIds.slice(0, 100).join(',')}`, {
+              headers: { 'Authorization': `Bearer ${session?.access_token || ''}` }
+            });
             const data = await res.json();
             if (!data.error) liveStatus = data;
-          } catch { /* pakai status dari Supabase */ }
+          } catch { /* pakai status Pending */ }
         }
 
         const parsed = txData.map(t => {
@@ -84,14 +95,14 @@ export default function ViewMyOrders() {
           const localMeta = meta[t.order_id] || {};
           return {
             id: t.order_id || t.id,
-            status: live?.status || t.status || 'Pending',
+            status: live?.status || 'Pending',
             charge: live?.charge || t.charge,
             startCount: live?.start_count,
             remains: live?.remains,
             error: live?.error,
             serviceName: localMeta.serviceName || t.description?.replace(/^Order #\d+ - /, '') || '—',
-            link: localMeta.link || '—',
-            qty: localMeta.qty || '—',
+            link: t.link || localMeta.link || '—',
+            qty: t.qty || localMeta.qty || '—',
             createdAt: t.created_at,
             amountIDR: t.amount,
           };
@@ -249,9 +260,10 @@ export default function ViewMyOrders() {
                 <tbody>
                   {shown.map((o, i) => {
                     const cfg = STATUS_CONFIG[o.status] || { label: o.status, color: 'var(--text3)', bg: 'var(--bg2)', icon: null };
-                    const progress = o.startCount && o.remains != null
-                      ? Math.max(0, Math.min(100, Math.round(((o.startCount - o.remains) / o.startCount) * 100)))
-                      : null;
+                    const progress = o.status === 'Completed' ? 100
+                      : (o.startCount && o.startCount > 0 && o.remains != null && o.status !== 'Canceled')
+                        ? Math.max(0, Math.min(100, Math.round(((o.startCount - o.remains) / o.startCount) * 100)))
+                        : null;
                     return (
                       <tr key={o.id} style={{ borderBottom: i < shown.length - 1 ? '1px solid var(--border)' : 'none' }}>
                         <td style={{ padding: '13px 16px', fontWeight: 700, color: 'var(--blue)', fontFamily: "'JetBrains Mono', monospace", fontSize: 12.5, whiteSpace: 'nowrap' }}>#{o.id}</td>
@@ -270,7 +282,7 @@ export default function ViewMyOrders() {
                           {progress !== null ? (
                             <div>
                               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text3)', marginBottom: 4 }}>
-                                <span>{o.startCount - o.remains}/{o.startCount}</span>
+                                <span>{o.startCount > 0 ? `${o.startCount - o.remains}/${o.startCount}` : ''}</span>
                                 <span style={{ fontWeight: 700 }}>{progress}%</span>
                               </div>
                               <div style={{ height: 6, background: 'var(--bg2)', borderRadius: 99, overflow: 'hidden' }}>

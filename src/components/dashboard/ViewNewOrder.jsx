@@ -66,7 +66,11 @@ function SearchSelect({ options, value, onChange, placeholder, disabled }) {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  const filtered = options.filter(o => !q || o.label.toLowerCase().includes(q.toLowerCase()));
+  const filtered = options.filter(o => !q ||
+    o.label.toLowerCase().includes(q.toLowerCase()) ||
+    o.value.includes(q)
+  );
+  const visible = filtered.slice(0, q ? 200 : 80); // limit render
   const selected = options.find(o => o.value === value);
 
   return (
@@ -84,19 +88,28 @@ function SearchSelect({ options, value, onChange, placeholder, disabled }) {
           <div style={{ padding: '10px 10px 6px', borderBottom: '1px solid var(--border)' }}>
             <div style={{ position: 'relative' }}>
               <Search size={13} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text3)' }} />
-              <input autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder="Cari..." style={{ width: '100%', padding: '7px 10px 7px 30px', border: '1.5px solid var(--border)', borderRadius: 8, fontSize: 13, fontFamily: "'Plus Jakarta Sans',sans-serif", background: 'var(--bg2)', color: 'var(--text)', outline: 'none' }} />
+              <input autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder="Ketik nama atau ID service..." style={{ width: '100%', padding: '7px 10px 7px 30px', border: '1.5px solid var(--border)', borderRadius: 8, fontSize: 13, fontFamily: "'Plus Jakarta Sans',sans-serif", background: 'var(--bg2)', color: 'var(--text)', outline: 'none' }} />
             </div>
+            {!q && <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 6, paddingLeft: 2 }}>Menampilkan {Math.min(80, options.length)} dari {options.length} layanan — ketik untuk cari</div>}
           </div>
           <div style={{ maxHeight: 240, overflowY: 'auto' }} className="ns">
             {filtered.length === 0 && <div style={{ padding: '14px', textAlign: 'center', fontSize: 13, color: 'var(--text3)' }}>Tidak ditemukan</div>}
-            {filtered.map(o => (
+            {visible.map(o => (
               <div key={o.value} onClick={() => { onChange(o.value); setOpen(false); setQ(''); }}
-                style={{ padding: '10px 14px', fontSize: 13, fontWeight: o.value === value ? 700 : 500, color: o.value === value ? 'var(--blue)' : 'var(--text)', cursor: 'pointer', background: o.value === value ? 'var(--blue-l)' : 'transparent', transition: 'background .1s', borderBottom: '1px solid var(--border)' }}
+                style={{ padding: '9px 14px', fontSize: 12.5, fontWeight: o.value === value ? 700 : 400, color: o.value === value ? 'var(--blue)' : 'var(--text)', cursor: 'pointer', background: o.value === value ? 'var(--blue-l)' : 'transparent', transition: 'background .1s', borderBottom: '1px solid var(--border)' }}
                 onMouseEnter={e => { if (o.value !== value) e.currentTarget.style.background = 'var(--bg2)'; }}
                 onMouseLeave={e => { if (o.value !== value) e.currentTarget.style.background = 'transparent'; }}>
-                {o.label}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                  <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.label}</span>
+                  {o.sub && <span style={{ fontSize: 11, color: 'var(--text3)', flexShrink: 0, fontFamily: 'monospace' }}>{o.sub}</span>}
+                </div>
               </div>
             ))}
+            {filtered.length > visible.length && (
+              <div style={{ padding: '10px 14px', fontSize: 12, color: 'var(--text3)', textAlign: 'center', borderTop: '1px solid var(--border)' }}>
+                +{filtered.length - visible.length} lagi — ketik untuk filter lebih spesifik
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -128,6 +141,7 @@ export default function ViewNewOrder({ user, setMenu }) {
   const [bulkResults, setBulkResults] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState('');
   const [selectedPlatform, setSelectedPlatform] = useState('');
+  const [orderCount, setOrderCount] = useState(null);
 
   // Deteksi apakah service butuh username atau link
   const getInputType = (service) => {
@@ -186,6 +200,28 @@ export default function ViewNewOrder({ user, setMenu }) {
     loadBalance();
   }, []);
 
+  // Order count — dari Supabase
+  useEffect(() => {
+    const loadOrderCount = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const email = session?.user?.email;
+        if (!email) return;
+        const { data } = await supabase
+          .from('transactions')
+          .select('order_id, description')
+          .eq('email', email)
+          .eq('type', 'order');
+        const valid = (data || []).filter(t =>
+          (t.order_id && /^\d+$/.test(String(t.order_id))) ||
+          (t.description && t.description.startsWith('Order #'))
+        );
+        setOrderCount(valid.length);
+      } catch { setOrderCount(0); }
+    };
+    loadOrderCount();
+  }, []);
+
   // Services — fetch via /api/smm proxy (server punya API key)
   // ✅ Fix: hapus guard apiUrl/effectiveApiKey — /api/smm baca SMM_API_KEY dari env server
   // Client tidak perlu tahu API key, cukup kirim auth token user
@@ -241,6 +277,8 @@ export default function ViewNewOrder({ user, setMenu }) {
           charge: parseFloat(selectedService.rate || 0) * parseInt(qty) / 1000,
           description: `Order #${res.order} - ${selectedService.name?.slice(0, 60)}`,
           status: 'success',
+          link: link || null,
+          qty: parseInt(qty) || null,
         });
         // Update balance state langsung tanpa reload
         setBalance(prev => Math.max(0, (prev || 0) - totalIDR));
@@ -333,13 +371,13 @@ export default function ViewNewOrder({ user, setMenu }) {
       </div>
 
       {/* Stat cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 20 }} className="stat-grid">
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12, marginBottom: 20 }} className="stat-grid">
         {[
           { icon: <CreditCard size={20} />, iconBg: 'var(--blue-l)', iconColor: 'var(--blue)', label: 'Saldo Akun', value: balance !== null ? `Rp ${(typeof balance === 'number' ? balance : Math.round(parseFloat(balance || 0) * rate)).toLocaleString('id-ID')}` : '...', action: 'Tambah Saldo', actionColor: 'var(--blue)', actionBg: 'var(--blue-l)', target: 'Add Funds', fullWidth: true },
           { icon: <Package size={20} />, iconBg: 'var(--green-l)', iconColor: 'var(--green)', label: 'Total Layanan', value: services.length > 0 ? services.length : (loadingServices ? '...' : '—'), action: 'Buat Order', actionColor: 'var(--green)', actionBg: 'var(--green-l)', target: 'New Order' },
-          { icon: <Activity size={20} />, iconBg: 'var(--red-l)', iconColor: 'var(--red)', label: 'Pesanan Saya', value: '—', action: 'Lihat Pesanan', actionColor: 'var(--red)', actionBg: 'var(--red-l)', target: 'My Orders' },
+          { icon: <Activity size={20} />, iconBg: 'var(--red-l)', iconColor: 'var(--red)', label: 'Pesanan Saya', value: orderCount !== null ? orderCount : '...', action: 'Lihat Pesanan', actionColor: 'var(--red)', actionBg: 'var(--red-l)', target: 'My Orders' },
         ].map((s, i) => (
-          <div key={i} className="card" style={{ padding: '14px 16px', gridColumn: s.fullWidth ? 'span 3' : 'span 1' }} data-stat-full={s.fullWidth ? '1' : '0'}>
+          <div key={i} className="card" style={{ padding: '14px 16px', gridColumn: s.fullWidth ? 'span 2' : 'span 1' }} data-stat-full={s.fullWidth ? '1' : '0'}>
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, marginBottom: 10 }}>
               <div style={{ width: 42, height: 42, borderRadius: 12, background: s.iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center', color: s.iconColor, flexShrink: 0 }}>{s.icon}</div>
               <div><div style={{ fontSize: 12, color: 'var(--text3)', fontWeight: 600, marginBottom: 2 }}>{s.label}</div><div style={{ fontSize: 20, fontWeight: 800, color: 'var(--text)' }}>{s.value}</div></div>
@@ -446,7 +484,7 @@ export default function ViewNewOrder({ user, setMenu }) {
             <div>
               <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: 'var(--text)', marginBottom: 7 }}>Choose Service</label>
               <SearchSelect
-                options={(selectedCategory ? services.filter(s => s.category === selectedCategory) : services).map(s => ({ value: String(s.service), label: cleanName(s.name) || s.name }))}
+                options={(selectedCategory ? services.filter(s => s.category === selectedCategory) : services).map(s => ({ value: String(s.service), label: s.name || cleanName(s.name), sub: `#${s.service}` }))}
                 value={selectedService ? String(selectedService.service) : ''}
                 onChange={v => { const svc = services.find(s => String(s.service) === v) || null; setSelectedService(svc); if (svc) setQty(String(svc.min)); }}
                 placeholder="— Pilih Service —"
@@ -508,7 +546,30 @@ export default function ViewNewOrder({ user, setMenu }) {
                 {/* Info tabel */}
                 <div style={{ background: 'var(--bg2)', borderRadius: 12, border: '1px solid var(--border)', overflow: 'hidden' }}>
                   {[
-                    { label: 'Average Time', value: selectedService.average_time ? `${selectedService.average_time} minutes` : (selectedService.name?.match(/(\d+[-–]\d+\s*(?:Hour|Min|Day|Jam|Hari|Menit)s?)/i)?.[0] || selectedService.name?.match(/(Instant|Instan)/i)?.[0] || 'Not specified') },
+                    {
+                      label: 'Start Time', value: (() => {
+                        const n = selectedService.name || '';
+                        if (n.match(/instant|instan/i)) return 'Instan (0–1 jam)';
+                        if (n.match(/\d+[-–]\d+\s*hour/i)) return n.match(/(\d+[-–]\d+\s*hour)/i)[0];
+                        return 'Beberapa jam';
+                      })()
+                    },
+                    {
+                      label: 'Speed / Hari', value: (() => {
+                        const n = selectedService.name || '';
+                        const dayMatch = n.match(/day\s*([\d,.]+[km]?)/i);
+                        if (dayMatch) return dayMatch[0].replace(/day/i, '').trim() + ' / hari';
+                        return 'Tidak tersedia';
+                      })()
+                    },
+                    ...(parseInt(selectedService.average_time) > 0 ? [{
+                      label: 'Average Time', value: (() => {
+                        const mins = parseInt(selectedService.average_time);
+                        if (mins < 60) return `~${mins} menit`;
+                        if (mins < 1440) return `~${Math.round(mins / 60)} jam`;
+                        return `~${Math.round(mins / 1440)} hari`;
+                      })()
+                    }] : []),
                   ].map((row, i) => (
                     <div key={i} style={{ display: 'flex', borderBottom: '1px solid var(--border)' }}>
                       <div style={{ width: 140, padding: '9px 16px', fontSize: 12.5, fontWeight: 600, color: 'var(--text3)', flexShrink: 0 }}>{row.label}</div>

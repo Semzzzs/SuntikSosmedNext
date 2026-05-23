@@ -12,6 +12,10 @@ export default function ViewSettings({ user, onLogout }) {
   const [showPw, setShowPw] = useState({ cur: false, new: false, con: false });
   const [saved, setSaved] = useState(false);
   const [pwMsg, setPwMsg] = useState({ type: '', text: '' });
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteEmailInput, setDeleteEmailInput] = useState('');
+  const [deleteError, setDeleteError] = useState('');
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   // Profile fields
   const [phone, setPhone] = useState('');
@@ -286,27 +290,71 @@ export default function ViewSettings({ user, onLogout }) {
                   <div style={{ fontSize: 12, color: 'var(--text3)', maxWidth: 220, lineHeight: 1.5 }}>Permanen dan tidak bisa dibatalkan. Semua data akan dihapus.</div>
                 </div>
                 <button
-                  onClick={async () => {
-                    const confirmed = window.confirm('Yakin ingin menghapus akun? Semua data transaksi akan dihapus permanen dan tidak bisa dikembalikan.');
-                    if (!confirmed) return;
-                    const emailInput = window.prompt('Ketik email kamu untuk konfirmasi:');
-                    const { data: { session } } = await supabase.auth.getSession();
-                    if (!emailInput || emailInput.trim() !== session?.user?.email) {
-                      alert('Email tidak cocok. Penghapusan dibatalkan.');
-                      return;
-                    }
-                    const token = session?.access_token || '';
-                    const res = await fetch('/api/admin-api?action=delete_user', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                      body: JSON.stringify({ email: session.user.email }),
-                    });
-                    if (res.ok) { alert('Akun berhasil dihapus.'); onLogout(); }
-                    else { alert('Gagal menghapus akun. Hubungi admin.'); }
-                  }}
-                  className="btn" style={{ background: 'var(--red)', color: '#fff', border: 'none', borderRadius: 9, padding: '8px 14px', fontSize: 13, flexShrink: 0 }}>
+                  onClick={() => { setShowDeleteModal(true); setDeleteEmailInput(''); setDeleteError(''); }}
+                  className="btn" style={{ background: 'var(--red)', color: '#fff', border: 'none', borderRadius: 9, padding: '8px 14px', fontSize: 13, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
                   <Trash2 size={14} /> Hapus Akun
                 </button>
+
+                {/* Modal Konfirmasi Hapus Akun */}
+                {showDeleteModal && (
+                  <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div style={{ background: 'var(--bg)', borderRadius: 16, padding: 28, width: 420, maxWidth: '90vw', boxShadow: '0 20px 60px rgba(0,0,0,.3)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+                        <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--red-l)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <Trash2 size={18} style={{ color: 'var(--red)' }} />
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--text)' }}>Hapus Akun</div>
+                          <div style={{ fontSize: 12, color: 'var(--text3)' }}>Tindakan ini tidak bisa dibatalkan</div>
+                        </div>
+                      </div>
+                      <p style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 16, lineHeight: 1.6 }}>
+                        Semua data akun dan transaksi akan dihapus permanen. Ketik email kamu untuk konfirmasi.
+                      </p>
+                      <input
+                        className="inp"
+                        type="email"
+                        placeholder="Email kamu"
+                        value={deleteEmailInput}
+                        onChange={e => { setDeleteEmailInput(e.target.value); setDeleteError(''); }}
+                        style={{ width: '100%', fontSize: 13, marginBottom: 10 }}
+                      />
+                      {deleteError && (
+                        <div style={{ marginBottom: 10, padding: '8px 12px', borderRadius: 8, background: 'var(--red-l)', color: 'var(--red)', fontSize: 13, fontWeight: 600 }}>
+                          {deleteError}
+                        </div>
+                      )}
+                      <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                        <button
+                          onClick={() => { setShowDeleteModal(false); setDeleteError(''); }}
+                          style={{ flex: 1, padding: '10px 0', borderRadius: 9, border: '1px solid var(--border)', background: 'var(--bg2)', color: 'var(--text)', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif" }}>
+                          Batal
+                        </button>
+                        <button
+                          disabled={deleteLoading}
+                          onClick={async () => {
+                            const { data: { session } } = await supabase.auth.getSession();
+                            if (!deleteEmailInput || deleteEmailInput.trim() !== session?.user?.email) {
+                              setDeleteError('Email tidak cocok. Periksa kembali.');
+                              return;
+                            }
+                            setDeleteLoading(true);
+                            const res = await fetch('/api/admin-api?action=delete_user', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token || ''}` },
+                              body: JSON.stringify({ email: session.user.email }),
+                            });
+                            setDeleteLoading(false);
+                            if (res.ok) { setShowDeleteModal(false); onLogout(); }
+                            else { setDeleteError('Gagal menghapus akun. Hubungi admin.'); }
+                          }}
+                          style={{ flex: 1, padding: '10px 0', borderRadius: 9, border: 'none', background: 'var(--red)', color: '#fff', fontSize: 13, fontWeight: 700, cursor: deleteLoading ? 'not-allowed' : 'pointer', opacity: deleteLoading ? 0.7 : 1, fontFamily: "'Plus Jakarta Sans',sans-serif" }}>
+                          {deleteLoading ? 'Menghapus...' : 'Ya, Hapus Akun'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>

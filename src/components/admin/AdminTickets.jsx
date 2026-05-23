@@ -37,11 +37,40 @@ export default function AdminTickets() {
         load();
     };
 
+    const [filterStatus, setFilterStatus] = useState('all');
+    const filteredTickets = filterStatus === 'all' ? tickets : tickets.filter(t => t.status === filterStatus);
+    const countOpen = tickets.filter(t => t.status === 'open').length;
+    const countProgress = tickets.filter(t => t.status === 'inprogress').length;
+    const countClosed = tickets.filter(t => t.status === 'closed').length;
+
     return (
         <div>
             <div style={{ marginBottom: 20 }}>
                 <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text)', marginBottom: 3 }}>Support Tickets</h1>
                 <p style={{ fontSize: 13.5, color: 'var(--text2)' }}>{tickets.length} tiket masuk.</p>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 20 }}>
+                {[
+                    { label: 'Open', value: countOpen, color: 'var(--blue)', bg: 'var(--blue-l)', status: 'open' },
+                    { label: 'In Progress', value: countProgress, color: 'var(--yellow)', bg: 'var(--yellow-l)', status: 'inprogress' },
+                    { label: 'Closed', value: countClosed, color: 'var(--green)', bg: 'var(--green-l)', status: 'closed' },
+                ].map(s => (
+                    <div key={s.label} className="card" onClick={() => setFilterStatus(filterStatus === s.status ? 'all' : s.status)}
+                        style={{ padding: 18, cursor: 'pointer', border: filterStatus === s.status ? `2px solid ${s.color}` : '1.5px solid var(--border)', transition: 'all .15s' }}>
+                        <div style={{ fontSize: 12, color: 'var(--text3)', fontWeight: 600, marginBottom: 6 }}>{s.label}</div>
+                        <div style={{ fontSize: 26, fontWeight: 800, color: s.color }}>{s.value}</div>
+                    </div>
+                ))}
+            </div>
+
+            <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+                {[['all', 'Semua'], ['open', 'Open'], ['inprogress', 'In Progress'], ['closed', 'Closed']].map(([v, l]) => (
+                    <button key={v} onClick={() => setFilterStatus(v)}
+                        style={{ padding: '7px 16px', borderRadius: 9, border: `1.5px solid ${filterStatus === v ? 'var(--blue)' : 'var(--border)'}`, background: filterStatus === v ? 'var(--blue)' : 'transparent', color: filterStatus === v ? '#fff' : 'var(--text2)', fontWeight: 700, fontSize: 12.5, cursor: 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif" }}>
+                        {l} {v !== 'all' && `(${v === 'open' ? countOpen : v === 'inprogress' ? countProgress : countClosed})`}
+                    </button>
+                ))}
             </div>
 
             {loading ? (
@@ -56,7 +85,7 @@ export default function AdminTickets() {
                 </div>
             ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    {tickets.map(t => {
+                    {filteredTickets.map(t => {
                         const isOpen = expanded === t.id;
                         const sc = STATUS_COLOR[t.status] || 'var(--text3)';
                         const sb = STATUS_BG[t.status] || 'var(--bg2)';

@@ -39,23 +39,33 @@ export default async function handler(req, res) {
 
             // ✅ Paksa email dari session, bukan dari client
             try {
+                const reqBody = {
+                    reference_id: body.reference_id,
+                    amount,
+                    customer_name: user.user_metadata?.full_name || user.email,
+                    customer_email: user.email,
+                    channel_code: 'qris',
+                    return_url: `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/dashboard`,
+                };
+                console.log('[Paymenku] Request URL:', `${PAYMENKU_BASE}/transaction/create`);
+                console.log('[Paymenku] Request body:', JSON.stringify(reqBody));
                 const resp = await fetch(`${PAYMENKU_BASE}/transaction/create`, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${PAYMENKU_API_KEY}`,
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({
-                        reference_id: body.reference_id,
-                        amount,
-                        customer_name: user.user_metadata?.full_name || user.email,
-                        customer_email: user.email, // ✅ dari server session, bukan dari client
-                        channel_code: 'qris',
-                        return_url: `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/dashboard`,
-                    }),
+                    body: JSON.stringify(reqBody),
                 });
-                const data = await resp.json();
-                return res.status(resp.ok ? 200 : 400).json(data);
+                const rawText = await resp.text();
+                console.log('[Paymenku] Response status:', resp.status);
+                console.log('[Paymenku] Response body:', rawText);
+                try {
+                    const data = JSON.parse(rawText);
+                    return res.status(resp.ok ? 200 : 400).json(data);
+                } catch {
+                    return res.status(500).json({ error: 'Response Paymenku bukan JSON', raw: rawText.slice(0, 200) });
+                }
             } catch (e) {
                 return res.status(500).json({ error: e.message });
             }

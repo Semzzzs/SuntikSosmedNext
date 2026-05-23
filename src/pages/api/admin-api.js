@@ -177,6 +177,42 @@ export default async function handler(req, res) {
             return res.status(200).json({ ok: true });
         }
 
+        // Approve deposit pending
+        if (action === 'approve_deposit') {
+            const { id, email, amount } = body;
+            if (!id || !email || !amount) return res.status(400).json({ error: 'Data tidak lengkap.' });
+
+            // Update status jadi success
+            const { error } = await supabase.from('transactions').update({
+                status: 'success',
+                description: `Deposit QRIS diapprove admin - Rp ${parseInt(amount).toLocaleString('id-ID')}`,
+            }).eq('id', id).eq('email', email);
+
+            if (error) return res.status(500).json({ error: error.message });
+            return res.status(200).json({ ok: true });
+        }
+
+        // Deposit manual oleh admin
+        if (action === 'manual_deposit') {
+            const { email, amount, note } = body;
+            if (!email || !email.includes('@')) return res.status(400).json({ error: 'Email tidak valid.' });
+            const amt = parseInt(amount);
+            if (!amt || amt <= 0) return res.status(400).json({ error: 'Jumlah tidak valid.' });
+
+            const { data: profile } = await supabase.from('profiles').select('email').eq('email', email).maybeSingle();
+            if (!profile) return res.status(400).json({ error: `Email ${email} tidak terdaftar di sistem.` });
+
+            const { error } = await supabase.from('transactions').insert({
+                email,
+                type: 'deposit',
+                amount: amt,
+                description: note || 'Deposit manual oleh admin',
+                status: 'success',
+            });
+            if (error) return res.status(500).json({ error: error.message });
+            return res.status(200).json({ ok: true });
+        }
+
         return res.status(400).json({ error: 'Unknown action' });
     }
 

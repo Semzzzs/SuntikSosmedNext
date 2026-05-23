@@ -217,35 +217,56 @@ export default function AdminPanel() {
     const fetchOrders = useCallback(async () => {
         setLoadingOrders(true);
         try {
-            // ✅ Ambil orders dari Supabase — akurat, semua user, persisten
-            const { data: txData, error: txError } = await supabase
+            // Ambil orders dari Supabase
+            const { data: txRaw, error: txError } = await supabase
                 .from('transactions')
                 .select('*')
-                // ✅ Hanya ambil SMM orders
                 .eq('type', 'order')
                 .order('created_at', { ascending: false });
 
-            if (!txError && txData) {
-                setDbOrders(txData);
-                // Map ke format orders untuk tabel (gunakan field Supabase)
-                setOrders(txData.map(t => ({
-                    id: t.order_id || t.id,
-                    status: t.status || 'pending',
-                    charge: t.charge || (t.amount_usd) || (t.amount ? t.amount / ((t._rate || 17687) * (t._markup || 1)) : 0),
-                    amount_idr: t.amount || 0,
-                    start_count: t.start_count,
-                    remains: t.remains,
-                    created_at: t.created_at,
-                    email: t.email,
-                    service: t.service_id || t.service || t.description,
-                    description: t.description,
-                })));
-            }
+            // Filter hanya SMM orders asli
+            const txData = txRaw?.filter(t =>
+                (t.order_id && /^\d+$/.test(String(t.order_id))) ||
+                (t.description && t.description.startsWith('Order #'))
+            ) || [];
 
-            // ✅ Fallback localStorage dihapus:
-            // Data dari browser storage tidak bisa dipercaya sebagai sumber kebenaran bisnis.
-            // Jika Supabase kosong, tampilkan state kosong. Admin perlu cek langsung ke provider.
-            if (!txData || txData.length === 0) {
+            if (!txError && txData.length > 0) {
+                setDbOrders(txData);
+
+                // Fetch live status dari SMMSOC
+                const orderIds = txData
+                    .filter(t => t.order_id && /^\d+$/.test(String(t.order_id)))
+                    .map(t => String(t.order_id));
+
+                let liveStatus = {};
+                if (orderIds.length > 0) {
+                    try {
+                        const res = await fetch(`/api/smm?action=status&orders=${orderIds.slice(0, 100).join(',')}`, {
+                            headers: { 'Authorization': `Bearer ${sessionStorage.getItem('admin_token') || ''}` }
+                        });
+                        const data = await res.json();
+                        if (!data.error) liveStatus = data;
+                    } catch { /* pakai status Supabase */ }
+                }
+
+                setOrders(txData.map(t => {
+                    const live = t.order_id ? liveStatus[t.order_id] : null;
+                    return {
+                        id: t.order_id || t.id,
+                        status: live?.status || 'Pending',
+                        charge: t.charge || (t.amount ? t.amount / ((t._rate || 17687) * (t._markup || 1)) : 0),
+                        amount_idr: t.amount || 0,
+                        start_count: live?.start_count || t.start_count,
+                        remains: live?.remains || t.remains,
+                        created_at: t.created_at,
+                        email: t.email,
+                        service: t.service_id || t.description,
+                        description: t.description,
+                        link: t.link,
+                        qty: t.qty,
+                    };
+                }));
+            } else {
                 setOrders([]);
                 setDbOrders([]);
             }
@@ -621,7 +642,17 @@ export default function AdminPanel() {
                                                         <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.description || o.service || '—'}</div>
                                                     </td>
                                                     <td style={{ padding: '11px 14px' }}>
-                                                        <span style={{ fontSize: 11.5, fontWeight: 700, color: statusColor(o.status), background: `${statusColor(o.status)}18`, padding: '3px 8px', borderRadius: 20, textTransform: 'capitalize' }}>{o.status || 'pending'}</span>
+                                                        {(() => {
+                                                            const s = o.status;
+                                                            const cfg = {
+                                                                'Completed': { label: 'Selesai', color: '#059669', bg: '#d1fae5' },
+                                                                'In progress': { label: 'Berjalan', color: 'var(--blue)', bg: 'var(--blue-l)' },
+                                                                'Processing': { label: 'Diproses', color: 'var(--blue)', bg: 'var(--blue-l)' },
+                                                                'Pending': { label: 'Menunggu', color: '#d97706', bg: '#fef3c7' },
+                                                                'Canceled': { label: 'Dibatalkan', color: 'var(--red)', bg: 'var(--red-l)' },
+                                                            }[s] || { label: s || 'Pending', color: 'var(--text3)', bg: 'var(--bg2)' };
+                                                            return <span style={{ fontSize: 11.5, fontWeight: 700, color: cfg.color, background: cfg.bg, padding: '3px 8px', borderRadius: 20 }}>{cfg.label}</span>;
+                                                        })()}
                                                     </td>
                                                     <td style={{ padding: '11px 14px', fontWeight: 700, color: 'var(--green)' }}>
                                                         {o.amount_idr ? `Rp ${o.amount_idr.toLocaleString('id-ID')}` : fIDRMarkup(parseFloat(o.charge || 0))}

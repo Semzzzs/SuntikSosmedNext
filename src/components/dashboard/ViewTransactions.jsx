@@ -7,14 +7,18 @@ export default function ViewTransactions({ user }) {
   const [loading, setLoading] = useState(true);
 
   const load = async () => {
-    if (!user?.email) return;
     setLoading(true);
-    const { data } = await supabase
-      .from('transactions')
-      .select('*')
-      .eq('email', user.email)
-      .order('created_at', { ascending: false });
-    setTransactions(data || []);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const email = session?.user?.email || user?.email;
+      if (!email) { setLoading(false); return; }
+      const { data } = await supabase
+        .from('transactions')
+        .select('*')
+        .eq('email', email)
+        .order('created_at', { ascending: false });
+      setTransactions(data || []);
+    } catch { }
     setLoading(false);
   };
 
@@ -29,6 +33,7 @@ export default function ViewTransactions({ user }) {
     order: { label: 'Order', icon: <ArrowUpRight size={16} />, color: 'var(--red)', bg: 'var(--red-l)', sign: '-' },
     refund: { label: 'Refund', icon: <ArrowDownLeft size={16} />, color: 'var(--blue)', bg: 'var(--blue-l)', sign: '+' },
     bonus: { label: 'Bonus', icon: <ArrowDownLeft size={16} />, color: 'var(--yellow)', bg: 'var(--yellow-l)', sign: '+' },
+    deduction: { label: 'Pengurangan', icon: <ArrowUpRight size={16} />, color: 'var(--red)', bg: 'var(--red-l)', sign: '-' },
   };
 
   const totalDeposit = transactions.filter(t => ['deposit', 'bonus', 'refund'].includes(t.type)).reduce((s, t) => s + (t.amount || 0), 0);

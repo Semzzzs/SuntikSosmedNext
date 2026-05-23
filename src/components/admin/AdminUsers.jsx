@@ -13,7 +13,7 @@ async function getAllBalances(emails) {
     const map = {};
     for (const email of emails) map[email] = 0;
     for (const t of data) {
-        if (!t.email) continue;
+        if (!t.email || t.status !== 'success') continue;
         const masuk = ['deposit', 'bonus', 'refund'].includes(t.type) ? (t.amount || 0) : 0;
         const keluar = t.type === 'order' ? (t.amount || 0) : 0;
         map[t.email] = (map[t.email] || 0) + masuk - keluar;
@@ -140,6 +140,11 @@ export default function AdminUsers() {
         setTimeout(() => { setModal(null); setMsg(''); }, 2000);
     };
 
+    const [search, setSearch] = useState('');
+    const filteredUsers = users.filter(u =>
+        !search || u.email?.toLowerCase().includes(search.toLowerCase()) || u.name?.toLowerCase().includes(search.toLowerCase())
+    );
+
     return (
         <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
@@ -147,6 +152,8 @@ export default function AdminUsers() {
                     <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text)', marginBottom: 3 }}>User Management</h1>
                     <p style={{ fontSize: 13.5, color: 'var(--text2)' }}>{users.length} user terdaftar.</p>
                 </div>
+                <input className="inp" placeholder="Cari email atau nama..." value={search} onChange={e => setSearch(e.target.value)}
+                    style={{ width: 260, fontSize: 13 }} />
             </div>
 
             {modal && (
@@ -211,8 +218,8 @@ export default function AdminUsers() {
                             </tr>
                         </thead>
                         <tbody>
-                            {users.map((u, i) => (
-                                <tr key={u.email} style={{ borderBottom: i < users.length - 1 ? '1px solid var(--border)' : 'none', opacity: u.blocked ? 0.6 : 1 }}>
+                            {filteredUsers.map((u, i) => (
+                                <tr key={u.email} style={{ borderBottom: i < filteredUsers.length - 1 ? '1px solid var(--border)' : 'none', opacity: u.blocked ? 0.6 : 1 }}>
                                     <td style={{ padding: '11px 14px' }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                                             <div style={{ width: 34, height: 34, borderRadius: 10, background: u.blocked ? 'var(--text3)' : 'var(--blue)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 13, flexShrink: 0 }}>
