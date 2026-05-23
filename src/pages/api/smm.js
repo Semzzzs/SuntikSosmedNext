@@ -61,10 +61,73 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'API Key belum dikonfigurasi.' });
     }
 
+    // ✅ Whitelist params — cegah override 'key' atau inject param arbitrary
+    const ALLOWED = new Set(['action', 'service', 'link', 'quantity', 'order', 'orders']);
+    const safeQuery = Object.fromEntries(
+        Object.entries(req.query).filter(([k]) => ALLOWED.has(k))
+    );
+
+    // ✅ Validasi saldo server-side saat action=add (user biasa, bukan admin)
+    if (safeQuery.action === 'add' && !isAdmin) {
+        try {
+            const token = authHeader.split(' ')[1];
+            const supabaseCheck = createClient(
+                process.env.NEXT_PUBLIC_SUPABASE_URL,
+                process.env.SUPABASE_SERVICE_ROLE_KEY
+            );
+            const { data: { user: u } } = await supabaseCheck.auth.getUser(token);
+            if (u?.email) {
+                const { data: txs } = await supabaseCheck
+                    .from('transactions')
+                    .select('type, amount, status')
+                    .eq('email', u.email);
+
+                const masuk = (txs || []).filter(t => ['deposit', 'bonus', 'refund'].includes(t.type) && t.status === 'success').reduce((s, t) => s + (t.amount || 0), 0);
+                const keluar = (txs || []).filter(t => t.type === 'order' && t.status === 'success').reduce((s, t) => s + (t.amount || 0), 0);
+                const balance = Math.max(0, masuk - keluar);
+
+                // Ambil rate USD->IDR
+                let rate = 17689;
+                try {
+                    const rateRes = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/rate`);
+                    const rateData = await rateRes.json();
+                    if (rateData.rate) rate = rateData.rate;
+                } catch { }
+
+                // Ambil markup
+                let markup = 1;
+                try {
+                    const { data: mkData } = await supabaseCheck.from('settings').select('value').eq('key', 'markup').maybeSingle();
+                    if (mkData?.value) markup = parseFloat(mkData.value);
+                } catch { }
+
+                // Ambil harga service dari SMMSOC
+                const svcRes = await fetch(`${apiUrl}/api/v2`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: new URLSearchParams({ key: apiKey, action: 'services' }).toString(),
+                });
+                const svcData = await svcRes.json();
+                const svc = Array.isArray(svcData) ? svcData.find(s => String(s.service) === String(safeQuery.service)) : null;
+
+                if (svc) {
+                    const qty = parseInt(safeQuery.quantity) || 0;
+                    const totalIDR = Math.round(qty * parseFloat(svc.rate || 0) / 1000 * rate * markup);
+                    if (totalIDR > balance) {
+                        return res.status(402).json({ error: `Saldo tidak cukup. Saldo: Rp ${Math.round(balance).toLocaleString('id-ID')}, Dibutuhkan: Rp ${totalIDR.toLocaleString('id-ID')}` });
+                    }
+                }
+            }
+        } catch (e) {
+            console.error('[smm] Balance check error:', e.message);
+            // Fail open — jangan block order kalau balance check error
+        }
+    }
+
     try {
         const body = new URLSearchParams({
             key: apiKey,
-            ...req.query,
+            ...safeQuery,
         });
 
         const response = await fetch(`${apiUrl}/api/v2`, {

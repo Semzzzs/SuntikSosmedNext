@@ -12,6 +12,32 @@
 
 import { createClient } from '@supabase/supabase-js';
 
+// Rate limiting in-memory
+const loginAttempts = new Map();
+const MAX_LOGIN_ATTEMPTS = 10;
+const LOGIN_WINDOW_MS = 15 * 60 * 1000; // 15 menit
+
+function isLoginRateLimited(ip) {
+    const now = Date.now();
+    const entry = loginAttempts.get(ip);
+    if (!entry || now > entry.resetAt) {
+        loginAttempts.set(ip, { count: 0, resetAt: now + LOGIN_WINDOW_MS });
+        return false;
+    }
+    return entry.count >= MAX_LOGIN_ATTEMPTS;
+}
+
+function recordLoginFailure(ip) {
+    const now = Date.now();
+    const entry = loginAttempts.get(ip) || { count: 0, resetAt: now + LOGIN_WINDOW_MS };
+    entry.count += 1;
+    loginAttempts.set(ip, entry);
+}
+
+function resetLoginAttempts(ip) {
+    loginAttempts.delete(ip);
+}
+
 // Supabase admin — untuk signInWithPassword server-side
 const supabaseAdmin = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -20,6 +46,13 @@ const supabaseAdmin = createClient(
 
 export default async function handler(req, res) {
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+    // Rate limiting
+    const ip = (req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown')
+        .split(',')[0].trim();
+    if (isLoginRateLimited(ip)) {
+        return res.status(429).json({ error: 'Terlalu banyak percobaan login. Tunggu 15 menit.' });
+    }
 
     const { email, password } = req.body;
 
@@ -58,9 +91,11 @@ export default async function handler(req, res) {
     const { data, error } = await supabaseAuth.auth.signInWithPassword({ email, password });
 
     if (error || !data?.session) {
-        await new Promise(r => setTimeout(r, 300)); // slow down brute force
+        recordLoginFailure(ip);
+        await new Promise(r => setTimeout(r, 300));
         return res.status(401).json({ error: 'Email atau password salah.' });
     }
+    resetLoginAttempts(ip);
 
     // ✅ Return session tokens ke client — client set session via supabase.auth.setSession()
     return res.status(200).json({

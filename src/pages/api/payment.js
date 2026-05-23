@@ -47,8 +47,7 @@ export default async function handler(req, res) {
                     channel_code: 'qris',
                     return_url: `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/dashboard`,
                 };
-                console.log('[Paymenku] Request URL:', `${PAYMENKU_BASE}/transaction/create`);
-                console.log('[Paymenku] Request body:', JSON.stringify(reqBody));
+
                 const resp = await fetch(`${PAYMENKU_BASE}/transaction/create`, {
                     method: 'POST',
                     headers: {
@@ -58,8 +57,7 @@ export default async function handler(req, res) {
                     body: JSON.stringify(reqBody),
                 });
                 const rawText = await resp.text();
-                console.log('[Paymenku] Response status:', resp.status);
-                console.log('[Paymenku] Response body:', rawText);
+
                 try {
                     const data = JSON.parse(rawText);
                     return res.status(resp.ok ? 200 : 400).json(data);
@@ -77,7 +75,9 @@ export default async function handler(req, res) {
     if (req.method === 'GET') {
         const { action, order_id } = req.query;
 
-        if (action === 'check_status' && order_id) {
+        // Sanitasi order_id — hanya boleh alphanumeric dan strip/dash
+        const sanitizedOrderId = String(order_id || '').replace(/[^a-zA-Z0-9_-]/g, '');
+        if (action === 'check_status' && sanitizedOrderId) {
             // ✅ Cek dari Supabase dulu (bukan filesystem)
             const supabase = createClient(
                 process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -86,7 +86,7 @@ export default async function handler(req, res) {
             const { data: tx } = await supabase
                 .from('transactions')
                 .select('*')
-                .ilike('description', `%${order_id}%`)
+                .ilike('description', `%${sanitizedOrderId}%`)
                 .eq('email', user.email)
                 .maybeSingle();
 
@@ -96,7 +96,7 @@ export default async function handler(req, res) {
 
             // Fallback: tanya langsung ke Paymenku
             try {
-                const resp = await fetch(`${PAYMENKU_BASE}/check-status/${order_id}`, {
+                const resp = await fetch(`${PAYMENKU_BASE}/check-status/${sanitizedOrderId}`, {
                     headers: { 'Authorization': `Bearer ${PAYMENKU_API_KEY}` },
                 });
                 const data = await resp.json();

@@ -236,6 +236,12 @@ export default function ViewNewOrder({ user, setMenu }) {
 
   const handleOrder = async () => {
     if (!selectedService || !link || !qty) { setError('Lengkapi semua field terlebih dahulu.'); return; }
+    // Validasi saldo sebelum order
+    const totalIDRCheck = Math.round(parseInt(qty) * parseFloat(selectedService.rate || 0) / 1000 * (rate || 17687) * markup);
+    if (balance !== null && totalIDRCheck > balance) {
+      setError(`Saldo tidak cukup. Saldo kamu Rp ${Math.round(balance).toLocaleString('id-ID')}, dibutuhkan Rp ${totalIDRCheck.toLocaleString('id-ID')}.`);
+      return;
+    }
     setOrderLoading(true); setError(''); setOrderResult(null);
     try {
       const res = await api.addOrder(selectedService.service, link, qty);
