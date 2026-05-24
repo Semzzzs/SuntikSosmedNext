@@ -48,85 +48,97 @@ export default function AuthForm({ type }) {
       if (!form.name.trim()) { setLoading(false); return setError('Nama wajib diisi.'); }
       if (form.password.length < 6) { setLoading(false); return setError('Password minimal 6 karakter.'); }
 
-      const { data, error: err } = await supabase.auth.signUp({
-        email: form.email,
-        password: form.password,
-        options: { data: { name: form.name.trim() } },
-      });
+      try {
+        const { data, error: err } = await Promise.race([
+          supabase.auth.signUp({
+            email: form.email,
+            password: form.password,
+            options: { data: { name: form.name.trim() } },
+          }),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 10000))
+        ]);
 
-      if (err) {
+        if (err) {
+          setLoading(false);
+          const msg = err.message?.toLowerCase();
+          if (msg?.includes('already registered') || msg?.includes('already exists') || msg?.includes('user already')) {
+            return setError('Email sudah terdaftar. Silakan login.');
+          }
+          if (msg?.includes('rate limit') || msg?.includes('too many')) {
+            return setError('Terlalu banyak percobaan. Tunggu beberapa menit.');
+          }
+          if (msg?.includes('invalid email')) {
+            return setError('Format email tidak valid.');
+          }
+          if (msg?.includes('weak password') || msg?.includes('password')) {
+            return setError('Password terlalu lemah. Gunakan minimal 8 karakter.');
+          }
+          return setError('Registrasi gagal: ' + err.message);
+        }
+
+        const user = data.user || data.session?.user;
+        if (!user) {
+          setLoading(false);
+          return setError('Cek email kamu untuk konfirmasi akun, lalu login.');
+        }
+
+        const name = form.name.trim();
+        sessionStorage.setItem('user', JSON.stringify({
+          name,
+          initials: (name[0] + (name.split(' ')[1]?.[0] || '')).toUpperCase(),
+        }));
+
+        router.push('/login?registered=1');
+      } catch (err) {
         setLoading(false);
-        console.error('[Register error]', err.message, err.status);
-        const msg = err.message?.toLowerCase();
-        if (msg?.includes('already registered') || msg?.includes('already exists') || msg?.includes('user already')) {
-          return setError('Email sudah terdaftar. Silakan login.');
+        if (err.message === 'timeout') {
+          return setError('Koneksi timeout. Periksa internet kamu dan coba lagi.');
         }
-        if (msg?.includes('rate limit') || msg?.includes('too many')) {
-          return setError('Terlalu banyak percobaan. Tunggu beberapa menit.');
-        }
-        if (msg?.includes('invalid email')) {
-          return setError('Format email tidak valid.');
-        }
-        if (msg?.includes('weak password') || msg?.includes('password')) {
-          return setError('Password terlalu lemah. Gunakan minimal 8 karakter.');
-        }
-        return setError('Registrasi gagal: ' + err.message);
+        return setError('Registrasi gagal. Periksa koneksi internet kamu.');
       }
-
-      const user = data.user || data.session?.user;
-      if (!user) {
-        setLoading(false);
-        // Email confirmation required
-        return setError('Cek email kamu untuk konfirmasi akun, lalu login.');
-      }
-
-      // ✅ Fix: sessionStorage hanya simpan data non-sensitif untuk UI (nama, initials)
-      // Email/ID untuk operasi database selalu diambil dari supabase.auth.getSession()
-      const name = form.name.trim();
-      sessionStorage.setItem('user', JSON.stringify({
-        name,
-        initials: (name[0] + (name.split(' ')[1]?.[0] || '')).toUpperCase(),
-      }));
-
-      // ✅ Fix: hapus admin_users localStorage — admin panel sudah pakai Supabase langsung
-      // Menyimpan user list di localStorage tidak aman dan tidak akurat
-
-      router.push('/login?registered=1');
 
     } else {
       // ✅ Fix Critical: blocked check dipindah ke server-side via /api/auth/login
       // Client-side check (query Supabase dari browser) mudah di-bypass lewat DevTools/console
-      const loginRes = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: form.email, password: form.password }),
-      });
-      const loginData = await loginRes.json();
-
-      if (!loginRes.ok) {
-        setLoading(false);
-        return setError(loginData.error || 'Email atau password salah.');
-      }
-
-      // Set Supabase session dari token yang dikembalikan server
-      if (loginData.access_token) {
-        await supabase.auth.setSession({
-          access_token: loginData.access_token,
-          refresh_token: loginData.refresh_token,
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 10000); // 10 detik timeout
+        const loginRes = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: form.email, password: form.password }),
+          signal: controller.signal,
         });
+        clearTimeout(timeout);
+        const loginData = await loginRes.json();
+
+        if (!loginRes.ok) {
+          setLoading(false);
+          return setError(loginData.error || 'Email atau password salah.');
+        }
+
+        // Set Supabase session dari token yang dikembalikan server
+        if (loginData.access_token) {
+          await supabase.auth.setSession({
+            access_token: loginData.access_token,
+            refresh_token: loginData.refresh_token,
+          });
+        }
+
+        const name = loginData.user?.name || form.email.split('@')[0];
+        sessionStorage.setItem('user', JSON.stringify({
+          name,
+          initials: (name[0] + (name.split(' ')[1]?.[0] || '')).toUpperCase(),
+        }));
+
+        router.push('/dashboard');
+      } catch (err) {
+        setLoading(false);
+        if (err.name === 'AbortError') {
+          return setError('Koneksi timeout. Periksa internet kamu dan coba lagi.');
+        }
+        return setError('Gagal login. Periksa koneksi internet kamu.');
       }
-
-      // ✅ Fix: sessionStorage hanya simpan data non-sensitif untuk UI (nama, initials)
-      // Email/ID untuk operasi database selalu dari supabase.auth.getSession()
-      const name = loginData.user?.name || form.email.split('@')[0];
-      sessionStorage.setItem('user', JSON.stringify({
-        name,
-        initials: (name[0] + (name.split(' ')[1]?.[0] || '')).toUpperCase(),
-      }));
-
-      // ✅ Fix: hapus admin_users localStorage — tidak aman dan tidak akurat
-
-      router.push('/dashboard');
     }
 
     setLoading(false);

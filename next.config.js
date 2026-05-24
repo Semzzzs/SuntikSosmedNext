@@ -23,8 +23,20 @@ const nextConfig = {
           { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
           // Paksa HTTPS selama 1 tahun (HSTS)
           { key: 'Strict-Transport-Security', value: 'max-age=31536000; includeSubDomains' },
-          // Cegah XSS & injection (CSP) - sesuaikan jika pakai CDN eksternal
-          { key: 'Content-Security-Policy', value: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; object-src 'none'; base-uri 'self'; frame-src 'none';" },
+          // Cegah XSS & injection (CSP)
+          {
+            key: 'Content-Security-Policy', value: [
+              "default-src 'self'",
+              "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+              "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+              "font-src 'self' data: https://fonts.gstatic.com",
+              "img-src 'self' data: https: blob:",
+              "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://paymenku.com https://smmsoc.com https://api.qrserver.com https://cdn.jsdelivr.net https://open.er-api.com https://api.frankfurter.app",
+              "object-src 'none'",
+              "base-uri 'self'",
+              "frame-src 'none'",
+            ].join('; ')
+          },
         ],
       },
     ];
