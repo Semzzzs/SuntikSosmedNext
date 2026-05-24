@@ -217,64 +217,64 @@ export default function AdminPanel() {
     const fetchOrders = useCallback(async () => {
         setLoadingOrders(true);
         try {
-            // Ambil orders dari Supabase
-            const { data: txRaw, error: txError } = await supabase
-                .from('transactions')
-                .select('*')
-                .eq('type', 'order')
-                .order('created_at', { ascending: false });
+            // ✅ Pakai adminFetch (service role) — bypass RLS, bisa baca semua transaksi
+            const res = await adminFetch('/api/admin-api?action=get_orders');
+            if (res.status === 401) { logout(); return; }
+            const json = await res.json();
+            const txRaw = json.orders || [];
 
-            // Filter hanya SMM orders asli
-            const txData = txRaw?.filter(t =>
+            // Filter hanya SMM orders asli (punya order_id numerik atau desc 'Order #')
+            const txData = txRaw.filter(t =>
                 (t.order_id && /^\d+$/.test(String(t.order_id))) ||
                 (t.description && t.description.startsWith('Order #'))
-            ) || [];
+            );
 
-            if (!txError && txData.length > 0) {
-                setDbOrders(txData);
+            setDbOrders(txData);
 
-                // Fetch live status dari SMMSOC
-                const orderIds = txData
-                    .filter(t => t.order_id && /^\d+$/.test(String(t.order_id)))
-                    .map(t => String(t.order_id));
-
-                let liveStatus = {};
-                if (orderIds.length > 0) {
-                    try {
-                        const res = await fetch(`/api/smm?action=status&orders=${orderIds.slice(0, 100).join(',')}`, {
-                            headers: { 'Authorization': `Bearer ${sessionStorage.getItem('admin_token') || ''}` }
-                        });
-                        const data = await res.json();
-                        if (!data.error) liveStatus = data;
-                    } catch { /* pakai status Supabase */ }
-                }
-
-                setOrders(txData.map(t => {
-                    const live = t.order_id ? liveStatus[t.order_id] : null;
-                    return {
-                        id: t.order_id || t.id,
-                        status: live?.status || 'Pending',
-                        charge: t.charge || (t.amount ? t.amount / ((t._rate || 17687) * (t._markup || 1)) : 0),
-                        amount_idr: t.amount || 0,
-                        start_count: live?.start_count || t.start_count,
-                        remains: live?.remains || t.remains,
-                        created_at: t.created_at,
-                        email: t.email,
-                        service: t.service_id || t.description,
-                        description: t.description,
-                        link: t.link,
-                        qty: t.qty,
-                    };
-                }));
-            } else {
+            if (txData.length === 0) {
                 setOrders([]);
-                setDbOrders([]);
+                setLoadingOrders(false);
+                return;
             }
+
+            // Fetch live status dari SMMSOC
+            const orderIds = txData
+                .filter(t => t.order_id && /^\d+$/.test(String(t.order_id)))
+                .map(t => String(t.order_id));
+
+            let liveStatus = {};
+            if (orderIds.length > 0) {
+                try {
+                    const statusRes = await fetch(`/api/smm?action=status&orders=${orderIds.slice(0, 100).join(',')}`, {
+                        headers: { 'Authorization': `Bearer ${sessionStorage.getItem('admin_token') || ''}` }
+                    });
+                    const statusData = await statusRes.json();
+                    if (!statusData.error) liveStatus = statusData;
+                } catch { /* pakai status dari Supabase */ }
+            }
+
+            setOrders(txData.map(t => {
+                const live = t.order_id ? liveStatus[t.order_id] : null;
+                return {
+                    id: t.order_id || t.id,
+                    status: live?.status || t.status || 'Pending',
+                    charge: t.charge || (t.amount ? t.amount / ((t._rate || 17687) * (t._markup || 1)) : 0),
+                    amount_idr: t.amount || 0,
+                    start_count: live?.start_count || t.start_count,
+                    remains: live?.remains || t.remains,
+                    created_at: t.created_at,
+                    email: t.email,
+                    service: t.service_id || t.description,
+                    description: t.description,
+                    link: t.link,
+                    qty: t.qty,
+                };
+            }));
         } catch (e) {
             setOverviewError(e.message);
         }
         setLoadingOrders(false);
-    }, [apiUrl]);
+    }, []);
 
 
     useEffect(() => {

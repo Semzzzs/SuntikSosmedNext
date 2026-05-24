@@ -1,28 +1,39 @@
 import { useState, useEffect } from 'react';
 import { MessageSquare } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
 
 const STATUS_COLOR = { open: 'var(--blue)', inprogress: 'var(--yellow)', closed: 'var(--green)' };
 const STATUS_BG = { open: 'var(--blue-l)', inprogress: 'var(--yellow-l)', closed: 'var(--green-l)' };
 const STATUS_LABEL = { open: 'Open', inprogress: 'In Progress', closed: 'Closed' };
+
+const adminFetch = (url, opts = {}) => fetch(url, {
+    ...opts,
+    headers: { 'Authorization': `Bearer ${sessionStorage.getItem('admin_token') || ''}`, 'Content-Type': 'application/json', ...(opts.headers || {}) },
+});
 
 export default function AdminTickets() {
     const [tickets, setTickets] = useState([]);
     const [replyText, setReplyText] = useState({});
     const [expanded, setExpanded] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [filterStatus, setFilterStatus] = useState('all');
 
     const load = async () => {
         setLoading(true);
-        const { data } = await supabase.from('tickets').select('*').order('created_at', { ascending: false });
-        setTickets(data || []);
+        try {
+            const res = await adminFetch('/api/admin-api?action=get_tickets');
+            const data = await res.json();
+            setTickets(data.tickets || []);
+        } catch (e) { console.error('load tickets:', e); }
         setLoading(false);
     };
 
     useEffect(() => { load(); const i = setInterval(load, 30000); return () => clearInterval(i); }, []);
 
     const updateStatus = async (id, status) => {
-        await supabase.from('tickets').update({ status, updated_at: new Date().toISOString() }).eq('id', id);
+        await adminFetch('/api/admin-api?action=update_ticket', {
+            method: 'POST',
+            body: JSON.stringify({ id, status }),
+        });
         load();
     };
 
@@ -32,12 +43,14 @@ export default function AdminTickets() {
         const ticket = tickets.find(t => t.id === id);
         if (!ticket) return;
         const replies = [...(ticket.replies || []), { from: 'admin', message: msg, at: new Date().toISOString() }];
-        await supabase.from('tickets').update({ replies, status: 'inprogress', updated_at: new Date().toISOString() }).eq('id', id);
+        await adminFetch('/api/admin-api?action=update_ticket', {
+            method: 'POST',
+            body: JSON.stringify({ id, replies, status: 'inprogress' }),
+        });
         setReplyText(r => ({ ...r, [id]: '' }));
         load();
     };
 
-    const [filterStatus, setFilterStatus] = useState('all');
     const filteredTickets = filterStatus === 'all' ? tickets : tickets.filter(t => t.status === filterStatus);
     const countOpen = tickets.filter(t => t.status === 'open').length;
     const countProgress = tickets.filter(t => t.status === 'inprogress').length;

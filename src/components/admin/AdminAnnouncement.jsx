@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { Plus, Trash2, Edit2, CheckCircle, X, Megaphone, Pin, AlertCircle, Info, Zap } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
 
 const TYPES = [
     { value: 'info', label: 'Info', color: 'var(--blue)', bg: 'var(--blue-l)', icon: <Info size={14} /> },
@@ -10,6 +9,11 @@ const TYPES = [
 ];
 
 const emptyForm = { title: '', content: '', type: 'info', pinned: false };
+
+const adminFetch = (url, opts = {}) => fetch(url, {
+    ...opts,
+    headers: { 'Authorization': `Bearer ${sessionStorage.getItem('admin_token') || ''}`, 'Content-Type': 'application/json', ...(opts.headers || {}) },
+});
 
 export default function AdminAnnouncement() {
     const [announcements, setAnnouncements] = useState([]);
@@ -21,8 +25,11 @@ export default function AdminAnnouncement() {
 
     const load = async () => {
         setLoading(true);
-        const { data } = await supabase.from('announcements').select('*').order('pinned', { ascending: false }).order('updated_at', { ascending: false });
-        setAnnouncements(data || []);
+        try {
+            const res = await adminFetch('/api/admin-api?action=get_announcements');
+            const data = await res.json();
+            setAnnouncements(data.announcements || []);
+        } catch (e) { console.error('load announcements:', e); }
         setLoading(false);
     };
 
@@ -34,11 +41,10 @@ export default function AdminAnnouncement() {
 
     const save = async () => {
         if (!form.title.trim() || !form.content.trim()) return;
-        if (editId) {
-            await supabase.from('announcements').update({ ...form, updated_at: new Date().toISOString() }).eq('id', editId);
-        } else {
-            await supabase.from('announcements').insert({ ...form, updated_at: new Date().toISOString() });
-        }
+        await adminFetch('/api/admin-api?action=save_announcement', {
+            method: 'POST',
+            body: JSON.stringify({ ...form, id: editId || undefined }),
+        });
         setForm(emptyForm); setEditId(null);
         setSaved(true); setTimeout(() => setSaved(false), 2000);
         load();
@@ -51,7 +57,10 @@ export default function AdminAnnouncement() {
     };
 
     const remove = async (id) => {
-        await supabase.from('announcements').delete().eq('id', id);
+        await adminFetch('/api/admin-api?action=delete_announcement', {
+            method: 'POST',
+            body: JSON.stringify({ id }),
+        });
         setDeleteConfirm(null);
         load();
     };

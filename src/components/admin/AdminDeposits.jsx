@@ -1,7 +1,5 @@
 import { useState, useEffect } from 'react';
 import { DollarSign, Plus, X, CheckCircle, XCircle } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
-
 export default function AdminDeposits() {
     const [deposits, setDeposits] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -16,12 +14,16 @@ export default function AdminDeposits() {
 
     const load = async () => {
         setLoading(true);
-        const { data } = await supabase
-            .from('transactions')
-            .select('*')
-            .eq('type', 'deposit')
-            .order('created_at', { ascending: false });
-        setDeposits(data || []);
+        try {
+            const token = sessionStorage.getItem('admin_token') || '';
+            const res = await fetch('/api/admin-api?action=get_deposits', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json();
+            setDeposits(data.deposits || []);
+        } catch (e) {
+            console.error('Gagal load deposits:', e);
+        }
         setLoading(false);
     };
 
@@ -51,7 +53,12 @@ export default function AdminDeposits() {
 
     const handleReject = async (t) => {
         setApprovingId(t.id);
-        await supabase.from('transactions').update({ status: 'failed' }).eq('id', t.id);
+        const token = sessionStorage.getItem('admin_token') || '';
+        await fetch('/api/admin-api?action=reject_deposit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ id: t.id }),
+        });
         setApprovingId(null);
         setConfirmModal(null);
         load();

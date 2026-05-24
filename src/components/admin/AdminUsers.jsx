@@ -34,12 +34,46 @@ export default function AdminUsers() {
 
     const load = async () => {
         setLoadingUsers(true);
+        const token = sessionStorage.getItem('admin_token') || '';
 
-        // Ambil blocked emails dari Supabase settings
+        // Ambil users via admin-api (pakai service role - bypass RLS)
+        const res = await fetch('/api/admin-api?action=get_users', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const apiData = await res.json();
+
+        if (apiData.users) {
+            // Ambil saldo dari transactions via admin-api
+            const txRes = await fetch('/api/admin-api?action=get_transactions_all', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const txData = await txRes.json();
+            const txList = txData.transactions || [];
+
+            const balanceMap = {};
+            // ✅ Init semua email ke 0 — hindari "Rp ..." untuk user tanpa transaksi
+            for (const u of apiData.users) { if (u.email) balanceMap[u.email] = 0; }
+            for (const t of txList) {
+                if (!t.email || t.status !== 'success') continue;
+                const masuk = ['deposit', 'bonus', 'refund'].includes(t.type) ? (t.amount || 0) : 0;
+                const keluar = ['order', 'purchase'].includes(t.type) ? (t.amount || 0) : 0;
+                balanceMap[t.email] = (balanceMap[t.email] || 0) + masuk - keluar;
+            }
+            // ✅ Clamp ke 0 — hindari nilai negatif
+            for (const k of Object.keys(balanceMap)) balanceMap[k] = Math.max(0, balanceMap[k]);
+
+            setUsers(apiData.users.map(u => ({
+                ...u,
+                balance: Math.max(0, balanceMap[u.email] || 0),
+            })));
+            setBalances(balanceMap); // ✅ FIX: sync state saldo agar tabel render angka
+            setLoadingUsers(false);
+            return;
+        }
+
+        // Fallback: coba langsung (mungkin gagal karena RLS)
         const { data: blockData } = await supabase.from('settings').select('value').eq('key', 'blocked_emails').maybeSingle();
         const blockedEmails = blockData?.value ? JSON.parse(blockData.value) : [];
-
-        // Ambil semua user dari tabel profiles/auth via API
         const { data: authData, error } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
 
         let userList = [];

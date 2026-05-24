@@ -98,6 +98,15 @@ export default async function handler(req, res) {
             return res.status(200).json({ users: userList });
         }
 
+        // Ambil semua transactions untuk kalkulasi saldo
+        if (action === 'get_transactions_all') {
+            const { data, error } = await supabase
+                .from('transactions')
+                .select('email, type, amount, status');
+            if (error) return res.status(500).json({ error: error.message });
+            return res.status(200).json({ transactions: data || [] });
+        }
+
         // Ambil orders (transactions type=order)
         if (action === 'get_orders') {
             const { data, error } = await supabase
@@ -107,6 +116,39 @@ export default async function handler(req, res) {
                 .order('created_at', { ascending: false });
             if (error) return res.status(500).json({ error: error.message });
             return res.status(200).json({ orders: data || [] });
+        }
+
+        // Ambil semua deposits (transactions type=deposit)
+        if (action === 'get_deposits') {
+            const { data, error } = await supabase
+                .from('transactions')
+                .select('*')
+                .eq('type', 'deposit')
+                .order('created_at', { ascending: false });
+            if (error) return res.status(500).json({ error: error.message });
+            return res.status(200).json({ deposits: data || [] });
+        }
+
+
+        // Ambil semua tiket support
+        if (action === 'get_tickets') {
+            const { data, error } = await supabase
+                .from('tickets')
+                .select('*')
+                .order('created_at', { ascending: false });
+            if (error) return res.status(500).json({ error: error.message });
+            return res.status(200).json({ tickets: data || [] });
+        }
+
+        // Ambil semua pengumuman
+        if (action === 'get_announcements') {
+            const { data, error } = await supabase
+                .from('announcements')
+                .select('*')
+                .order('pinned', { ascending: false })
+                .order('updated_at', { ascending: false });
+            if (error) return res.status(500).json({ error: error.message });
+            return res.status(200).json({ announcements: data || [] });
         }
 
         return res.status(400).json({ error: 'Unknown action' });
@@ -192,6 +234,18 @@ export default async function handler(req, res) {
             return res.status(200).json({ ok: true });
         }
 
+        // Tolak deposit — set status jadi failed
+        if (action === 'reject_deposit') {
+            const { id } = body;
+            if (!id) return res.status(400).json({ error: 'ID tidak valid.' });
+            const { error } = await supabase
+                .from('transactions')
+                .update({ status: 'failed' })
+                .eq('id', id);
+            if (error) return res.status(500).json({ error: error.message });
+            return res.status(200).json({ ok: true });
+        }
+
         // Deposit manual oleh admin
         if (action === 'manual_deposit') {
             const { email, amount, note } = body;
@@ -209,6 +263,40 @@ export default async function handler(req, res) {
                 description: note || 'Deposit manual oleh admin',
                 status: 'success',
             });
+            if (error) return res.status(500).json({ error: error.message });
+            return res.status(200).json({ ok: true });
+        }
+
+
+        // Update tiket (status atau reply)
+        if (action === 'update_ticket') {
+            const { id, status, replies } = body;
+            if (!id) return res.status(400).json({ error: 'ID tiket wajib diisi.' });
+            const updates = { updated_at: new Date().toISOString() };
+            if (status) updates.status = status;
+            if (replies) updates.replies = replies;
+            const { error } = await supabase.from('tickets').update(updates).eq('id', id);
+            if (error) return res.status(500).json({ error: error.message });
+            return res.status(200).json({ ok: true });
+        }
+
+        // Buat atau update pengumuman
+        if (action === 'save_announcement') {
+            const { id, title, content, type, pinned } = body;
+            if (!title?.trim() || !content?.trim()) return res.status(400).json({ error: 'Judul dan isi wajib diisi.' });
+            const payload = { title, content, type: type || 'info', pinned: !!pinned, updated_at: new Date().toISOString() };
+            const { error } = id
+                ? await supabase.from('announcements').update(payload).eq('id', id)
+                : await supabase.from('announcements').insert(payload);
+            if (error) return res.status(500).json({ error: error.message });
+            return res.status(200).json({ ok: true });
+        }
+
+        // Hapus pengumuman
+        if (action === 'delete_announcement') {
+            const { id } = body;
+            if (!id) return res.status(400).json({ error: 'ID pengumuman wajib diisi.' });
+            const { error } = await supabase.from('announcements').delete().eq('id', id);
             if (error) return res.status(500).json({ error: error.message });
             return res.status(200).json({ ok: true });
         }

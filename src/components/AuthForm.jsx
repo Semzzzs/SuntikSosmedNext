@@ -251,8 +251,8 @@ export default function AuthForm({ type }) {
               <div style={{ position: 'relative' }}>
                 <Lock size={14} style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', color: 'var(--text3)' }} />
                 <input className="inp" style={{ paddingLeft: 38, paddingRight: 42 }} type={showPw ? 'text' : 'password'} placeholder={isLogin ? '••••••••' : 'Min. 6 karakter'} value={form.password} onChange={set('password')} />
-                <button type="button" onClick={() => setShowPw(v => !v)} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text3)', display: 'flex' }}>
-                  {showPw ? <EyeOff size={15} /> : <Eye size={15} />}
+                <button type="button" onClick={() => setShowPw(v => !v)} style={{ position: 'absolute', right: 4, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text3)', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 40, height: 40, borderRadius: 8, WebkitTapHighlightColor: 'transparent' }}>
+                  {showPw ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
               </div>
             </div>
