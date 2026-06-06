@@ -327,22 +327,54 @@ export default function ViewAddFunds({ user, balance: balanceProp = null }) {
   };
 
   // Poll QRIS payment status
+  // Helper: cek apakah pembayaran sudah lunas.
+  // Sumber utama = Supabase (webhook sudah ubah qris_pending -> deposit/success = saldo masuk).
+  // Sumber cadangan = Paymenku check_status. Terima berbagai variasi nama status.
+  const isPaidStatus = (s) => {
+    const v = String(s || '').toLowerCase();
+    return ['paid', 'success', 'settled', 'completed', 'berhasil'].includes(v);
+  };
+
+  const checkPaidViaSupabase = async () => {
+    try {
+      const trx = qrisData?.trx_id;
+      if (!trx) return false;
+      const { data } = await supabase
+        .from('transactions')
+        .select('status, type')
+        .or(`qr_trx_id.eq.${trx},description.ilike.%${trx}%`)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      // Webhook mengubah baris jadi type='deposit' status='success' saat lunas
+      if (data && data.type === 'deposit' && data.status === 'success') return true;
+    } catch { }
+    return false;
+  };
+
   const checkQrisStatus = async () => {
     if (!qrisData?.trx_id) return;
     setQrisChecking(true);
     try {
+      // 1) Cek Supabase dulu (paling andal — saldo sudah benar2 masuk)
+      if (await checkPaidViaSupabase()) {
+        setQrisStatus('paid');
+        setDone(true);
+        setQrisChecking(false);
+        return;
+      }
+      // 2) Cadangan: tanya Paymenku
       const { data: { session } } = await supabase.auth.getSession();
       const resp = await fetch(`/api/payment?action=check_status&order_id=${qrisData.trx_id}`, {
         headers: { 'Authorization': `Bearer ${session?.access_token || ''}` }
       });
       const data = await resp.json();
       const status = data.data?.status || data.status;
-      setQrisStatus(status);
-      if (status === 'paid') {
-        // ✅ Fix Critical: TIDAK insert deposit dari client.
-        // Saldo dikreditkan exclusively oleh webhook server-side (/api/webhook/paymenku).
-        // Client hanya update UI — tidak boleh menulis ke database payment.
+      if (isPaidStatus(status)) {
+        setQrisStatus('paid');
         setDone(true);
+      } else {
+        setQrisStatus(status || 'pending');
       }
     } catch { }
     setQrisChecking(false);
@@ -353,19 +385,24 @@ export default function ViewAddFunds({ user, balance: balanceProp = null }) {
     if (step !== 3 || !qrisData || qrisStatus === 'paid' || qrisStatus === 'expired') return;
     const interval = setInterval(async () => {
       try {
+        // 1) Sumber kebenaran: Supabase (di-update webhook saat lunas)
+        if (await checkPaidViaSupabase()) {
+          setQrisStatus('paid');
+          clearInterval(interval);
+          setTimeout(() => setDone(true), 1200);
+          return;
+        }
+        // 2) Cadangan: Paymenku
         const { data: { session: pollSession } } = await supabase.auth.getSession();
         const resp = await fetch(`/api/payment?action=check_status&order_id=${qrisData.trx_id}`, {
           headers: { 'Authorization': `Bearer ${pollSession?.access_token || ''}` }
         });
         const data = await resp.json();
         const status = data.data?.status || data.status;
-        if (status === 'paid') {
+        if (isPaidStatus(status)) {
           setQrisStatus('paid');
           clearInterval(interval);
-          // Tambah ke user_transactions
-          // ✅ Transaksi sudah dicatat oleh webhook di Supabase
-          // Tidak perlu simpan ke localStorage
-          setTimeout(() => setDone(true), 1500);
+          setTimeout(() => setDone(true), 1200);
         } else if (status === 'expired' || status === 'cancelled') {
           setQrisStatus(status);
           clearInterval(interval);
@@ -454,17 +491,30 @@ export default function ViewAddFunds({ user, balance: balanceProp = null }) {
               }
             </div>
             <div style={{ marginBottom: 18 }}>
-              {qrisStatus === 'pending' && <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'var(--yellow-l)', color: 'var(--yellow)', padding: '8px 18px', borderRadius: 20, fontSize: 13, fontWeight: 700 }}><div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--yellow)' }} />Menunggu pembayaran...</div>}
+              {qrisStatus === 'pending' && <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'var(--yellow-l)', color: 'var(--yellow)', padding: '8px 18px', borderRadius: 20, fontSize: 13, fontWeight: 700 }}><style>{`@keyframes dotPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.3;transform:scale(.7)}}`}</style><div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--yellow)', animation: 'dotPulse 1s ease-in-out infinite' }} />Menunggu pembayaran...</div>}
               {qrisStatus === 'paid' && <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'var(--green-l)', color: 'var(--green)', padding: '8px 18px', borderRadius: 20, fontSize: 13, fontWeight: 700 }}><CheckCircle size={14} /> Pembayaran berhasil!</div>}
               {qrisStatus === 'expired' && <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'var(--red-l)', color: 'var(--red)', padding: '8px 18px', borderRadius: 20, fontSize: 13, fontWeight: 700 }}>✕ QR kedaluwarsa</div>}
             </div>
-            <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
-              <button onClick={() => setShowBackConfirm(true)} style={{ flex: 1, padding: '11px 0', borderRadius: 11, border: '1.5px solid var(--border)', background: 'transparent', color: 'var(--text2)', fontWeight: 700, fontSize: 14, cursor: 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif" }}>Kembali</button>
-              <button onClick={checkQrisStatus} disabled={qrisChecking || qrisStatus === 'paid' || qrisStatus === 'expired'} style={{ flex: 2, padding: '11px 0', borderRadius: 11, border: 'none', background: '#E91E63', color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif", display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, opacity: qrisStatus === 'paid' || qrisStatus === 'expired' ? 0.5 : 1 }}>
-                {qrisChecking ? <><RefreshCw size={14} style={{ animation: 'spin .7s linear infinite' }} /> Mengecek...</> : <><RefreshCw size={14} /> Cek Status Bayar</>}
+
+            {/* Info: status terdeteksi otomatis — user tidak perlu klik apa-apa */}
+            {qrisStatus !== 'paid' && qrisStatus !== 'expired' && (
+              <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                <RefreshCw size={12} style={{ animation: 'spin 2s linear infinite' }} />
+                Status pembayaran terdeteksi otomatis setelah kamu bayar
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: 10, marginBottom: 10, alignItems: 'center' }}>
+              {/* Kembali jadi tombol utama */}
+              <button onClick={() => setShowBackConfirm(true)} style={{ flex: 1, padding: '12px 0', borderRadius: 11, border: '1.5px solid var(--border)', background: 'var(--bg2)', color: 'var(--text)', fontWeight: 700, fontSize: 14, cursor: 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif" }}>Kembali</button>
+              {/* Cek manual jadi tombol sekunder kecil — cadangan saja */}
+              <button onClick={checkQrisStatus} disabled={qrisChecking || qrisStatus === 'paid' || qrisStatus === 'expired'}
+                title="Auto-cek sudah jalan. Tombol ini opsional untuk cek manual."
+                style={{ padding: '9px 14px', borderRadius: 10, border: '1px solid var(--border)', background: 'transparent', color: 'var(--text3)', fontWeight: 600, fontSize: 12.5, cursor: (qrisChecking || qrisStatus === 'paid' || qrisStatus === 'expired') ? 'default' : 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif", display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap', opacity: (qrisStatus === 'paid' || qrisStatus === 'expired') ? 0.5 : 1 }}>
+                {qrisChecking ? <><RefreshCw size={13} style={{ animation: 'spin .7s linear infinite' }} /> Mengecek</> : <><RefreshCw size={13} /> Cek manual</>}
               </button>
             </div>
-            <div style={{ fontSize: 11.5, color: 'var(--text3)' }}>Ref: {qrisData.reference_id} · Setelah bayar klik tombol cek di atas</div>
+            <div style={{ fontSize: 11.5, color: 'var(--text3)' }}>Ref: {qrisData.reference_id}</div>
           </div>
           {/* INFO SIDEBAR */}
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 14, minWidth: 260 }}>
