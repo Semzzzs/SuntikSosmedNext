@@ -148,14 +148,32 @@ export default function ViewAddFunds({ user, balance: balanceProp = null }) {
     };
 
     const restore = async () => {
+      // Helper cek apakah trx_id sudah lunas (deposit success) di Supabase
+      const isAlreadyPaid = async (trxId) => {
+        try {
+          if (!trxId) return false;
+          const { data } = await supabase
+            .from('transactions')
+            .select('status, type')
+            .or(`qr_trx_id.eq.${trxId},description.ilike.%${trxId}%`)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          return data && data.type === 'deposit' && data.status === 'success';
+        } catch { return false; }
+      };
+
       // Coba dari sessionStorage dulu (cepat)
       try {
         const cached = sessionStorage.getItem('qris_data');
         const cachedStatus = sessionStorage.getItem('qris_status');
         if (cached) {
           const parsed = JSON.parse(cached);
-          // ✅ Jangan pulihkan QR yang sudah kadaluarsa
+          // ✅ Jangan pulihkan kalau sudah kadaluarsa
           if (isExpired(parsed?.expiry)) {
+            clearQris();
+          } else if (await isAlreadyPaid(parsed?.trx_id)) {
+            // ✅ Sudah dibayar — jangan tampilkan QR lagi, bersihkan
             clearQris();
           } else {
             setQrisDataRaw(parsed);
@@ -181,8 +199,8 @@ export default function ViewAddFunds({ user, balance: balanceProp = null }) {
           .limit(1)
           .maybeSingle();
         if (data?.qr_trx_id) {
-          // ✅ Jangan pulihkan kalau sudah kadaluarsa
-          if (isExpired(data.qr_expiry, data.created_at)) {
+          // ✅ Jangan pulihkan kalau sudah kadaluarsa atau sudah dibayar
+          if (isExpired(data.qr_expiry, data.created_at) || await isAlreadyPaid(data.qr_trx_id)) {
             clearQris();
             return;
           }
@@ -413,17 +431,29 @@ export default function ViewAddFunds({ user, balance: balanceProp = null }) {
   }, [step, qrisData, qrisStatus]);
 
   if (done) {
+    const newBalance = (balanceIDR || 0); // saldo sudah ter-update via auto-poll/refetch
     return (
-      <div className="fu" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 400 }}>
-        <div className="card" style={{ padding: '48px 40px', textAlign: 'center', maxWidth: 420 }}>
-          <div style={{ width: 72, height: 72, borderRadius: '50%', background: 'var(--green-l)', border: '2px solid var(--green)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
-            <CheckCircle size={36} style={{ color: 'var(--green)' }} />
+      <div className="fu" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 'min(60vh, 460px)', padding: 16 }}>
+        <style>{`
+          @keyframes popIn{0%{transform:scale(.6);opacity:0}60%{transform:scale(1.08)}100%{transform:scale(1);opacity:1}}
+          @keyframes ringPulse{0%{box-shadow:0 0 0 0 rgba(16,185,129,.35)}70%{box-shadow:0 0 0 16px rgba(16,185,129,0)}100%{box-shadow:0 0 0 0 rgba(16,185,129,0)}}
+        `}</style>
+        <div className="card" style={{ padding: 'clamp(28px, 6vw, 44px) clamp(20px, 5vw, 38px)', textAlign: 'center', maxWidth: 420, width: '100%' }}>
+          <div style={{ width: 76, height: 76, borderRadius: '50%', background: 'var(--green-l)', border: '2px solid var(--green)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px', animation: 'popIn .5s ease-out, ringPulse 1.8s ease-out .4s' }}>
+            <CheckCircle size={38} style={{ color: 'var(--green)' }} />
           </div>
-          <h2 style={{ fontSize: 20, fontWeight: 800, color: 'var(--text)', marginBottom: 8 }}>Permintaan Pembayaran Terkirim!</h2>
-          <p style={{ fontSize: 13.5, color: 'var(--text2)', lineHeight: 1.7, marginBottom: 24 }}>
-            Deposit <strong>{formatIDR(numIDR)}</strong> via <strong>{selectedMethod?.label}</strong> sedang diproses. Saldo akan terupdate otomatis.
+          <h2 style={{ fontSize: 'clamp(18px, 5vw, 21px)', fontWeight: 800, color: 'var(--text)', marginBottom: 8 }}>Pembayaran Berhasil!</h2>
+          <p style={{ fontSize: 13.5, color: 'var(--text2)', lineHeight: 1.7, marginBottom: 20 }}>
+            Deposit <strong>{formatIDR(numIDR)}</strong> berhasil. Saldo kamu sudah ditambahkan.
           </p>
-          <button className="btn btn-blue" onClick={() => { setDone(false); setStep(1); setAmountIDR(''); }} style={{ width: '100%', borderRadius: 11, padding: 12 }}>
+
+          {/* Kartu saldo baru */}
+          <div style={{ background: 'var(--blue)', borderRadius: 14, padding: '16px 18px', marginBottom: 22, color: '#fff' }}>
+            <div style={{ fontSize: 11, fontWeight: 700, opacity: .85, letterSpacing: '.05em', marginBottom: 4 }}>SALDO KAMU SEKARANG</div>
+            <div style={{ fontSize: 'clamp(22px, 6vw, 28px)', fontWeight: 800 }}>{formatIDR(newBalance)}</div>
+          </div>
+
+          <button className="btn btn-blue" onClick={() => { setDone(false); setStep(1); setAmountIDR(''); }} style={{ width: '100%', borderRadius: 11, padding: 13 }}>
             Tambah Dana Lagi
           </button>
         </div>
@@ -470,7 +500,7 @@ export default function ViewAddFunds({ user, balance: balanceProp = null }) {
       {step === 3 && qrisData && (
         <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start', flexWrap: 'wrap' }}>
           {/* QR CENTER */}
-          <div className="card" style={{ flex: '0 0 auto', padding: 28, textAlign: 'center', minWidth: 300 }}>
+          <div className="card" style={{ flex: '1 1 300px', maxWidth: 420, padding: 'clamp(18px, 4vw, 28px)', textAlign: 'center', minWidth: 0 }}>
             <div style={{ fontWeight: 800, fontSize: 17, color: 'var(--text)', marginBottom: 4 }}>Scan QR Code</div>
             <div style={{ fontSize: 13, color: 'var(--text3)', marginBottom: 20 }}>
               Bayar <strong style={{ color: '#E91E63' }}>Rp {(qrisData.totalAmount || Math.round(qrisData.amount)).toLocaleString('id-ID')}</strong> via QRIS
@@ -479,14 +509,14 @@ export default function ViewAddFunds({ user, balance: balanceProp = null }) {
               )}
               {qrisData.expiry && new Date(qrisData.expiry).getTime() > 0 && <span style={{ display: 'block', marginTop: 2 }}>Berlaku s/d {new Date(qrisData.expiry).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>}
             </div>
-            <div style={{ display: 'inline-block', padding: 16, background: '#fff', borderRadius: 16, border: '2px solid var(--border)', marginBottom: 20, boxShadow: '0 4px 20px rgba(0,0,0,.08)' }}>
+            <div style={{ display: 'inline-block', padding: 16, background: '#fff', borderRadius: 16, border: '2px solid var(--border)', marginBottom: 20, boxShadow: '0 4px 20px rgba(0,0,0,.08)', maxWidth: '100%' }}>
               {qrisData.qr_string
-                ? <img src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(qrisData.qr_string)}`} alt="QRIS" style={{ width: 220, height: 220, display: 'block', borderRadius: 8 }} />
+                ? <img src={`https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=${encodeURIComponent(qrisData.qr_string)}`} alt="QRIS" style={{ width: 'min(220px, 60vw)', height: 'min(220px, 60vw)', display: 'block', borderRadius: 8 }} />
                 : qrisData.qr_url
-                  ? <img src={qrisData.qr_url} alt="QRIS" style={{ width: 220, height: 220, display: 'block', borderRadius: 8 }} />
-                  : <div style={{ width: 220, height: 220, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, background: 'var(--bg2)', borderRadius: 10 }}>
+                  ? <img src={qrisData.qr_url} alt="QRIS" style={{ width: 'min(220px, 60vw)', height: 'min(220px, 60vw)', display: 'block', borderRadius: 8 }} />
+                  : <div style={{ width: 'min(220px, 60vw)', height: 'min(220px, 60vw)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, background: 'var(--bg2)', borderRadius: 10 }}>
                     <div style={{ fontSize: 56 }}>▦</div>
-                    <div style={{ fontSize: 12, color: 'var(--text3)', fontWeight: 600, textAlign: 'center' }}>ID: {qrisData.trx_id}</div>
+                    <div style={{ fontSize: 12, color: 'var(--text3)', fontWeight: 600, textAlign: 'center', wordBreak: 'break-all', padding: '0 8px' }}>ID: {qrisData.trx_id}</div>
                   </div>
               }
             </div>
@@ -514,10 +544,10 @@ export default function ViewAddFunds({ user, balance: balanceProp = null }) {
                 {qrisChecking ? <><RefreshCw size={13} style={{ animation: 'spin .7s linear infinite' }} /> Mengecek</> : <><RefreshCw size={13} /> Cek manual</>}
               </button>
             </div>
-            <div style={{ fontSize: 11.5, color: 'var(--text3)' }}>Ref: {qrisData.reference_id}</div>
+            <div style={{ fontSize: 11.5, color: 'var(--text3)', wordBreak: 'break-all' }}>Ref: {qrisData.reference_id}</div>
           </div>
           {/* INFO SIDEBAR */}
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 14, minWidth: 260 }}>
+          <div style={{ flex: '1 1 240px', display: 'flex', flexDirection: 'column', gap: 14, minWidth: 0 }}>
             <div style={{ background: 'linear-gradient(135deg, var(--blue), #1D4ED8)', borderRadius: 18, padding: '22px 20px', color: '#fff' }}>
               <div style={{ fontSize: 11, color: 'rgba(255,255,255,.65)', fontWeight: 600, marginBottom: 4 }}>SALDO SAAT INI</div>
               <div style={{ fontSize: 28, fontWeight: 800, marginBottom: 4 }}>{balanceIDR !== null ? formatIDR(balanceIDR) : '—'}</div>
