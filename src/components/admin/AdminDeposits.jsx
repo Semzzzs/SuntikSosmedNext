@@ -1,5 +1,20 @@
 import { useState, useEffect } from 'react';
 import { DollarSign, Plus, X, CheckCircle, XCircle } from 'lucide-react';
+
+const adminFetch = async (url, opts = {}) => {
+    const res = await fetch(url, {
+        ...opts,
+        headers: { 'Authorization': `Bearer ${sessionStorage.getItem('admin_token') || ''}`, ...(opts.headers || {}) },
+    });
+    if (res.status === 401) {
+        sessionStorage.removeItem('admin_authed');
+        sessionStorage.removeItem('admin_token');
+        window.location.reload();
+        throw new Error('SESSION_EXPIRED');
+    }
+    return res;
+};
+
 export default function AdminDeposits() {
     const [deposits, setDeposits] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -15,10 +30,7 @@ export default function AdminDeposits() {
     const load = async () => {
         setLoading(true);
         try {
-            const token = sessionStorage.getItem('admin_token') || '';
-            const res = await fetch('/api/admin-api?action=get_deposits', {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            const res = await adminFetch('/api/admin-api?action=get_deposits');
             const data = await res.json();
             setDeposits(data.deposits || []);
         } catch (e) {
@@ -38,10 +50,9 @@ export default function AdminDeposits() {
 
     const handleApprove = async (t) => {
         setApprovingId(t.id);
-        const token = sessionStorage.getItem('admin_token') || '';
-        const res = await fetch('/api/admin-api?action=approve_deposit', {
+        const res = await adminFetch('/api/admin-api?action=approve_deposit', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ id: t.id, email: t.email, amount: t.amount }),
         });
         const data = await res.json();
@@ -53,10 +64,9 @@ export default function AdminDeposits() {
 
     const handleReject = async (t) => {
         setApprovingId(t.id);
-        const token = sessionStorage.getItem('admin_token') || '';
-        await fetch('/api/admin-api?action=reject_deposit', {
+        await adminFetch('/api/admin-api?action=reject_deposit', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ id: t.id }),
         });
         setApprovingId(null);
@@ -79,13 +89,9 @@ export default function AdminDeposits() {
         if (!amount || amount <= 0) return setSubmitMsg('Jumlah tidak valid.');
 
         setSubmitting(true);
-        const token = sessionStorage.getItem('admin_token') || '';
-        const res = await fetch('/api/admin-api?action=manual_deposit', {
+        const res = await adminFetch('/api/admin-api?action=manual_deposit', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`,
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 email: manualEmail.trim().toLowerCase(),
                 amount,

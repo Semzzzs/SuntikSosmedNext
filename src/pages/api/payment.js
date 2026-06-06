@@ -37,15 +37,23 @@ export default async function handler(req, res) {
                 });
             }
 
+            // ✅ reference_id dibuat DI SERVER dari email session (jangan percaya client).
+            // Format: <email>_<timestamp> — dipakai webhook untuk mencocokkan & verifikasi email.
+            // Kalau client kirim reference_id, diabaikan demi keamanan & konsistensi.
+            const serverRefId = `${user.email}_${Date.now()}`;
+
             // ✅ Paksa email dari session, bukan dari client
             try {
+                const baseUrl = process.env.NEXT_PUBLIC_BASE_URL
+                    || (req.headers.origin)
+                    || (req.headers.host ? `https://${req.headers.host}` : 'https://suntiksosmed.store');
                 const reqBody = {
-                    reference_id: body.reference_id,
+                    reference_id: serverRefId,
                     amount,
                     customer_name: user.user_metadata?.full_name || user.email,
                     customer_email: user.email,
                     channel_code: 'qris',
-                    return_url: `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/dashboard`,
+                    return_url: `${baseUrl}/dashboard`,
                 };
 
                 const resp = await fetch(`${PAYMENKU_BASE}/transaction/create`, {
@@ -60,6 +68,8 @@ export default async function handler(req, res) {
 
                 try {
                     const data = JSON.parse(rawText);
+                    // Sertakan reference_id server agar client bisa simpan ke baris qris_pending (sinkron dgn webhook)
+                    if (data && typeof data === 'object' && !data.reference_id) data.reference_id = serverRefId;
                     return res.status(resp.ok ? 200 : 400).json(data);
                 } catch {
                     return res.status(500).json({ error: 'Response Paymenku bukan JSON', raw: rawText.slice(0, 200) });

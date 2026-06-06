@@ -125,7 +125,7 @@ export default function DashboardPage() {
           .eq('email', email);
         if (!data) { setBalance(0); return; }
         const masuk = data.filter(t => ['deposit', 'bonus', 'refund'].includes(t.type) && t.status === 'success').reduce((s, t) => s + (t.amount || 0), 0);
-        const keluar = data.filter(t => t.type === 'order' && t.status === 'success').reduce((s, t) => s + (t.amount || 0), 0);
+        const keluar = data.filter(t => ['order', 'purchase'].includes(t.type) && t.status === 'success').reduce((s, t) => s + (t.amount || 0), 0);
         setBalance(Math.max(0, masuk - keluar));
       } catch { setBalance(0); }
     };

@@ -34,7 +34,7 @@ export default function AuthForm({ type }) {
       redirectTo: `${window.location.origin}/reset-password`,
     });
     setResetLoading(false);
-    if (err) return setError('Gagal mengirim email. Pastikan email terdaftar dan coba lagi.');
+    if (err) return setError('Gagal mengirim email reset. Coba lagi beberapa saat.');
     setResetSent(true);
   };
 
@@ -53,7 +53,7 @@ export default function AuthForm({ type }) {
           supabase.auth.signUp({
             email: form.email,
             password: form.password,
-            options: { data: { name: form.name.trim() } },
+            options: { data: { full_name: form.name.trim(), name: form.name.trim() } },
           }),
           new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 10000))
         ]);
@@ -71,7 +71,7 @@ export default function AuthForm({ type }) {
             return setError('Format email tidak valid.');
           }
           if (msg?.includes('weak password') || msg?.includes('password')) {
-            return setError('Password terlalu lemah. Gunakan minimal 8 karakter.');
+            return setError('Password terlalu lemah. Gunakan minimal 6 karakter.');
           }
           return setError('Registrasi gagal: ' + err.message);
         }

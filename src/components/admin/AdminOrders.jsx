@@ -27,6 +27,12 @@ export default function AdminOrders() {
             const res = await fetch('/api/admin-api?action=get_orders', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
+            if (res.status === 401) {
+                sessionStorage.removeItem('admin_authed');
+                sessionStorage.removeItem('admin_token');
+                window.location.reload();
+                return;
+            }
             const data = await res.json();
 
             if (!res.ok) {

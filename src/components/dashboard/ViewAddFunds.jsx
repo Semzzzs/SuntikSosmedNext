@@ -123,16 +123,46 @@ export default function ViewAddFunds({ user, balance: balanceProp = null }) {
 
   // Restore QR dari sessionStorage atau Supabase saat mount
   useEffect(() => {
+    // Cek apakah QR sudah kadaluarsa. expiry bisa berupa ISO string / epoch detik / epoch ms.
+    // Kalau tidak ada info expiry, anggap basi setelah 2 jam dari created_at (kalau ada).
+    const isExpired = (expiry, createdAt) => {
+      try {
+        if (expiry) {
+          let t;
+          if (typeof expiry === 'number') t = expiry < 1e12 ? expiry * 1000 : expiry; // detik vs ms
+          else if (/^\d+$/.test(String(expiry))) {
+            const n = parseInt(expiry, 10); t = n < 1e12 ? n * 1000 : n;
+          } else t = new Date(expiry).getTime();
+          if (!isNaN(t)) return Date.now() > t;
+        }
+        if (createdAt) {
+          const c = new Date(createdAt).getTime();
+          if (!isNaN(c)) return Date.now() > c + 2 * 60 * 60 * 1000; // 2 jam
+        }
+      } catch { }
+      return false;
+    };
+
+    const clearQris = () => {
+      try { sessionStorage.removeItem('qris_data'); sessionStorage.removeItem('qris_status'); } catch { }
+    };
+
     const restore = async () => {
       // Coba dari sessionStorage dulu (cepat)
       try {
         const cached = sessionStorage.getItem('qris_data');
         const cachedStatus = sessionStorage.getItem('qris_status');
         if (cached) {
-          setQrisDataRaw(JSON.parse(cached));
-          setQrisStatusRaw(cachedStatus || 'pending');
-          setStepRaw(3);
-          return;
+          const parsed = JSON.parse(cached);
+          // ✅ Jangan pulihkan QR yang sudah kadaluarsa
+          if (isExpired(parsed?.expiry)) {
+            clearQris();
+          } else {
+            setQrisDataRaw(parsed);
+            setQrisStatusRaw(cachedStatus || 'pending');
+            setStepRaw(3);
+            return;
+          }
         }
       } catch { }
 
@@ -151,6 +181,11 @@ export default function ViewAddFunds({ user, balance: balanceProp = null }) {
           .limit(1)
           .maybeSingle();
         if (data?.qr_trx_id) {
+          // ✅ Jangan pulihkan kalau sudah kadaluarsa
+          if (isExpired(data.qr_expiry, data.created_at)) {
+            clearQris();
+            return;
+          }
           const restored = {
             qr_url: data.qr_url,
             qr_string: data.qr_string,
@@ -250,6 +285,7 @@ export default function ViewAddFunds({ user, balance: balanceProp = null }) {
           try {
             const { data: { session: s } } = await supabase.auth.getSession();
             await supabase.from('transactions').insert({
+              user_id: s?.user?.id || null,
               email: s?.user?.email,
               type: 'qris_pending',
               amount: numIDR,
@@ -277,10 +313,10 @@ export default function ViewAddFunds({ user, balance: balanceProp = null }) {
     if (method === 'manual') {
       const email = user?.email || '';
       const msg = encodeURIComponent(
-        `Halo admin, saya ingin konfirmasi top up manual.\n\n` +
+        `Halo admin, saya mau melakukan top up manual.\n\n` +
         `Email: ${email}\n` +
         `Jumlah: ${formatIDR(numIDR)}\n\n` +
-        `Saya sudah transfer via QRIS. Mohon dikonfirmasi. 🙏`
+        `Mohon info nomor/QRIS tujuan transfer. Setelah transfer, saya akan kirim BUKTI TRANSFER (screenshot) di chat ini untuk diverifikasi.`
       );
       window.open(`https://wa.me/6283843306230?text=${msg}`, '_blank');
       return;
@@ -573,10 +609,11 @@ export default function ViewAddFunds({ user, balance: balanceProp = null }) {
                     <MessageCircle size={14} /> Cara Transfer Manual
                   </div>
                   <ol style={{ fontSize: 12.5, color: 'var(--text2)', lineHeight: 2, margin: 0, paddingLeft: 18 }}>
-                    <li>Scan QRIS admin via aplikasi bank/e-wallet kamu</li>
+                    <li>Klik tombol di bawah untuk chat admin via WhatsApp</li>
+                    <li>Admin akan kirim nomor/QRIS tujuan transfer</li>
                     <li>Transfer sejumlah <strong style={{ color: 'var(--text)' }}>{formatIDR(numIDR)}</strong></li>
-                    <li>Klik tombol di bawah untuk konfirmasi ke WhatsApp admin</li>
-                    <li>Saldo akan ditambahkan dalam &lt; 5 menit</li>
+                    <li><strong style={{ color: 'var(--text)' }}>Kirim bukti transfer (screenshot)</strong> ke admin</li>
+                    <li>Saldo ditambahkan setelah pembayaran diverifikasi admin</li>
                   </ol>
                 </div>
               )}
@@ -674,7 +711,19 @@ export default function ViewAddFunds({ user, balance: balanceProp = null }) {
                 style={{ flex: 1, padding: '10px 0', borderRadius: 9, border: '1.5px solid var(--border)', background: 'transparent', color: 'var(--text)', fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif" }}>
                 Tetap di sini
               </button>
-              <button onClick={() => { setShowBackConfirm(false); setStep(1); setQrisData(null); setQrisStatus(null); setQrisError(''); }}
+              <button onClick={async () => {
+                // Tandai baris QR pending ini batal di Supabase agar tidak ter-restore lagi
+                try {
+                  const trx = qrisData?.trx_id;
+                  if (trx) {
+                    await supabase.from('transactions')
+                      .update({ status: 'failed' })
+                      .eq('qr_trx_id', trx)
+                      .eq('status', 'pending_webhook');
+                  }
+                } catch { }
+                setShowBackConfirm(false); setStep(1); setQrisData(null); setQrisStatus(null); setQrisError('');
+              }}
                 style={{ flex: 1, padding: '10px 0', borderRadius: 9, border: 'none', background: 'var(--red)', color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif" }}>
                 Ya, Kembali
               </button>

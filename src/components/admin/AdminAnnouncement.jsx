@@ -10,10 +10,19 @@ const TYPES = [
 
 const emptyForm = { title: '', content: '', type: 'info', pinned: false };
 
-const adminFetch = (url, opts = {}) => fetch(url, {
-    ...opts,
-    headers: { 'Authorization': `Bearer ${sessionStorage.getItem('admin_token') || ''}`, 'Content-Type': 'application/json', ...(opts.headers || {}) },
-});
+const adminFetch = async (url, opts = {}) => {
+    const res = await fetch(url, {
+        ...opts,
+        headers: { 'Authorization': `Bearer ${sessionStorage.getItem('admin_token') || ''}`, 'Content-Type': 'application/json', ...(opts.headers || {}) },
+    });
+    if (res.status === 401) {
+        sessionStorage.removeItem('admin_authed');
+        sessionStorage.removeItem('admin_token');
+        window.location.reload();
+        throw new Error('SESSION_EXPIRED');
+    }
+    return res;
+};
 
 export default function AdminAnnouncement() {
     const [announcements, setAnnouncements] = useState([]);

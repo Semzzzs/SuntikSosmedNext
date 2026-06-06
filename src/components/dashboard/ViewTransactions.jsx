@@ -31,13 +31,14 @@ export default function ViewTransactions({ user }) {
   const TYPE_CONFIG = {
     deposit: { label: 'Deposit', icon: <ArrowDownLeft size={16} />, color: 'var(--green)', bg: 'var(--green-l)', sign: '+' },
     order: { label: 'Order', icon: <ArrowUpRight size={16} />, color: 'var(--red)', bg: 'var(--red-l)', sign: '-' },
+    purchase: { label: 'Order', icon: <ArrowUpRight size={16} />, color: 'var(--red)', bg: 'var(--red-l)', sign: '-' },
     refund: { label: 'Refund', icon: <ArrowDownLeft size={16} />, color: 'var(--blue)', bg: 'var(--blue-l)', sign: '+' },
     bonus: { label: 'Bonus', icon: <ArrowDownLeft size={16} />, color: 'var(--yellow)', bg: 'var(--yellow-l)', sign: '+' },
     deduction: { label: 'Pengurangan', icon: <ArrowUpRight size={16} />, color: 'var(--red)', bg: 'var(--red-l)', sign: '-' },
   };
 
-  const totalDeposit = transactions.filter(t => ['deposit', 'bonus', 'refund'].includes(t.type)).reduce((s, t) => s + (t.amount || 0), 0);
-  const totalOrder = transactions.filter(t => t.type === 'order').reduce((s, t) => s + (t.amount || 0), 0);
+  const totalDeposit = transactions.filter(t => ['deposit', 'bonus', 'refund'].includes(t.type) && t.status === 'success').reduce((s, t) => s + (t.amount || 0), 0);
+  const totalOrder = transactions.filter(t => ['order', 'purchase'].includes(t.type) && t.status === 'success').reduce((s, t) => s + (t.amount || 0), 0);
 
 
   const STATUS_CONFIG_TRX = {

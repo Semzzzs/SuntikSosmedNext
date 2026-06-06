@@ -99,6 +99,7 @@ export default function Landing() {
   const router = useRouter();
   const { dark, toggle } = useTheme();
   const navScrolled = useNavbarScroll();
+  const [serviceQuery, setServiceQuery] = useState('');
 
   const services = [
     { id: '197', icon: <Instagram size={16} style={{ color: '#E1306C' }} />, iconBg: 'rgba(225,48,108,.1)', name: 'Instagram Followers — High Quality / Instant', min: '10', max: '10,000', price: 'Rp 875' },
@@ -107,6 +108,12 @@ export default function Landing() {
     { id: '550', icon: <Twitter size={16} style={{ color: '#1DA1F2' }} />, iconBg: 'rgba(29,161,242,.1)', name: 'Twitter Retweets — Non Drop Guaranteed', min: '20', max: '20,000', price: 'Rp 875' },
     { id: '711', icon: <Facebook size={16} style={{ color: '#1877F2' }} />, iconBg: 'rgba(24,119,242,.1)', name: 'Facebook Page Likes — Real Users', min: '50', max: '50,000', price: 'Rp 1.750' },
   ];
+
+  const filteredServices = services.filter(sv => {
+    const q = serviceQuery.trim().toLowerCase();
+    if (!q) return true;
+    return sv.name.toLowerCase().includes(q) || sv.id.includes(q);
+  });
 
   const features = [
     { icon: <Star size={22} />, iconBg: 'var(--yellow-l)', iconColor: 'var(--yellow)', title: 'Kualitas Premium', desc: 'Engagement berkualitas tinggi dari akun nyata di seluruh dunia.' },
@@ -193,7 +200,7 @@ export default function Landing() {
               { label: 'Beranda', id: 'hero' },
               { label: 'Layanan', id: 'layanan' },
               { label: 'Panduan', id: 'panduan' },
-              { label: 'Blog', id: 'footer' },
+              { label: 'Testimoni', id: 'testimoni' },
             ].map(({ label, id }) => (
               <a key={label} href={`#${id}`}
                 onClick={e => { e.preventDefault(); document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' }); }}
@@ -215,7 +222,7 @@ export default function Landing() {
       </nav>
 
       {/* ── HERO ── */}
-      <div style={{ position: 'relative', zIndex: 10, maxWidth: 1160, margin: '0 auto', padding: '40px 16px 0' }}>
+      <div id="hero" style={{ position: 'relative', zIndex: 10, maxWidth: 1160, margin: '0 auto', padding: '40px 16px 0' }}>
 
         {/* Floating LEFT widget - hidden on mobile */}
         <div className="fltA hide-mobile" style={{ position: 'absolute', left: 24, top: 80, width: 240, zIndex: 20, display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -295,10 +302,10 @@ export default function Landing() {
           </div>
 
           <h1 style={{ fontSize: 'clamp(28px, 4vw, 48px)', fontWeight: 800, textShadow: dark ? 'none' : '0 2px 8px rgba(37,99,235,.08)', lineHeight: 1.12, color: 'var(--text)', marginBottom: 18, letterSpacing: '-1.5px' }}>
-            <span className="grad-text">SuntikSosmed</span> — Platform SMM<br />Terbaik & Terpercaya di Indonesia
+            <span className="grad-text">SuntikSosmed</span> — Platform SMM<br /><span className="grad-text">Terbaik &amp; Terpercaya</span> di Indonesia
           </h1>
-          <p style={{ color: 'var(--text2)', fontSize: 15, lineHeight: 1.7, marginBottom: 28, maxWidth: 440, margin: '0 auto 28px' }}>
-            Cocok untuk Seniman, Influencer, Bisnis, Proyek NFT &amp; Perusahaan Crypto.
+          <p style={{ color: 'var(--text2)', fontSize: 15, lineHeight: 1.7, marginBottom: 28, maxWidth: 460, margin: '0 auto 28px' }}>
+            Tingkatkan followers, likes, dan views di semua media sosial. Proses cepat, harga mulai Rp 1/K, dengan garansi refill &amp; support 24 jam.
           </p>
 
           <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginBottom: 24, flexWrap: 'wrap' }}>
@@ -313,7 +320,13 @@ export default function Landing() {
           {/* Avatars + rating */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, marginBottom: 22 }}>
             <div style={{ display: 'flex' }}>
-              {[1, 2, 3].map(i => <img key={i} src={`https://i.pravatar.cc/100?img=${i}`} loading="lazy" style={{ width: 36, height: 36, borderRadius: '50%', border: '2px solid var(--white)', marginRight: -10 }} alt="" />)}
+              {[
+                { t: 'A', bg: '#2563EB' },
+                { t: 'R', bg: '#7C3AED' },
+                { t: 'D', bg: '#059669' },
+              ].map((a, i) => (
+                <div key={i} style={{ width: 36, height: 36, borderRadius: '50%', border: '2px solid var(--white)', marginRight: -10, background: a.bg, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 14, fontFamily: "'Plus Jakarta Sans',sans-serif" }}>{a.t}</div>
+              ))}
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginLeft: 16 }}>
               <Star size={14} fill="#F59E0B" style={{ color: '#F59E0B' }} />
@@ -432,7 +445,7 @@ export default function Landing() {
           {/* Search bar */}
           <div style={{ position: 'relative', marginBottom: 16 }}>
             <Search size={16} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--text3)' }} />
-            <input className="inp" style={{ paddingLeft: 42, borderRadius: 12 }} placeholder="Cari layanan..." />
+            <input className="inp" style={{ paddingLeft: 42, borderRadius: 12 }} placeholder="Cari layanan..." value={serviceQuery} onChange={e => setServiceQuery(e.target.value)} />
           </div>
           <div style={{ background: 'var(--white)', border: '1px solid var(--border)', borderRadius: 22, overflow: 'hidden', boxShadow: 'var(--shadow2)' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -446,8 +459,8 @@ export default function Landing() {
                 </tr>
               </thead>
               <tbody>
-                {services.map((sv, i) => (
-                  <tr key={sv.id} className="service-row" style={{ borderBottom: i < services.length - 1 ? '1px solid var(--border)' : 'none' }}>
+                {filteredServices.map((sv, i) => (
+                  <tr key={sv.id} className="service-row" style={{ borderBottom: i < filteredServices.length - 1 ? '1px solid var(--border)' : 'none' }}>
                     <td style={{ padding: '15px 20px', fontFamily: "'JetBrains Mono',monospace", fontSize: 12, fontWeight: 700, color: 'var(--text3)' }}>#{sv.id}</td>
                     <td style={{ padding: '15px 20px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontWeight: 600, fontSize: 13.5, color: 'var(--text)' }}>
@@ -464,6 +477,13 @@ export default function Landing() {
                     </td>
                   </tr>
                 ))}
+                {filteredServices.length === 0 && (
+                  <tr>
+                    <td colSpan={5} style={{ padding: '32px 20px', textAlign: 'center', color: 'var(--text3)', fontSize: 13.5 }}>
+                      Tidak ada layanan yang cocok dengan "{serviceQuery}". Coba kata kunci lain — total ada 2.000+ layanan setelah daftar.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
             <div style={{ padding: '16px 20px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'center' }}>
@@ -475,7 +495,7 @@ export default function Landing() {
         </div>
 
         {/* ── TESTIMONIALS (Animated Scroll) ── */}
-        <div style={{ position: 'relative', zIndex: 10, padding: '80px 0', background: 'var(--white)', overflow: 'hidden' }}>
+        <div id="testimoni" style={{ position: 'relative', zIndex: 10, padding: '80px 0', background: 'var(--white)', overflow: 'hidden' }}>
           {/* Blob decorations */}
           <div style={{ position: 'absolute', top: '10%', left: '-5%', width: 400, height: 400, borderRadius: '50%', background: 'radial-gradient(circle, rgba(37,99,235,.08) 0%, transparent 70%)', filter: 'blur(40px)', pointerEvents: 'none' }} />
           <div style={{ position: 'absolute', top: '40%', right: '-5%', width: 350, height: 350, borderRadius: '50%', background: 'radial-gradient(circle, rgba(16,185,129,.07) 0%, transparent 70%)', filter: 'blur(40px)', pointerEvents: 'none' }} />
@@ -620,16 +640,27 @@ export default function Landing() {
               Suntik<span style={{ color: 'var(--blue)' }}>Sosmed</span>
             </div>
             <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+              {/* TODO: ganti id target / href ke halaman asli kalau sudah ada (Syarat, Privasi, Docs API) */}
               {['Syarat Layanan', 'Kebijakan Privasi', 'Dokumentasi API'].map(t => (
-                <a key={t} href="#" style={{ color: 'var(--text3)', textDecoration: 'none', fontSize: 12, fontWeight: 500, transition: 'color .15s' }}>{t}</a>
+                <a key={t} href="#panduan"
+                  onClick={e => { e.preventDefault(); document.getElementById('panduan')?.scrollIntoView({ behavior: 'smooth' }); }}
+                  style={{ color: 'var(--text3)', textDecoration: 'none', fontSize: 12, fontWeight: 500, transition: 'color .15s', cursor: 'pointer' }}>{t}</a>
               ))}
             </div>
           </div>
           <div style={{ borderTop: '1px solid var(--border)', paddingTop: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
             <p style={{ color: 'var(--text3)', fontSize: 11.5 }}>© 2026 SuntikSosmed.com. Hak cipta dilindungi.</p>
             <div style={{ display: 'flex', gap: 6 }}>
-              {[<Instagram key="ig" size={14} />, <Youtube key="yt" size={14} />, <Twitter key="tw" size={14} />, <Facebook key="fb" size={14} />].map((ic, i) => (
-                <a key={i} href="#" style={{ width: 28, height: 28, borderRadius: 7, background: 'var(--bg2)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text3)', textDecoration: 'none' }}>{ic}</a>
+              {/* TODO: isi URL sosial media asli di bawah ini */}
+              {[
+                { ic: <Instagram key="ig" size={14} />, url: '' },
+                { ic: <Youtube key="yt" size={14} />, url: '' },
+                { ic: <Twitter key="tw" size={14} />, url: '' },
+                { ic: <Facebook key="fb" size={14} />, url: '' },
+              ].map(({ ic, url }, i) => (
+                <a key={i} href={url || undefined} target={url ? '_blank' : undefined} rel={url ? 'noreferrer' : undefined}
+                  onClick={e => { if (!url) e.preventDefault(); }}
+                  style={{ width: 28, height: 28, borderRadius: 7, background: 'var(--bg2)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text3)', textDecoration: 'none', cursor: url ? 'pointer' : 'default' }}>{ic}</a>
               ))}
             </div>
           </div>

@@ -2,6 +2,20 @@ import { useState, useEffect } from 'react';
 import { DollarSign, Users, MinusCircle, Ban, CheckCircle } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
+const adminFetch = async (url, opts = {}) => {
+    const res = await fetch(url, {
+        ...opts,
+        headers: { 'Authorization': `Bearer ${sessionStorage.getItem('admin_token') || ''}`, ...(opts.headers || {}) },
+    });
+    if (res.status === 401) {
+        sessionStorage.removeItem('admin_authed');
+        sessionStorage.removeItem('admin_token');
+        window.location.reload();
+        throw new Error('SESSION_EXPIRED');
+    }
+    return res;
+};
+
 // ✅ Single query untuk semua user sekaligus — bukan N query terpisah
 async function getAllBalances(emails) {
     if (!emails.length) return {};
@@ -34,19 +48,14 @@ export default function AdminUsers() {
 
     const load = async () => {
         setLoadingUsers(true);
-        const token = sessionStorage.getItem('admin_token') || '';
 
         // Ambil users via admin-api (pakai service role - bypass RLS)
-        const res = await fetch('/api/admin-api?action=get_users', {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
+        const res = await adminFetch('/api/admin-api?action=get_users');
         const apiData = await res.json();
 
         if (apiData.users) {
             // Ambil saldo dari transactions via admin-api
-            const txRes = await fetch('/api/admin-api?action=get_transactions_all', {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            const txRes = await adminFetch('/api/admin-api?action=get_transactions_all');
             const txData = await txRes.json();
             const txList = txData.transactions || [];
 

@@ -54,52 +54,89 @@ export default async function handler(req: any, res: any) {
             return res.status(400).json({ error: 'Invalid amount' });
         }
 
-        // Cek duplikat
-        const { data: existing } = await supabaseAdmin
+        // ── Anti-duplikat: kalau sudah pernah jadi 'deposit success' untuk trx ini, stop ──
+        const { data: alreadyDone } = await supabaseAdmin
             .from('transactions')
             .select('id')
-            .or(`description.ilike.%${reference_id}%,description.ilike.%${trx_id}%`)
-            .in('status', ['success', 'pending_webhook'])
+            .eq('type', 'deposit')
+            .eq('status', 'success')
+            .or(`description.ilike.%${trx_id}%,description.ilike.%${reference_id}%`)
             .maybeSingle();
 
-        if (!existing) {
-            // ✅ Parse email dari reference_id (format: email_timestamp)
-            let email = '';
-            if (reference_id && reference_id.includes('_')) {
-                const parts = reference_id.split('_');
-                if (parts[0] && parts[0].includes('@')) {
-                    email = parts[0].toLowerCase().trim();
-                }
-            }
-
-            // ✅ Validasi: email harus terdaftar di sistem sebelum saldo dikreditkan
-            // Mencegah penyerang menyisipkan email arbitrary di reference_id
-            let verifiedEmail = '';
-            if (email) {
-                const { data: profile } = await supabaseAdmin
-                    .from('profiles')
-                    .select('email')
-                    .eq('email', email)
-                    .maybeSingle();
-                verifiedEmail = profile?.email || '';
-            }
-
-            // Kalau email tidak terdaftar -> pending_webhook untuk review manual
-            const status = verifiedEmail ? 'success' : 'pending_webhook';
-
-            await supabaseAdmin.from('transactions').insert({
-                email: verifiedEmail,
-                type: 'deposit',
-                amount: Math.round(amount),
-                description: `Top up QRIS - Ref: ${reference_id} - TrxID: ${trx_id}`,
-                status,
-            });
-
-            if (!verifiedEmail && email) {
-                console.warn(`[Webhook] Email '${email}' dari reference_id tidak terdaftar. Transaksi disimpan sebagai pending_webhook untuk review manual.`);
-            }
-            console.log(`[Webhook] Payment saved: ${trx_id} - Rp ${amount} - email: ${verifiedEmail || 'unknown'} - status: ${status}`);
+        if (alreadyDone) {
+            return res.status(200).json({ received: true, note: 'already processed' });
         }
+
+        // ── STRATEGI UTAMA: cari baris 'qris_pending' yang dibuat saat user bikin QRIS ──
+        // Baris itu SUDAH punya email + (idealnya) user_id yang benar dari session user.
+        // Cocokkan via trx_id (disimpan di qr_trx_id atau di description "QRIS_PENDING_<trx_id>").
+        const { data: pendingRow } = await supabaseAdmin
+            .from('transactions')
+            .select('id, email, user_id')
+            .or(`qr_trx_id.eq.${trx_id},description.eq.QRIS_PENDING_${trx_id}`)
+            .maybeSingle();
+
+        if (pendingRow && pendingRow.email) {
+            // ✅ Email sudah benar dari awal — tinggal jadikan deposit success.
+            const { error: updErr } = await supabaseAdmin
+                .from('transactions')
+                .update({
+                    type: 'deposit',
+                    status: 'success',
+                    amount: Math.round(amount),
+                    description: `Top up QRIS - Ref: ${reference_id} - TrxID: ${trx_id}`,
+                })
+                .eq('id', pendingRow.id);
+            if (updErr) {
+                console.error('[Webhook] update pending row error:', updErr.message);
+                return res.status(500).json({ error: 'DB update failed' });
+            }
+            console.log(`[Webhook] Deposit OK (via pending row): ${trx_id} - Rp ${amount} - ${pendingRow.email}`);
+            return res.status(200).json({ received: true });
+        }
+
+        // ── FALLBACK: baris pending tidak ketemu. Resolve email dari reference_id. ──
+        // (mis. baris pending kehapus, atau dibuat di device lain tanpa simpan ke DB)
+        let email = '';
+        if (reference_id && typeof reference_id === 'string') {
+            // reference_id = "<email>_<timestamp>"; timestamp = angka di paling akhir
+            const m = reference_id.match(/^(.+?)_\d+$/);
+            const cand = (m ? m[1] : reference_id.split('_')[0] || '').toLowerCase().trim();
+            if (cand.includes('@') && cand.includes('.')) email = cand;
+        }
+
+        // Verifikasi ke auth.users (sumber kebenaran), fallback ke profiles
+        let verifiedEmail = '';
+        let verifiedUserId: string | null = null;
+        if (email) {
+            try {
+                const { data: list } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+                const u = list?.users?.find((x: any) => (x.email || '').toLowerCase() === email);
+                if (u) { verifiedEmail = u.email!.toLowerCase(); verifiedUserId = u.id; }
+            } catch (e: any) {
+                console.error('[Webhook] auth.users lookup error:', e?.message);
+            }
+            if (!verifiedEmail) {
+                const { data: profile } = await supabaseAdmin
+                    .from('profiles').select('id, email').eq('email', email).maybeSingle();
+                if (profile?.email) { verifiedEmail = profile.email.toLowerCase(); verifiedUserId = profile.id || null; }
+            }
+        }
+
+        // JANGAN buang email — simpan apa adanya. Kalau tak terverifikasi -> pending_webhook (review manual)
+        const status = verifiedEmail ? 'success' : 'pending_webhook';
+        const emailToSave = verifiedEmail || email || '';
+
+        const { error: insErr } = await supabaseAdmin.from('transactions').insert({
+            user_id: verifiedUserId,
+            email: emailToSave,
+            type: 'deposit',
+            amount: Math.round(amount),
+            description: `Top up QRIS - Ref: ${reference_id} - TrxID: ${trx_id}`,
+            status,
+        });
+        if (insErr) console.error('[Webhook] insert error:', insErr.message);
+        console.log(`[Webhook] Deposit (via fallback): ${trx_id} - Rp ${amount} - email: ${emailToSave || 'unknown'} - status: ${status}`);
     }
 
     return res.status(200).json({ received: true });

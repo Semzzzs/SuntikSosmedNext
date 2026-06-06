@@ -86,19 +86,30 @@ export default async function handler(req, res) {
                 const keluar = (txs || []).filter(t => t.type === 'order' && t.status === 'success').reduce((s, t) => s + (t.amount || 0), 0);
                 const balance = Math.max(0, masuk - keluar);
 
-                // Ambil rate USD->IDR
+                // Ambil rate USD->IDR — tanpa self-fetch ke /api/rate (cegah error localhost di production)
                 let rate = 17689;
                 try {
-                    const rateRes = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/rate`);
-                    const rateData = await rateRes.json();
-                    if (rateData.rate) rate = rateData.rate;
+                    // 1) Override manual admin di settings.rate_override (menang atas live)
+                    const { data: rOverride } = await supabaseCheck.from('settings').select('value').eq('key', 'rate_override').maybeSingle();
+                    const ov = rOverride?.value ? parseInt(rOverride.value, 10) : 0;
+                    if (ov && ov >= 1000) {
+                        rate = ov;
+                    } else {
+                        // 2) Rate live langsung dari sumber eksternal
+                        const rr = await fetch('https://open.er-api.com/v6/latest/USD');
+                        const rd = await rr.json();
+                        if (rd?.result === 'success' && rd?.rates?.IDR) rate = Math.round(rd.rates.IDR);
+                    }
                 } catch { }
 
-                // Ambil markup
+                // Ambil markup global + rules per-kategori/per-service
                 let markup = 1;
+                let markupRules = { categories: {}, services: {} };
                 try {
                     const { data: mkData } = await supabaseCheck.from('settings').select('value').eq('key', 'markup').maybeSingle();
                     if (mkData?.value) markup = parseFloat(mkData.value);
+                    const { data: rulesData } = await supabaseCheck.from('settings').select('value').eq('key', 'markup_rules').maybeSingle();
+                    if (rulesData?.value) { const p = JSON.parse(rulesData.value); markupRules = { categories: p.categories || {}, services: p.services || {} }; }
                 } catch { }
 
                 // Ambil harga service dari SMMSOC
@@ -112,7 +123,8 @@ export default async function handler(req, res) {
 
                 if (svc) {
                     const qty = parseInt(safeQuery.quantity) || 0;
-                    const totalIDR = Math.round(qty * parseFloat(svc.rate || 0) / 1000 * rate * markup);
+                    const effMarkup = markupRules.services?.[String(svc.service)] ?? markupRules.categories?.[svc.category] ?? markup;
+                    const totalIDR = Math.round(qty * parseFloat(svc.rate || 0) / 1000 * rate * effMarkup);
                     if (totalIDR > balance) {
                         return res.status(402).json({ error: `Saldo tidak cukup. Saldo: Rp ${Math.round(balance).toLocaleString('id-ID')}, Dibutuhkan: Rp ${totalIDR.toLocaleString('id-ID')}` });
                     }
@@ -139,6 +151,26 @@ export default async function handler(req, res) {
         const text = await response.text();
         try {
             const data = JSON.parse(text);
+
+            // ✅ Sembunyikan layanan yang dimatikan admin dari daftar service.
+            //    Hanya untuk user/publik (admin tetap lihat semua agar bisa kelola).
+            if (safeQuery.action === 'services' && Array.isArray(data) && !isAdmin) {
+                try {
+                    const supa = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+                    const { data: ds } = await supa.from('settings').select('value').eq('key', 'disabled_services').maybeSingle();
+                    let disabled = [];
+                    try { disabled = ds?.value ? JSON.parse(ds.value) : []; } catch { disabled = []; }
+                    if (Array.isArray(disabled) && disabled.length) {
+                        const off = new Set(disabled.map(String));
+                        const filtered = data.filter(s => !off.has(String(s.service)));
+                        return res.status(200).json(filtered);
+                    }
+                } catch (e) {
+                    console.error('[smm] filter disabled services error:', e.message);
+                    // kalau gagal, kirim apa adanya (jangan sampai daftar service kosong)
+                }
+            }
+
             return res.status(200).json(data);
         } catch {
             return res.status(response.status).send(text);

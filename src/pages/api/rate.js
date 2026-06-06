@@ -2,9 +2,23 @@
  * Fetch real-time USD to IDR exchange rate
  * Tries multiple free sources for best accuracy
  */
+import { createClient } from '@supabase/supabase-js';
+
 export default async function handler(req, res) {
     // Cache 10 menit di edge
     res.setHeader('Cache-Control', 's-maxage=600, stale-while-revalidate');
+
+    // ✅ Override manual dari admin (settings.rate_override) — menang atas sumber live
+    try {
+        if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+            const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+            const { data } = await supabase.from('settings').select('value').eq('key', 'rate_override').maybeSingle();
+            const val = data?.value ? parseInt(data.value, 10) : 0;
+            if (val && val >= 1000) {
+                return res.status(200).json({ rate: val, updated: new Date().toISOString(), source: 'manual-override' });
+            }
+        }
+    } catch { /* lanjut ke sumber live */ }
 
     const sources = [
         // Source 1: Fawaz Ahmed currency API - update tiap jam

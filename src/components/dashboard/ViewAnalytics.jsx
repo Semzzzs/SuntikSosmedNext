@@ -24,8 +24,8 @@ export default function ViewAnalytics({ user }) {
     setOrders(ids);
   }, [user]);
 
-  const totalDeposit = transactions.filter(t => ['deposit', 'bonus', 'refund'].includes(t.type)).reduce((s, t) => s + (t.amount || 0), 0);
-  const totalSpent = transactions.filter(t => t.type === 'order').reduce((s, t) => s + (t.amount || 0), 0);
+  const totalDeposit = transactions.filter(t => ['deposit', 'bonus', 'refund'].includes(t.type) && t.status === 'success').reduce((s, t) => s + (t.amount || 0), 0);
+  const totalSpent = transactions.filter(t => ['order', 'purchase'].includes(t.type) && t.status === 'success').reduce((s, t) => s + (t.amount || 0), 0);
   const balance = totalDeposit - totalSpent;
 
   // Chart data - transaksi per hari 7 hari terakhir
@@ -35,8 +35,8 @@ export default function ViewAnalytics({ user }) {
     d.setHours(0, 0, 0, 0);
     const dateKey = d.toISOString().slice(0, 10);
     const dayTx = transactions.filter(t => t.created_at?.slice(0, 10) === dateKey);
-    const deposit = dayTx.filter(t => ['deposit', 'bonus', 'refund'].includes(t.type)).reduce((s, t) => s + (t.amount || 0), 0);
-    const spent = dayTx.filter(t => t.type === 'order').reduce((s, t) => s + (t.amount || 0), 0);
+    const deposit = dayTx.filter(t => ['deposit', 'bonus', 'refund'].includes(t.type) && t.status === 'success').reduce((s, t) => s + (t.amount || 0), 0);
+    const spent = dayTx.filter(t => ['order', 'purchase'].includes(t.type) && t.status === 'success').reduce((s, t) => s + (t.amount || 0), 0);
     return { label: d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }), deposit, spent };
   });
 

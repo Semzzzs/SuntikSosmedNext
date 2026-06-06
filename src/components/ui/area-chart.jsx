@@ -33,7 +33,7 @@ function useChart() {
 
 // ── Interaction hook ──────────────────────────────────────────────────────────
 
-function useChartInteraction({ xScale, yScale, data, lines, margin, xAccessor, bisectDate, canInteract }) {
+function useChartInteraction({ xScale, yScale, secondaryYScale, data, lines, margin, xAccessor, bisectDate, canInteract }) {
   const [tooltipData, setTooltipData] = useState(null);
   const [selection, setSelection] = useState(null);
   const isDragging = useRef(false);
@@ -47,9 +47,9 @@ function useChartInteraction({ xScale, yScale, data, lines, margin, xAccessor, b
     let d = d0, fi = idx - 1;
     if (d1 && x0.getTime() - xAccessor(d0).getTime() > xAccessor(d1).getTime() - x0.getTime()) { d = d1; fi = idx; }
     const yPositions = {};
-    for (const line of lines) { const v = d[line.dataKey]; if (typeof v === "number") yPositions[line.dataKey] = yScale(v) ?? 0; }
+    for (const line of lines) { const v = d[line.dataKey]; if (typeof v === "number") { const sc = line.secondary && secondaryYScale ? secondaryYScale : yScale; yPositions[line.dataKey] = sc(v) ?? 0; } }
     return { point: d, index: fi, x: xScale(xAccessor(d)) ?? 0, yPositions };
-  }, [xScale, yScale, data, lines, xAccessor, bisectDate]);
+  }, [xScale, yScale, secondaryYScale, data, lines, xAccessor, bisectDate]);
 
   const resolveIndex = useCallback((pixelX) => {
     const x0 = xScale.invert(pixelX);
@@ -315,28 +315,31 @@ export function XAxis({ numTicks = 6 }) {
   );
 }
 
-export function YAxis({ numTicks = 5, formatValue }) {
-  const { yScale, margin, containerRef } = useChart();
+export function YAxis({ numTicks = 5, formatValue, secondary = false }) {
+  const { yScale, secondaryYScale, margin, containerRef, width } = useChart();
+  const scale = secondary ? (secondaryYScale || yScale) : yScale;
   const [container, setContainer] = useState(null);
   useEffect(() => { setContainer(containerRef.current); }, [containerRef]);
 
   const ticks = useMemo(() => {
-    const [min, max] = yScale.domain();
+    const [min, max] = scale.domain();
     const step = (max - min) / (numTicks - 1);
     return Array.from({ length: numTicks }, (_, i) => {
       const value = min + step * i;
       return {
-        value, y: (yScale(value) ?? 0) + margin.top,
-        label: formatValue ? formatValue(value) : value >= 1000000 ? `${(value / 1000000).toFixed(1)}M` : value >= 1000 ? `${(value / 1000).toFixed(0)}k` : value.toLocaleString(),
+        value, y: (scale(value) ?? 0) + margin.top,
+        label: formatValue ? formatValue(value) : value >= 1000000 ? `${(value / 1000000).toFixed(1)}M` : value >= 1000 ? `${(value / 1000).toFixed(0)}k` : Math.round(value).toLocaleString(),
       };
     });
-  }, [yScale, margin.top, numTicks, formatValue]);
+  }, [scale, margin.top, numTicks, formatValue]);
 
   if (!container) return null;
   return createPortal(
     <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
       {ticks.map(tick => (
-        <div key={tick.value} style={{ position: "absolute", left: 0, top: tick.y, width: margin.left - 6, display: "flex", justifyContent: "flex-end", transform: "translateY(-50%)" }}>
+        <div key={tick.value} style={secondary
+          ? { position: "absolute", left: width - margin.right + 6, top: tick.y, width: margin.right - 8, display: "flex", justifyContent: "flex-start", transform: "translateY(-50%)" }
+          : { position: "absolute", left: 0, top: tick.y, width: margin.left - 6, display: "flex", justifyContent: "flex-end", transform: "translateY(-50%)" }}>
           <span style={{ fontSize: 10, color: "var(--chart-label)", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>{tick.label}</span>
         </div>
       ))}
@@ -345,8 +348,9 @@ export function YAxis({ numTicks = 5, formatValue }) {
   );
 }
 
-export function Area({ dataKey, fill = "var(--chart-line-primary)", fillOpacity = 0.15, stroke, strokeWidth = 2, curve = curveMonotoneX, animate = true, showHighlight = true, gradientToOpacity = 0 }) {
-  const { data, xScale, yScale, innerHeight, innerWidth, tooltipData, selection, isLoaded, animationDuration, xAccessor } = useChart();
+export function Area({ dataKey, fill = "var(--chart-line-primary)", fillOpacity = 0.15, stroke, strokeWidth = 2, curve = curveMonotoneX, animate = true, showHighlight = true, gradientToOpacity = 0, secondary = false }) {
+  const { data, xScale, yScale, secondaryYScale, innerHeight, innerWidth, tooltipData, selection, isLoaded, animationDuration, xAccessor } = useChart();
+  const activeYScale = secondary && secondaryYScale ? secondaryYScale : yScale;
   const pathRef = useRef(null);
   const [pathLength, setPathLength] = useState(0);
   const [clipW, setClipW] = useState(0);
@@ -386,7 +390,7 @@ export function Area({ dataKey, fill = "var(--chart-line-primary)", fillOpacity 
   const animDash = useMotionTemplate`${lenSpring} ${pathLength}`;
   useEffect(() => { offSpring.set(-segBounds.startLength); lenSpring.set(segBounds.segmentLength); }, [segBounds.startLength, segBounds.segmentLength, offSpring, lenSpring]);
 
-  const getY = useCallback((d) => { const v = d[dataKey]; return typeof v === "number" ? (yScale(v) ?? 0) : 0; }, [dataKey, yScale]);
+  const getY = useCallback((d) => { const v = d[dataKey]; return typeof v === "number" ? (activeYScale(v) ?? 0) : 0; }, [dataKey, activeYScale]);
   const isHovering = tooltipData !== null || selection?.active === true;
   const easing = "cubic-bezier(0.85, 0, 0.15, 1)";
 
@@ -414,7 +418,7 @@ export function Area({ dataKey, fill = "var(--chart-line-primary)", fillOpacity 
       )}
       <g clipPath={animate ? `url(#clip-${gradId})` : undefined}>
         <motion.g animate={{ opacity: isHovering && showHighlight ? 0.55 : 1 }} initial={{ opacity: 1 }} transition={{ duration: 0.35 }}>
-          <AreaClosed curve={curve} data={data} fill={`url(#${gradId})`} x={(d) => xScale(xAccessor(d)) ?? 0} y={getY} yScale={yScale} />
+          <AreaClosed curve={curve} data={data} fill={`url(#${gradId})`} x={(d) => xScale(xAccessor(d)) ?? 0} y={getY} yScale={activeYScale} />
           <LinePath curve={curve} data={data} innerRef={pathRef} stroke={`url(#${strokeGradId})`} strokeLinecap="round" strokeWidth={strokeWidth} x={(d) => xScale(xAccessor(d)) ?? 0} y={getY} />
         </motion.g>
       </g>
@@ -434,7 +438,7 @@ function extractLineConfigs(children) {
     const name = typeof child.type === "function" ? (child.type.displayName || child.type.name || "") : "";
     const props = child.props;
     if ((name === "Area" || child.type === Area) && props?.dataKey) {
-      configs.push({ dataKey: props.dataKey, stroke: props.stroke || props.fill || "var(--chart-line-primary)", strokeWidth: props.strokeWidth || 2 });
+      configs.push({ dataKey: props.dataKey, stroke: props.stroke || props.fill || "var(--chart-line-primary)", strokeWidth: props.strokeWidth || 2, secondary: !!props.secondary });
     }
   });
   return configs;
@@ -458,10 +462,19 @@ function ChartInner({ width, height, data, xDataKey, margin, animationDuration, 
 
   const yScale = useMemo(() => {
     let max = 0;
-    for (const line of lines) for (const d of data) { const v = d[line.dataKey]; if (typeof v === "number" && v > max) max = v; }
+    for (const line of lines) { if (line.secondary) continue; for (const d of data) { const v = d[line.dataKey]; if (typeof v === "number" && v > max) max = v; } }
     if (max === 0) max = 100;
     return scaleLinear({ range: [iH, 0], domain: [0, max * 1.15], nice: true });
   }, [iH, data, lines]);
+
+  const hasSecondary = useMemo(() => lines.some(l => l.secondary), [lines]);
+  const secondaryYScale = useMemo(() => {
+    if (!hasSecondary) return null;
+    let max = 0;
+    for (const line of lines) { if (!line.secondary) continue; for (const d of data) { const v = d[line.dataKey]; if (typeof v === "number" && v > max) max = v; } }
+    if (max === 0) max = 100;
+    return scaleLinear({ range: [iH, 0], domain: [0, max * 1.15], nice: true });
+  }, [iH, data, lines, hasSecondary]);
 
   const columnWidth = useMemo(() => data.length < 2 ? 0 : iW / (data.length - 1), [iW, data.length]);
   const dateLabels = useMemo(() => data.map(d => xAccessor(d).toLocaleDateString("id-ID", { day: "numeric", month: "short" })), [data, xAccessor]);
@@ -469,13 +482,13 @@ function ChartInner({ width, height, data, xDataKey, margin, animationDuration, 
   useEffect(() => { const t = setTimeout(() => setIsLoaded(true), animationDuration); return () => clearTimeout(t); }, [animationDuration]);
 
   const { tooltipData, setTooltipData, selection, clearSelection, interactionHandlers, interactionStyle } = useChartInteraction({
-    xScale, yScale, data, lines, margin, xAccessor, bisectDate, canInteract: isLoaded,
+    xScale, yScale, secondaryYScale, data, lines, margin, xAccessor, bisectDate, canInteract: isLoaded,
   });
 
   if (width < 10 || height < 10) return null;
 
   return (
-    <ChartContext.Provider value={{ data, xScale, yScale, width, height, innerWidth: iW, innerHeight: iH, margin, columnWidth, tooltipData, setTooltipData, containerRef, lines, isLoaded, animationDuration, xAccessor, dateLabels, selection, clearSelection }}>
+    <ChartContext.Provider value={{ data, xScale, yScale, secondaryYScale, width, height, innerWidth: iW, innerHeight: iH, margin, columnWidth, tooltipData, setTooltipData, containerRef, lines, isLoaded, animationDuration, xAccessor, dateLabels, selection, clearSelection }}>
       <svg width={width} height={height} aria-hidden="true">
         <rect fill="transparent" width={width} height={height} />
         <g transform={`translate(${margin.left},${margin.top})`} {...interactionHandlers} style={interactionStyle}>

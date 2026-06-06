@@ -24,11 +24,11 @@ const FAQS = [
     items: [
       {
         q: 'Metode pembayaran apa yang tersedia?',
-        a: 'Saat ini kami menerima pembayaran via QRIS (GoPay, OVO, Dana, ShopeePay, dll) dan Cryptocurrency (BTC, ETH, USDT, BNB). Deposit via Crypto mendapatkan bonus saldo 5% untuk transaksi di atas Rp 1.000.000.',
+        a: 'Saat ini kami menerima pembayaran via QRIS (GoPay, OVO, Dana, ShopeePay, dan semua e-wallet/m-banking yang mendukung QRIS) serta Transfer Manual. Pembayaran QRIS terkonfirmasi otomatis, sedangkan transfer manual dikonfirmasi oleh admin.',
       },
       {
         q: 'Berapa minimum deposit?',
-        a: 'Minimum deposit via QRIS adalah Rp 5.000, sedangkan via Cryptocurrency minimum Rp 10.000.',
+        a: 'Minimum deposit via QRIS adalah Rp 10.000, sedangkan via Transfer Manual minimum Rp 5.000.',
       },
       {
         q: 'Apakah saldo bisa di-refund?',
@@ -36,7 +36,7 @@ const FAQS = [
       },
       {
         q: 'Kenapa saldo saya belum masuk?',
-        a: 'Proses konfirmasi pembayaran biasanya memakan waktu 5–15 menit untuk QRIS, dan 1–3 konfirmasi untuk Crypto. Jika lebih dari 1 jam belum masuk, silakan buka tiket support.',
+        a: 'Untuk QRIS, saldo biasanya masuk otomatis dalam beberapa menit setelah pembayaran berhasil. Untuk Transfer Manual, saldo masuk setelah admin mengonfirmasi pembayaran kamu. Jika lebih dari 1 jam belum masuk, silakan buka tiket support dengan menyertakan bukti pembayaran.',
       },
     ],
   },

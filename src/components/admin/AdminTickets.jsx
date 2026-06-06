@@ -5,10 +5,19 @@ const STATUS_COLOR = { open: 'var(--blue)', inprogress: 'var(--yellow)', closed:
 const STATUS_BG = { open: 'var(--blue-l)', inprogress: 'var(--yellow-l)', closed: 'var(--green-l)' };
 const STATUS_LABEL = { open: 'Open', inprogress: 'In Progress', closed: 'Closed' };
 
-const adminFetch = (url, opts = {}) => fetch(url, {
-    ...opts,
-    headers: { 'Authorization': `Bearer ${sessionStorage.getItem('admin_token') || ''}`, 'Content-Type': 'application/json', ...(opts.headers || {}) },
-});
+const adminFetch = async (url, opts = {}) => {
+    const res = await fetch(url, {
+        ...opts,
+        headers: { 'Authorization': `Bearer ${sessionStorage.getItem('admin_token') || ''}`, 'Content-Type': 'application/json', ...(opts.headers || {}) },
+    });
+    if (res.status === 401) {
+        sessionStorage.removeItem('admin_authed');
+        sessionStorage.removeItem('admin_token');
+        window.location.reload();
+        throw new Error('SESSION_EXPIRED');
+    }
+    return res;
+};
 
 export default function AdminTickets() {
     const [tickets, setTickets] = useState([]);

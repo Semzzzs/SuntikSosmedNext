@@ -70,7 +70,7 @@ function SearchSelect({ options, value, onChange, placeholder, disabled }) {
     o.label.toLowerCase().includes(q.toLowerCase()) ||
     o.value.includes(q)
   );
-  const visible = filtered.slice(0, q ? 200 : 80); // limit render
+  const visible = filtered.slice(0, 1000); // tampilkan semua; cap 1000 hanya pengaman performa kategori sangat besar
   const selected = options.find(o => o.value === value);
 
   return (
@@ -90,7 +90,7 @@ function SearchSelect({ options, value, onChange, placeholder, disabled }) {
               <Search size={13} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text3)' }} />
               <input autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder="Ketik nama atau ID service..." style={{ width: '100%', padding: '7px 10px 7px 30px', border: '1.5px solid var(--border)', borderRadius: 8, fontSize: 13, fontFamily: "'Plus Jakarta Sans',sans-serif", background: 'var(--bg2)', color: 'var(--text)', outline: 'none' }} />
             </div>
-            {!q && <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 6, paddingLeft: 2 }}>Menampilkan {Math.min(80, options.length)} dari {options.length} layanan — ketik untuk cari</div>}
+            {!q && <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 6, paddingLeft: 2 }}>{options.length} layanan — ketik untuk cari</div>}
           </div>
           <div style={{ maxHeight: 240, overflowY: 'auto' }} className="ns">
             {filtered.length === 0 && <div style={{ padding: '14px', textAlign: 'center', fontSize: 13, color: 'var(--text3)' }}>Tidak ditemukan</div>}

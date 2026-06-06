@@ -7,6 +7,22 @@
 //             ADMIN_SECRET tidak pernah dikirim ke client.
 
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
+import { createClient } from '@supabase/supabase-js';
+
+// Verifikasi password scrypt (format sama dengan admin-api.js)
+function verifyPassword(password, stored) {
+    try {
+        const [scheme, saltHex, hashHex] = String(stored).split('$');
+        if (scheme !== 'scrypt') return false;
+        const salt = Buffer.from(saltHex, 'hex');
+        const expected = Buffer.from(hashHex, 'hex');
+        const actual = crypto.scryptSync(String(password), salt, expected.length);
+        return expected.length === actual.length && crypto.timingSafeEqual(actual, expected);
+    } catch {
+        return false;
+    }
+}
 
 // ── Rate limiting sederhana in-memory ──────────────────────────────────────
 // Untuk production pakai @upstash/ratelimit agar persist di-across serverless instances.
@@ -36,7 +52,7 @@ function resetFailures(ip) {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
-export default function handler(req, res) {
+export default async function handler(req, res) {
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
     const correctUser = process.env.ADMIN_USERNAME;
@@ -61,7 +77,20 @@ export default function handler(req, res) {
         return res.status(400).json({ ok: false, error: 'Username dan password wajib diisi.' });
     }
 
-    if (username === correctUser && password === correctPass) {
+    // ✅ Verifikasi password: pakai hash di settings kalau ada, fallback ke ADMIN_PASSWORD env.
+    // Lupa password? Hapus row settings key='admin_password_hash' → env password aktif lagi.
+    let passOk = false;
+    if (username === correctUser) {
+        try {
+            const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+            const { data: hashData } = await supabase.from('settings').select('value').eq('key', 'admin_password_hash').maybeSingle();
+            passOk = hashData?.value ? verifyPassword(password, hashData.value) : (password === correctPass);
+        } catch {
+            passOk = (password === correctPass); // DB error → fail-safe ke env
+        }
+    }
+
+    if (passOk) {
         resetFailures(ip);
 
         // ✅ Return JWT — bukan ADMIN_SECRET mentah
