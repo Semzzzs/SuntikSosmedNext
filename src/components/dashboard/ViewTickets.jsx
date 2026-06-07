@@ -8,6 +8,13 @@ const STATUS_CONFIG = {
   closed: { label: 'Closed', color: 'var(--green)', bg: 'var(--green-l)' },
 };
 
+// Normalisasi status tiket dari berbagai penulisan ('in_progress', 'In Progress',
+// 'in-progress', dst) ke key STATUS_CONFIG agar badge tidak salah jatuh ke 'open'.
+function getTicketStatus(raw) {
+  const key = String(raw || 'open').toLowerCase().replace(/[\s_-]/g, '');
+  return STATUS_CONFIG[key] || STATUS_CONFIG.open;
+}
+
 export default function ViewTickets() {
   const [tickets, setTickets] = useState([]);
   const [showForm, setShowForm] = useState(false);
@@ -37,8 +44,16 @@ export default function ViewTickets() {
 
   useEffect(() => {
     load();
-    const interval = setInterval(load, 30000);
-    return () => clearInterval(interval);
+    let interval = null;
+    const start = () => { if (!interval) interval = setInterval(load, 30000); };
+    const stop = () => { if (interval) { clearInterval(interval); interval = null; } };
+    const onVisibility = () => {
+      if (document.hidden) { stop(); }
+      else { load(); start(); }
+    };
+    if (!document.hidden) start();
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => { stop(); document.removeEventListener('visibilitychange', onVisibility); };
   }, []);
 
   const submit = async (e) => {
@@ -57,11 +72,15 @@ export default function ViewTickets() {
       status: 'open',
       replies: [],
     };
-    await supabase.from('tickets').insert(ticket);
+    const { error } = await supabase.from('tickets').insert(ticket);
+    if (error) {
+      console.error('[tickets] insert error:', error.message);
+      return;
+    }
     setForm({ subject: '', category: 'General', message: '' });
     setShowForm(false);
     setSubmitted(true);
-    load();
+    await load();
     setTimeout(() => setSubmitted(false), 3000);
   };
 
@@ -131,7 +150,7 @@ export default function ViewTickets() {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {tickets.map(t => {
-            const st = STATUS_CONFIG[t.status] || STATUS_CONFIG.open;
+            const st = getTicketStatus(t.status);
             const isOpen = expanded === t.id;
             return (
               <div key={t.id} className="card" style={{ overflow: 'hidden' }}>

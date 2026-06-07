@@ -442,21 +442,30 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* BOTTOM NAV — Mobile only */}
+      {/* FLOATING BOTTOM NAV — Mobile only */}
       <nav className="bottom-nav-bar">
         {[
-          { id: 'New Order', icon: <ShoppingCart size={20} /> },
-          { id: 'My Orders', icon: <Package size={20} /> },
-          { id: 'Add Funds', icon: <CreditCard size={20} /> },
-          { id: 'Tickets', icon: <Ticket size={20} /> },
-          { id: 'Settings', icon: <Settings size={20} /> },
-        ].map(item => (
-          <button key={item.id} onClick={() => setMenuAndSave(item.id)}
-            style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 3, background: 'none', border: 'none', cursor: 'pointer', color: menu === item.id ? 'var(--blue)' : 'var(--text3)', fontFamily: "'Plus Jakarta Sans',sans-serif", fontSize: 10, fontWeight: 700, padding: '4px 0' }}>
-            {item.icon}
-            <span>{item.id === 'New Order' ? 'Order' : item.id === 'Add Funds' ? 'Deposit' : item.id}</span>
-          </button>
-        ))}
+          { id: 'New Order', icon: <ShoppingCart size={19} />, label: 'Order' },
+          { id: 'My Orders', icon: <Package size={19} />, label: 'Orders' },
+          { id: 'Add Funds', icon: <CreditCard size={19} />, label: 'Deposit' },
+          { id: 'Tickets', icon: <Ticket size={19} />, label: 'Tickets' },
+          { id: 'Settings', icon: <Settings size={19} />, label: 'Settings' },
+        ].map(item => {
+          const active = menu === item.id;
+          return (
+            <button key={item.id} onClick={() => setMenuAndSave(item.id)}
+              style={{
+                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 3,
+                background: active ? 'var(--blue)' : 'transparent', border: 'none', cursor: 'pointer',
+                color: active ? '#fff' : 'var(--text3)', fontFamily: "'Plus Jakarta Sans',sans-serif",
+                fontSize: 9.5, fontWeight: 700, padding: '8px 12px', borderRadius: 16,
+                transition: 'all .25s cubic-bezier(.4,0,.2,1)', WebkitTapHighlightColor: 'transparent',
+              }}>
+              <span style={{ display: 'flex' }}>{item.icon}</span>
+              <span style={{ whiteSpace: 'nowrap' }}>{item.label}</span>
+            </button>
+          );
+        })}
       </nav>
     </div>
   );

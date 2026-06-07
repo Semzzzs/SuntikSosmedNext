@@ -24,8 +24,16 @@ export default function ViewTransactions({ user }) {
 
   useEffect(() => {
     load();
-    const interval = setInterval(load, 30000);
-    return () => clearInterval(interval);
+    let interval = null;
+    const start = () => { if (!interval) interval = setInterval(load, 30000); };
+    const stop = () => { if (interval) { clearInterval(interval); interval = null; } };
+    const onVisibility = () => {
+      if (document.hidden) { stop(); }
+      else { load(); start(); }
+    };
+    if (!document.hidden) start();
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => { stop(); document.removeEventListener('visibilitychange', onVisibility); };
   }, [user]);
 
   const TYPE_CONFIG = {

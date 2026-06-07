@@ -79,7 +79,7 @@ function RevealSection({ children, delay = 0, duration = 700, variant = 'up', st
 
     obs.observe(el);
     return () => obs.disconnect();
-  }, []);
+  }, [delay, duration, variant, stagger]);
 
   return <div ref={ref} className={className} style={style}>{children}</div>;
 }
@@ -95,72 +95,59 @@ function useNavbarScroll() {
   return scrolled;
 }
 
+const SERVICES = [
+  { id: '197', icon: <Instagram size={16} style={{ color: '#E1306C' }} />, iconBg: 'rgba(225,48,108,.1)', name: 'Instagram Followers — High Quality / Instant', min: '10', max: '10,000', price: 'Rp 875' },
+  { id: '302', icon: <Play size={16} fill="#000" style={{ color: '#000' }} />, iconBg: 'rgba(0,0,0,.07)', name: 'TikTok Views — Ultra Fast Delivery', min: '100', max: '1,000,000', price: 'Rp 12' },
+  { id: '415', icon: <Youtube size={16} style={{ color: '#FF0000' }} />, iconBg: 'rgba(255,0,0,.1)', name: 'YouTube Subscribers — Real & Active', min: '50', max: '5,000', price: 'Rp 4.375' },
+  { id: '550', icon: <Twitter size={16} style={{ color: '#1DA1F2' }} />, iconBg: 'rgba(29,161,242,.1)', name: 'Twitter Retweets — Non Drop Guaranteed', min: '20', max: '20,000', price: 'Rp 875' },
+  { id: '711', icon: <Facebook size={16} style={{ color: '#1877F2' }} />, iconBg: 'rgba(24,119,242,.1)', name: 'Facebook Page Likes — Real Users', min: '50', max: '50,000', price: 'Rp 1.750' },
+];
+
+const FEATURES = [
+  { icon: <Star size={22} />, iconBg: 'var(--yellow-l)', iconColor: 'var(--yellow)', title: 'Kualitas Premium', desc: 'Engagement berkualitas tinggi dari akun nyata di seluruh dunia.' },
+  { icon: <ShieldCheck size={22} />, iconBg: 'var(--green-l)', iconColor: 'var(--green)', title: 'Aman & Terpercaya', desc: 'Metode 100% aman, tidak perlu password. Perlindungan terjamin.' },
+  { icon: <Zap size={22} />, iconBg: 'rgba(139,92,246,.1)', iconColor: 'var(--purple)', title: 'Pengiriman Instan', desc: 'Order mulai diproses dalam hitungan menit. Super cepat.' },
+  { icon: <Globe size={22} />, grad: 'var(--blue)', title: 'Support 24/7', desc: 'Tim kami selalu siap membantu kapanpun, siang maupun malam.' },
+];
+
+const STEPS = [
+  {
+    icon: <UserPlus size={32} />,
+    title: 'Buat Akun Gratis',
+    desc: 'Daftar dalam kurang dari 1 menit. Tidak perlu kartu kredit atau verifikasi rumit — cukup email dan password.',
+    bullets: ['Email & password saja', 'Verifikasi instan', 'Akses langsung ke dashboard', 'Tanpa biaya pendaftaran'],
+    color: 'var(--blue)',
+    bg: 'var(--blue-l)',
+  },
+  {
+    icon: <Wallet size={32} />,
+    title: 'Top Up Saldo',
+    desc: 'Tambah saldo dengan mudah dan aman. Kami mendukung QRIS yang bisa dibayar dari semua bank dan e-wallet Indonesia.',
+    bullets: ['QRIS (semua bank & e-wallet)', 'Crypto BTC, ETH, USDT (segera)', 'Minimum deposit Rp 5.000', 'Saldo masuk instan'],
+    color: '#10B981',
+    bg: 'var(--green-l)',
+  },
+  {
+    icon: <ShoppingCart size={32} />,
+    title: 'Pilih & Buat Order',
+    desc: 'Pilih layanan dari 2.000+ opsi, masukkan link atau username target, tentukan jumlah, dan lihat pertumbuhanmu melesat.',
+    bullets: ['2.000+ layanan tersedia', 'Instagram, TikTok, YouTube & lebih', 'Pantau progress real-time', 'Garansi refill jika drop'],
+    color: '#8B5CF6',
+    bg: 'rgba(139,92,246,.1)',
+  },
+];
+
 export default function Landing() {
   const router = useRouter();
   const { dark, toggle } = useTheme();
   const navScrolled = useNavbarScroll();
   const [serviceQuery, setServiceQuery] = useState('');
 
-  const services = [
-    { id: '197', icon: <Instagram size={16} style={{ color: '#E1306C' }} />, iconBg: 'rgba(225,48,108,.1)', name: 'Instagram Followers — High Quality / Instant', min: '10', max: '10,000', price: 'Rp 875' },
-    { id: '302', icon: <Play size={16} fill="#000" style={{ color: '#000' }} />, iconBg: 'rgba(0,0,0,.07)', name: 'TikTok Views — Ultra Fast Delivery', min: '100', max: '1,000,000', price: 'Rp 12' },
-    { id: '415', icon: <Youtube size={16} style={{ color: '#FF0000' }} />, iconBg: 'rgba(255,0,0,.1)', name: 'YouTube Subscribers — Real & Active', min: '50', max: '5,000', price: 'Rp 4.375' },
-    { id: '550', icon: <Twitter size={16} style={{ color: '#1DA1F2' }} />, iconBg: 'rgba(29,161,242,.1)', name: 'Twitter Retweets — Non Drop Guaranteed', min: '20', max: '20,000', price: 'Rp 875' },
-    { id: '711', icon: <Facebook size={16} style={{ color: '#1877F2' }} />, iconBg: 'rgba(24,119,242,.1)', name: 'Facebook Page Likes — Real Users', min: '50', max: '50,000', price: 'Rp 1.750' },
-  ];
-
-  const filteredServices = services.filter(sv => {
+  const filteredServices = SERVICES.filter(sv => {
     const q = serviceQuery.trim().toLowerCase();
     if (!q) return true;
     return sv.name.toLowerCase().includes(q) || sv.id.includes(q);
   });
-
-  const features = [
-    { icon: <Star size={22} />, iconBg: 'var(--yellow-l)', iconColor: 'var(--yellow)', title: 'Kualitas Premium', desc: 'Engagement berkualitas tinggi dari akun nyata di seluruh dunia.' },
-    { icon: <ShieldCheck size={22} />, iconBg: 'var(--green-l)', iconColor: 'var(--green)', title: 'Aman & Terpercaya', desc: 'Metode 100% aman, tidak perlu password. Perlindungan terjamin.' },
-    { icon: <Zap size={22} />, iconBg: 'rgba(139,92,246,.1)', iconColor: 'var(--purple)', title: 'Pengiriman Instan', desc: 'Order mulai diproses dalam hitungan menit. Super cepat.' },
-    { icon: <Globe size={22} />, grad: 'var(--blue)', title: 'Support 24/7', desc: 'Tim kami selalu siap membantu kapanpun, siang maupun malam.' },
-  ];
-
-  const steps = [
-    {
-      icon: <UserPlus size={32} />,
-      title: 'Buat Akun Gratis',
-      desc: 'Daftar dalam kurang dari 1 menit. Tidak perlu kartu kredit atau verifikasi rumit — cukup email dan password.',
-      bullets: ['Email & password saja', 'Verifikasi instan', 'Akses langsung ke dashboard', 'Tanpa biaya pendaftaran'],
-      color: 'var(--blue)',
-      bg: 'var(--blue-l)',
-    },
-    {
-      icon: <Wallet size={32} />,
-      title: 'Top Up Saldo',
-      desc: 'Tambah saldo dengan mudah dan aman. Kami mendukung QRIS yang bisa dibayar dari semua bank dan e-wallet Indonesia.',
-      bullets: ['QRIS (semua bank & e-wallet)', 'Crypto BTC, ETH, USDT (segera)', 'Minimum deposit Rp 5.000', 'Saldo masuk instan'],
-      color: '#10B981',
-      bg: 'var(--green-l)',
-    },
-    {
-      icon: <ShoppingCart size={32} />,
-      title: 'Pilih & Buat Order',
-      desc: 'Pilih layanan dari 2.000+ opsi, masukkan link atau username target, tentukan jumlah, dan lihat pertumbuhanmu melesat.',
-      bullets: ['2.000+ layanan tersedia', 'Instagram, TikTok, YouTube & lebih', 'Pantau progress real-time', 'Garansi refill jika drop'],
-      color: '#8B5CF6',
-      bg: 'rgba(139,92,246,.1)',
-    },
-  ];
-
-  const platforms = [
-    { icon: <Instagram size={15} style={{ color: '#E1306C' }} />, label: 'Instagram', bg: 'rgba(225,48,108,.08)', color: '#E1306C' },
-    { icon: <Play size={15} fill="#000" />, label: 'TikTok', bg: 'rgba(0,0,0,.06)', color: '#000' },
-    { icon: <Youtube size={15} style={{ color: '#FF0000' }} />, label: 'YouTube', bg: 'rgba(255,0,0,.08)', color: '#FF0000' },
-    { icon: <Twitter size={15} style={{ color: '#1DA1F2' }} />, label: 'Twitter / X', bg: 'rgba(29,161,242,.08)', color: '#1DA1F2' },
-    { icon: <Facebook size={15} style={{ color: '#1877F2' }} />, label: 'Facebook', bg: 'rgba(24,119,242,.08)', color: '#1877F2' },
-    { icon: <Instagram size={15} style={{ color: '#E1306C' }} />, label: 'Instagram', bg: 'rgba(225,48,108,.08)', color: '#E1306C' },
-    { icon: <Play size={15} fill="#000" />, label: 'TikTok', bg: 'rgba(0,0,0,.06)', color: '#000' },
-    { icon: <Youtube size={15} style={{ color: '#FF0000' }} />, label: 'YouTube', bg: 'rgba(255,0,0,.08)', color: '#FF0000' },
-    { icon: <Twitter size={15} style={{ color: '#1DA1F2' }} />, label: 'Twitter / X', bg: 'rgba(29,161,242,.08)', color: '#1DA1F2' },
-    { icon: <Facebook size={15} style={{ color: '#1877F2' }} />, label: 'Facebook', bg: 'rgba(24,119,242,.08)', color: '#1877F2' },
-  ];
 
   return (
     <div className={`root${dark ? ' dark' : ''}`} style={{ minHeight: '100vh', overflow: 'hidden' }}>
@@ -374,7 +361,7 @@ export default function Landing() {
             <p style={{ fontSize: 15, color: 'var(--text2)', maxWidth: 480, margin: '0 auto' }}>Semua yang kamu butuhkan untuk tumbuh — cepat, aman, dan terjangkau.</p>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 18 }}>
-            {features.map((f, i) => (
+            {FEATURES.map((f, i) => (
               <RevealSection key={i} delay={i * 120} variant="scale" duration={650}>
                 <div className="feature-card">
                   <div style={{ width: 52, height: 52, borderRadius: 16, background: f.iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 18, boxShadow: '0 6px 20px rgba(0,0,0,.15)' }}>{f.icon}</div>
@@ -399,7 +386,7 @@ export default function Landing() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 24, position: 'relative' }}>
               {/* connector line */}
               <div style={{ position: 'absolute', top: 44, left: '18%', right: '18%', height: 2, background: `linear-gradient(90deg, var(--blue), #10B981, #8B5CF6)`, borderRadius: 2, zIndex: 0, opacity: 0.3 }} />
-              {steps.map((s, i) => (
+              {STEPS.map((s, i) => (
                 <RevealSection key={i} delay={i * 160} variant="up" duration={680}>
                   <div style={{ background: 'var(--white)', border: `1.5px solid ${s.color}22`, borderRadius: 22, padding: '32px 26px', position: 'relative', zIndex: 1, boxShadow: 'var(--shadow)', transition: 'transform .2s, box-shadow .2s' }}
                     onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.boxShadow = '0 16px 40px rgba(0,0,0,.1)'; }}
@@ -613,7 +600,7 @@ export default function Landing() {
             <div style={{ position: 'absolute', bottom: -80, left: -40, width: 260, height: 260, borderRadius: '50%', background: 'rgba(255,255,255,.04)', pointerEvents: 'none' }} />
             <div style={{ position: 'relative', zIndex: 1 }}>
               <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,.15)', borderRadius: 50, padding: '5px 14px', fontSize: 11.5, fontWeight: 700, color: '#fff', marginBottom: 20, flexWrap: 'wrap', justifyContent: 'center', maxWidth: '100%' }}>
-                <Sparkles size={12} /> Mulai dari Rp 875 · Tanpa kontrak · Cancel kapan saja
+                <Sparkles size={12} /> Mulai dari Rp 1/K · Tanpa kontrak · Cancel kapan saja
               </div>
               <h2 style={{ fontSize: 'clamp(24px, 6vw, 44px)', fontWeight: 800, color: '#fff', marginBottom: 14, letterSpacing: '-.5px', lineHeight: 1.15 }}>Siap meningkatkan<br />jangkauan kamu?</h2>
               <p style={{ fontSize: 'clamp(13px, 3vw, 16px)', color: 'rgba(255,255,255,.75)', marginBottom: 32, maxWidth: 420, margin: '0 auto 32px', lineHeight: 1.7 }}>Bergabung dengan 50.000+ kreator yang sudah menggunakan SuntikSosmed setiap hari.</p>

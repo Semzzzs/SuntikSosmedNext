@@ -13,15 +13,24 @@ export default function ViewAnalytics({ user }) {
 
   useEffect(() => {
     if (!user?.email) return;
-    // ✅ Load transactions dari Supabase
-    import('@/lib/supabase').then(({ supabase }) => {
-      supabase.from('transactions').select('*').eq('email', user.email)
-        .order('created_at', { ascending: false })
-        .then(({ data }) => setTransactions(data || []));
-    });
-    // Order IDs tetap dari localStorage (metadata lokal)
-    const ids = JSON.parse(localStorage.getItem(`smm_orders_${user.email}`) || '[]');
-    setOrders(ids);
+    // ✅ Load transactions + order count dari Supabase (akurat & lintas device)
+    supabase.from('transactions').select('*').eq('email', user.email)
+      .order('created_at', { ascending: false })
+      .then(({ data }) => setTransactions(data || []));
+
+    // ✅ Total Order dihitung dari transactions tipe order/purchase di Supabase,
+    //    bukan dari localStorage (yang tidak ikut pindah device).
+    supabase.from('transactions')
+      .select('order_id, type, description')
+      .eq('email', user.email)
+      .in('type', ['order', 'purchase'])
+      .then(({ data }) => {
+        const valid = (data || []).filter(t =>
+          (t.order_id && /^\d+$/.test(String(t.order_id))) ||
+          (t.description && t.description.startsWith('Order #'))
+        );
+        setOrders(valid);
+      });
   }, [user]);
 
   const totalDeposit = transactions.filter(t => ['deposit', 'bonus', 'refund'].includes(t.type) && t.status === 'success').reduce((s, t) => s + (t.amount || 0), 0);

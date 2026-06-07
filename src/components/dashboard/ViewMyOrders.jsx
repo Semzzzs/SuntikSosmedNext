@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Search, Package, CheckCircle, Clock, Loader } from 'lucide-react';
+import { Search, Package, CheckCircle, Clock, Loader, XCircle, AlertTriangle } from 'lucide-react';
 import { useApi } from '@/context/ApiContext';
 import { supabase } from '@/lib/supabase';
 
@@ -8,7 +8,29 @@ const STATUS_CONFIG = {
   'In progress': { label: 'Berjalan', color: 'var(--blue)', bg: 'var(--blue-l)', icon: <Loader size={12} /> },
   'Processing': { label: 'Diproses', color: 'var(--blue)', bg: 'var(--blue-l)', icon: <Loader size={12} /> },
   'Pending': { label: 'Menunggu', color: '#d97706', bg: '#fef3c7', icon: <Clock size={12} /> },
+  'Partial': { label: 'Sebagian', color: '#d97706', bg: '#fef3c7', icon: <AlertTriangle size={12} /> },
+  'Canceled': { label: 'Dibatalkan', color: 'var(--red)', bg: 'var(--red-l)', icon: <XCircle size={12} /> },
+  'Refunded': { label: 'Dana Kembali', color: 'var(--text3)', bg: 'var(--bg2)', icon: <XCircle size={12} /> },
 };
+
+// Normalisasi status dari SMM API — provider kadang kirim casing/penulisan beda
+// ('in progress', 'In Progress', 'Cancelled' vs 'Canceled', dst) agar match STATUS_CONFIG.
+function normalizeStatus(raw) {
+  if (!raw) return 'Pending';
+  const s = String(raw).trim().toLowerCase();
+  switch (s) {
+    case 'completed': return 'Completed';
+    case 'in progress':
+    case 'inprogress': return 'In progress';
+    case 'processing': return 'Processing';
+    case 'pending': return 'Pending';
+    case 'partial': return 'Partial';
+    case 'canceled':
+    case 'cancelled': return 'Canceled';
+    case 'refunded': return 'Refunded';
+    default: return raw; // biarkan apa adanya kalau benar-benar tak dikenal
+  }
+}
 
 function getOrderKey(user) {
   return `smm_orders_${user?.email || user?.id || 'guest'}`;
@@ -95,7 +117,7 @@ export default function ViewMyOrders() {
           const localMeta = meta[t.order_id] || {};
           return {
             id: t.order_id || t.id,
-            status: live?.status || 'Pending',
+            status: normalizeStatus(live?.status),
             charge: live?.charge || t.charge,
             startCount: live?.start_count,
             remains: live?.remains,
@@ -123,7 +145,7 @@ export default function ViewMyOrders() {
       if (data.error) throw new Error(data.error);
       const parsed = Object.entries(data).map(([id, info]) => ({
         id,
-        status: info.status || 'Pending',
+        status: normalizeStatus(info.status),
         charge: info.charge,
         startCount: info.start_count,
         remains: info.remains,
@@ -143,8 +165,29 @@ export default function ViewMyOrders() {
 
   useEffect(() => {
     fetchOrders();
-    const interval = setInterval(fetchOrders, 30000);
-    return () => clearInterval(interval);
+    let interval = null;
+    const start = () => {
+      if (interval) return;
+      interval = setInterval(fetchOrders, 30000);
+    };
+    const stop = () => {
+      if (interval) { clearInterval(interval); interval = null; }
+    };
+    const onVisibility = () => {
+      if (document.hidden) {
+        stop();
+      } else {
+        fetchOrders();  // refresh langsung saat tab kembali aktif
+        start();
+      }
+    };
+    // Mulai polling hanya kalau tab sedang terlihat
+    if (!document.hidden) start();
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      stop();
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
   }, [fetchOrders]);
 
   const statuses = ['Semua', ...Object.keys(STATUS_CONFIG)];
@@ -282,7 +325,7 @@ export default function ViewMyOrders() {
                           {progress !== null ? (
                             <div>
                               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text3)', marginBottom: 4 }}>
-                                <span>{o.startCount > 0 ? `${o.startCount - o.remains}/${o.startCount}` : ''}</span>
+                                <span>{o.startCount > 0 ? `${Math.max(0, o.startCount - o.remains)}/${o.startCount}` : ''}</span>
                                 <span style={{ fontWeight: 700 }}>{progress}%</span>
                               </div>
                               <div style={{ height: 6, background: 'var(--bg2)', borderRadius: 99, overflow: 'hidden' }}>

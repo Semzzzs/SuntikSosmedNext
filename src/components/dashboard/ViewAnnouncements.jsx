@@ -25,8 +25,16 @@ export default function ViewAnnouncements() {
 
     useEffect(() => {
         load();
-        const interval = setInterval(load, 30000);
-        return () => clearInterval(interval);
+        let interval = null;
+        const start = () => { if (!interval) interval = setInterval(load, 30000); };
+        const stop = () => { if (interval) { clearInterval(interval); interval = null; } };
+        const onVisibility = () => {
+            if (document.hidden) { stop(); }
+            else { load(); start(); }
+        };
+        if (!document.hidden) start();
+        document.addEventListener('visibilitychange', onVisibility);
+        return () => { stop(); document.removeEventListener('visibilitychange', onVisibility); };
     }, []);
 
     const filters = ['Semua', 'info', 'success', 'warning', 'promo'];
@@ -46,7 +54,8 @@ export default function ViewAnnouncements() {
     const Card = ({ a }) => {
         const t = TYPES[a.type] || TYPES.info;
         const color = dark ? t.darkColor : t.color;
-        const isLong = a.content.length > 180;
+        const content = a.content || '';
+        const isLong = content.length > 180;
         const isOpen = expanded[a.id];
 
         return (
@@ -94,7 +103,7 @@ export default function ViewAnnouncements() {
                             WebkitLineClamp: isLong && !isOpen ? 3 : 'unset',
                             WebkitBoxOrient: 'vertical',
                             overflow: isLong && !isOpen ? 'hidden' : 'visible',
-                        }}>{a.content}</p>
+                        }}>{content}</p>
                         {isLong && (
                             <button onClick={() => setExpanded(e => ({ ...e, [a.id]: !e[a.id] }))}
                                 style={{ marginTop: 6, fontSize: 12.5, fontWeight: 700, color, background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: "'Plus Jakarta Sans',sans-serif" }}>

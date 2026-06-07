@@ -553,10 +553,8 @@ export default function ViewNewOrder({ user, setMenu }) {
                   if (n.match(/hq|high.?quality/i)) lines.push('- Quality: High Quality');
                   else if (n.match(/real/i)) lines.push('- Quality: Real Accounts');
 
-                  // ── Start & Speed: tidak ada field resmi, hanya tebak dari nama ──
-                  const startMatch = n.match(/(\d+[-–]\d+\s*(?:hour|min|day|jam|hari|menit)s?)/i);
-                  if (startMatch) lines.push(`- Start: ${startMatch[0]}`);
-                  else if (n.match(/instant|instan/i)) lines.push('- Start: 0-1 Hours');
+                  // ── Start: tidak ada field resmi dari API, tampilkan netral ──
+                  lines.push('- Start: Sesuai antrian');
                   const speedMatch = n.match(/day\s*(\d+[km]?)/i);
                   if (speedMatch) lines.push(`- Speed: ${speedMatch[0]}`);
 
@@ -615,12 +613,7 @@ export default function ViewNewOrder({ user, setMenu }) {
                 <div style={{ background: 'var(--bg2)', borderRadius: 12, border: '1px solid var(--border)', overflow: 'hidden' }}>
                   {[
                     {
-                      label: 'Start Time', value: (() => {
-                        const n = selectedService.name || '';
-                        if (n.match(/instant|instan/i)) return 'Instan (0–1 jam)';
-                        if (n.match(/\d+[-–]\d+\s*hour/i)) return n.match(/(\d+[-–]\d+\s*hour)/i)[0];
-                        return 'Beberapa jam';
-                      })()
+                      label: 'Start Time', value: 'Sesuai antrian'
                     },
                     {
                       label: 'Speed / Hari', value: (() => {
@@ -630,14 +623,6 @@ export default function ViewNewOrder({ user, setMenu }) {
                         return 'Tidak tersedia';
                       })()
                     },
-                    ...(parseInt(selectedService.average_time) > 0 ? [{
-                      label: 'Average Time', value: (() => {
-                        const mins = parseInt(selectedService.average_time);
-                        if (mins < 60) return `~${mins} menit`;
-                        if (mins < 1440) return `~${Math.round(mins / 60)} jam`;
-                        return `~${Math.round(mins / 1440)} hari`;
-                      })()
-                    }] : []),
                     // ── Refill dari field resmi API ──
                     ...(selectedService.refill !== undefined && selectedService.refill !== null ? [{
                       label: 'Refill', value: (selectedService.refill === true || selectedService.refill === 'true' || selectedService.refill === 1 || selectedService.refill === '1')

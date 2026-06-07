@@ -12,6 +12,8 @@ export default function AuthForm({ type }) {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [registerSuccess, setRegisterSuccess] = useState(false);
+    const [resetMsg, setResetMsg] = useState('');
+    const [resetLoading, setResetLoading] = useState(false);
 
     useEffect(() => {
         if (window.location.search.includes('registered=1')) setRegisterSuccess(true);
@@ -70,6 +72,28 @@ export default function AuthForm({ type }) {
         setLoading(false);
     };
 
+    // ✅ Lupa password: kirim email reset via Supabase
+    const handleForgotPassword = async () => {
+        setError('');
+        setResetMsg('');
+        if (!form.email.trim()) {
+            setError('Masukkan email kamu dulu di kolom di atas, lalu klik "Lupa password?".');
+            return;
+        }
+        setResetLoading(true);
+        try {
+            const { error: err } = await supabase.auth.resetPasswordForEmail(form.email.trim(), {
+                redirectTo: `${window.location.origin}/reset-password`,
+            });
+            // Tidak membocorkan apakah email terdaftar — pesan selalu sama (anti user-enumeration)
+            if (err) console.error('[auth] reset password error:', err.message);
+            setResetMsg('Jika email terdaftar, link reset password sudah dikirim. Cek inbox & folder spam kamu.');
+        } catch {
+            setResetMsg('Jika email terdaftar, link reset password sudah dikirim. Cek inbox & folder spam kamu.');
+        }
+        setResetLoading(false);
+    };
+
     return (
         <div className={`root${dark ? ' dark' : ''}`} style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, position: 'relative', overflow: 'hidden' }}>
             <div style={{ position: 'absolute', top: -200, left: '50%', transform: 'translateX(-50%)', width: 700, height: 700, borderRadius: '50%', border: '60px solid rgba(37,99,235,.06)', pointerEvents: 'none' }} />
@@ -107,7 +131,7 @@ export default function AuthForm({ type }) {
                     {type === 'register' && (
                         <div style={{ position: 'relative' }}>
                             <User size={15} style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', color: 'var(--text3)' }} />
-                            <input className="inp" style={{ paddingLeft: 38 }} placeholder="Full Name" required onChange={e => setForm({ ...form, name: e.target.value })} />
+                            <input className="inp" style={{ paddingLeft: 38 }} placeholder="Full Name" required value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
                         </div>
                     )}
                     <div style={{ position: 'relative' }}>
@@ -129,9 +153,17 @@ export default function AuthForm({ type }) {
                 </form>
 
                 {type === 'login' && (
-                    <p style={{ textAlign: 'center', marginTop: 10, fontSize: 13, color: 'var(--blue)', cursor: 'pointer', fontWeight: 600 }}>
-                        Lupa password?
-                    </p>
+                    <>
+                        <p onClick={resetLoading ? undefined : handleForgotPassword}
+                            style={{ textAlign: 'center', marginTop: 10, fontSize: 13, color: 'var(--blue)', cursor: resetLoading ? 'default' : 'pointer', fontWeight: 600, opacity: resetLoading ? 0.6 : 1 }}>
+                            {resetLoading ? 'Mengirim...' : 'Lupa password?'}
+                        </p>
+                        {resetMsg && (
+                            <div style={{ background: 'var(--green-l)', border: '1px solid rgba(16,185,129,.2)', borderRadius: 9, padding: '10px 13px', marginTop: 10, fontSize: 12.5, color: 'var(--green)', fontWeight: 600, textAlign: 'center' }}>
+                                {resetMsg}
+                            </div>
+                        )}
+                    </>
                 )}
                 <div style={{ textAlign: 'center', marginTop: 20, fontSize: 13.5, color: 'var(--text2)' }}>
                     {type === 'login' ? "Don't have an account? " : 'Already have an account? '}
