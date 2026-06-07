@@ -57,6 +57,13 @@ export default function MyApp({ Component, pageProps }) {
           name="viewport"
           content="width=device-width, initial-scale=1, viewport-fit=cover"
         />
+        {/* ✅ Title & description default — bisa di-override per halaman.
+            Inilah yang tampil sebagai judul di hasil pencarian Google. */}
+        <title>SuntikSosmed — Jasa SMM Termurah & Tercepat di Indonesia</title>
+        <meta
+          name="description"
+          content="SuntikSosmed — platform SMM #1 Indonesia. 2.000+ layanan followers, likes, views Instagram, TikTok, YouTube. Harga mulai Rp1/1000, proses instan, aman & terpercaya."
+        />
       </Head>
       <AuthProvider>
         <ApiProvider>

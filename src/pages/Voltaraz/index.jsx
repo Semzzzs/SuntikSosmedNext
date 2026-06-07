@@ -892,7 +892,7 @@ export default function AdminPanel() {
                                 {[
                                     { l: 'Order Hari Ini', v: ordersToday.length, c: 'var(--yellow)', icon: <ShoppingCart size={16} /> },
                                     { l: 'Revenue Hari Ini', v: `Rp ${revenueTodayIDR.toLocaleString('id-ID')}`, c: 'var(--green)', icon: <TrendingUp size={16} /> },
-                                    { l: 'User Baru Hari Ini', v: newUsersToday, c: '#8B5CF6', icon: <Users size={16} /> },
+                                    { l: 'Total User Terdaftar', v: users.length, c: '#8B5CF6', icon: <Users size={16} /> },
                                 ].map(s => (
                                     <div key={s.l} className="card" style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
                                         <div style={{ width: 34, height: 34, borderRadius: 10, background: 'var(--bg2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: s.c, flexShrink: 0 }}>{s.icon}</div>

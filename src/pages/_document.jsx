@@ -15,18 +15,21 @@ export default function Document() {
         <meta name="theme-color" content="#2563EB" />
 
         {/* ✅ SEO */}
-        <meta name="description" content="Platform SMM terbaik & terpercaya di Indonesia. Followers, views, likes untuk Instagram, TikTok, YouTube & lebih." />
+        <meta name="description" content="SuntikSosmed — platform SMM #1 Indonesia. 2.000+ layanan followers, likes, views Instagram, TikTok, YouTube. Harga mulai Rp1/1000, proses instan, aman & terpercaya." />
+        <meta name="keywords" content="jasa smm, panel smm, beli followers, followers murah, tambah followers instagram, jasa followers tiktok, views youtube, smm panel indonesia, suntiksosmed" />
         <meta name="robots" content="index, follow" />
+        <link rel="canonical" href="https://suntiksosmed.store" />
 
         {/* ✅ Open Graph — preview saat dibagikan di WA/Twitter/dll */}
         <meta property="og:type" content="website" />
+        <meta property="og:url" content="https://suntiksosmed.store" />
         <meta property="og:site_name" content="SuntikSosmed" />
-        <meta property="og:title" content="SuntikSosmed — Platform SMM Terbaik Indonesia" />
-        <meta property="og:description" content="2.000+ layanan SMM. Followers, views, likes. Harga mulai Rp 1/K. Pengiriman instan." />
+        <meta property="og:title" content="SuntikSosmed — Jasa SMM Termurah & Tercepat di Indonesia" />
+        <meta property="og:description" content="2.000+ layanan SMM. Followers, likes, views Instagram, TikTok, YouTube. Mulai Rp1/1000 — proses instan, aman & terpercaya." />
         <meta property="og:image" content="/og-image.png" />
         <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content="SuntikSosmed — Platform SMM Terbaik Indonesia" />
-        <meta name="twitter:description" content="2.000+ layanan SMM. Followers, views, likes. Harga mulai Rp 1/K." />
+        <meta name="twitter:title" content="SuntikSosmed — Jasa SMM Termurah & Tercepat di Indonesia" />
+        <meta name="twitter:description" content="2.000+ layanan SMM. Followers, likes, views. Mulai Rp1/1000 — proses instan, aman & terpercaya." />
 
         {/* ✅ Security headers via meta (backup — utamanya di next.config.js) */}
         <meta httpEquiv="X-Content-Type-Options" content="nosniff" />
