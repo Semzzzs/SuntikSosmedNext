@@ -9,7 +9,7 @@ const CONTACTS = [
         color: '#25D366',
         bg: 'rgba(37,211,102,.08)',
         border: 'rgba(37,211,102,.25)',
-        link: 'https://wa.me/YOUR_NUMBER',
+        link: 'https://wa.me/6283843306230',
         btnLabel: 'Chat WhatsApp',
     },
     {
@@ -20,7 +20,7 @@ const CONTACTS = [
         color: '#229ED9',
         bg: 'rgba(34,158,217,.08)',
         border: 'rgba(34,158,217,.25)',
-        link: 'https://t.me/YOUR_USERNAME',
+        link: 'https://t.me/specterzsz',
         btnLabel: 'Chat Telegram',
     },
     {

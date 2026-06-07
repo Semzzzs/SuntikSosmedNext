@@ -769,3 +769,28 @@ a {
     min-width: unset !important;
   }
 }
+
+/* ══════════════════════════════════════
+   SEARCH INPUT SERVICE — cegah auto-zoom iOS
+   Desktop 13px (sesuai desain), mobile 16px (iOS tidak zoom)
+   ══════════════════════════════════════ */
+.svc-search-input {
+  font-size: 13px;
+}
+
+@media (max-width: 768px) {
+  .svc-search-input {
+    font-size: 16px !important;
+  }
+}
+
+/* Bulk order textarea — kecil di desktop, 16px di mobile (anti zoom iOS) */
+.bulk-textarea {
+  font-size: 12.5px;
+}
+
+@media (max-width: 768px) {
+  .bulk-textarea {
+    font-size: 16px !important;
+  }
+}

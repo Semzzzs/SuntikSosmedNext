@@ -88,7 +88,7 @@ function SearchSelect({ options, value, onChange, placeholder, disabled }) {
           <div style={{ padding: '10px 10px 6px', borderBottom: '1px solid var(--border)' }}>
             <div style={{ position: 'relative' }}>
               <Search size={13} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text3)' }} />
-              <input autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder="Ketik nama atau ID service..." style={{ width: '100%', padding: '7px 10px 7px 30px', border: '1.5px solid var(--border)', borderRadius: 8, fontSize: 13, fontFamily: "'Plus Jakarta Sans',sans-serif", background: 'var(--bg2)', color: 'var(--text)', outline: 'none' }} />
+              <input autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder="Ketik nama atau ID service..." className="svc-search-input" style={{ width: '100%', padding: '7px 10px 7px 30px', border: '1.5px solid var(--border)', borderRadius: 8, fontFamily: "'Plus Jakarta Sans',sans-serif", background: 'var(--bg2)', color: 'var(--text)', outline: 'none' }} />
             </div>
             {!q && <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 6, paddingLeft: 2 }}>{options.length} layanan — ketik untuk cari</div>}
           </div>
@@ -597,6 +597,16 @@ export default function ViewNewOrder({ user, setMenu }) {
                       <div style={{ fontSize: 12.5, color: 'var(--text2)', lineHeight: 1.9, whiteSpace: 'pre-line' }}>
                         {finalDesc}
                       </div>
+
+                      {/* ── Catatan penting (peringatan order dobel) ── */}
+                      <div style={{ marginTop: 12, padding: '10px 12px', background: 'var(--yellow-l)', border: '1px solid var(--yellow)', borderRadius: 10 }}>
+                        <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--yellow)', marginBottom: 6, letterSpacing: '.03em', textTransform: 'uppercase' }}>⚠️ Catatan Penting</div>
+                        <ul style={{ margin: 0, paddingLeft: 16, fontSize: 12, color: 'var(--text2)', lineHeight: 1.7 }}>
+                          <li>Jangan order ke link yang sama sebelum order sebelumnya selesai. Sistem bisa menandai order sebagai <strong>selesai</strong> atau <strong>partial</strong> jika ada order ganda di link yang sama.</li>
+                          <li>Kecepatan proses bisa berubah saat layanan sedang ramai.</li>
+                          <li>Jika ada kendala pada layanan, silakan hubungi support.</li>
+                        </ul>
+                      </div>
                     </div>
                   );
                 })()}
@@ -768,7 +778,7 @@ export default function ViewNewOrder({ user, setMenu }) {
               </div>
             </div>
 
-            <textarea className="inp" rows={7} placeholder={'Contoh:\n2771|https://instagram.com/username|1000\n302|https://tiktok.com/@user/video/123|5000\n88|https://youtube.com/watch?v=abc|500'} style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12.5 }} value={bulkText} onChange={e => setBulkText(e.target.value)} />
+            <textarea className="inp bulk-textarea" rows={7} placeholder={'Contoh:\n2771|https://instagram.com/username|1000\n302|https://tiktok.com/@user/video/123|5000\n88|https://youtube.com/watch?v=abc|500'} style={{ fontFamily: "'JetBrains Mono',monospace" }} value={bulkText} onChange={e => setBulkText(e.target.value)} />
             {bulkResults.length > 0 && (
               <div style={{ margin: '12px 0', display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {bulkResults.map((r, i) => (
