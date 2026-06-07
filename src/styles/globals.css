@@ -12,6 +12,9 @@ body {
   font-family: 'Plus Jakarta Sans', sans-serif;
   background: #F1F5F9;
   min-height: 100vh;
+  min-height: 100dvh;
+  overflow-x: hidden;
+  width: 100%;
 }
 
 :root {
@@ -139,6 +142,7 @@ body {
   background: var(--bg);
   color: var(--text);
   min-height: 100vh;
+  min-height: 100dvh;
 }
 
 /* DARK */
@@ -431,7 +435,10 @@ html {
 }
 
 .ns,
-.main-scroll {
+.main-scroll,
+.table-scroll,
+.trx-table-wrap,
+.service-table-wrap {
   -webkit-overflow-scrolling: touch;
 }
 
@@ -444,9 +451,15 @@ a {
   min-height: 44px;
 }
 
-/* Prevent iOS zoom on input focus */
-.inp {
-  font-size: 16px !important;
+/* Prevent iOS zoom on input focus — hanya di layar sentuh kecil */
+@media (max-width: 768px) {
+
+  .inp,
+  input.inp,
+  select.inp,
+  textarea.inp {
+    font-size: 16px !important;
+  }
 }
 
 /* ── TABLET ── */
@@ -503,12 +516,13 @@ a {
     border-top: 1px solid var(--border);
     z-index: 50;
     padding-bottom: env(safe-area-inset-bottom);
+    height: calc(60px + env(safe-area-inset-bottom));
     align-items: center;
     justify-content: space-around;
   }
 
   .main-scroll {
-    padding-bottom: 100px !important;
+    padding-bottom: calc(100px + env(safe-area-inset-bottom)) !important;
   }
 }
 
@@ -550,13 +564,14 @@ a {
     grid-template-columns: repeat(2, 1fr) !important;
   }
 
-  /* Tables always scroll horizontal */
+  /* Tabel boleh melebar tapi DI-SCROLL, bukan dipaksa keluar layar */
   .card table {
-    min-width: 500px;
+    min-width: 520px;
   }
 
   .card {
     position: relative;
+    max-width: 100%;
   }
 
   /* ViewTickets header wrap */
@@ -676,8 +691,9 @@ a {
     grid-template-columns: 1fr !important;
   }
 
-  /* Heading clamp */
-  h1 {
+  /* Heading clamp — HANYA hero landing, bukan judul dashboard */
+  .hero-center h1,
+  .landing-hero h1 {
     font-size: clamp(28px, 8vw, 44px) !important;
     font-weight: 800 !important;
     letter-spacing: -1.5px !important;
@@ -748,8 +764,8 @@ a {
     display: flex !important;
   }
 
-  /* Remove forced min-width on tables inside cards */
-  .card table {
+  /* card list transaksi tidak butuh min-width tabel */
+  .trx-card-list .card table {
     min-width: unset !important;
   }
 }

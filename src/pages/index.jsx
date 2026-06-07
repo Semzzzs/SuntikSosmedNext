@@ -448,44 +448,46 @@ export default function Landing() {
             <input className="inp" style={{ paddingLeft: 42, borderRadius: 12 }} placeholder="Cari layanan..." value={serviceQuery} onChange={e => setServiceQuery(e.target.value)} />
           </div>
           <div style={{ background: 'var(--white)', border: '1px solid var(--border)', borderRadius: 22, overflow: 'hidden', boxShadow: 'var(--shadow2)' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ background: dark ? 'rgba(255,255,255,.03)' : 'var(--bg2)' }}>
-                  <th style={{ padding: '16px 20px', textAlign: 'left', fontSize: 11.5, fontWeight: 700, color: 'var(--text3)', letterSpacing: '.06em', borderBottom: '1px solid var(--border)' }}>ID</th>
-                  <th style={{ padding: '16px 20px', textAlign: 'left', fontSize: 11.5, fontWeight: 700, color: 'var(--text3)', letterSpacing: '.06em', borderBottom: '1px solid var(--border)' }}>SERVICE</th>
-                  <th style={{ padding: '16px 20px', textAlign: 'center', fontSize: 11.5, fontWeight: 700, color: 'var(--text3)', letterSpacing: '.06em', borderBottom: '1px solid var(--border)' }}>MIN / MAX</th>
-                  <th style={{ padding: '16px 20px', textAlign: 'center', fontSize: 11.5, fontWeight: 700, color: 'var(--text3)', letterSpacing: '.06em', borderBottom: '1px solid var(--border)' }}>MULAI DARI</th>
-                  <th style={{ padding: '16px 20px', textAlign: 'center', fontSize: 11.5, fontWeight: 700, color: 'var(--text3)', letterSpacing: '.06em', borderBottom: '1px solid var(--border)' }}></th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredServices.map((sv, i) => (
-                  <tr key={sv.id} className="service-row" style={{ borderBottom: i < filteredServices.length - 1 ? '1px solid var(--border)' : 'none' }}>
-                    <td style={{ padding: '15px 20px', fontFamily: "'JetBrains Mono',monospace", fontSize: 12, fontWeight: 700, color: 'var(--text3)' }}>#{sv.id}</td>
-                    <td style={{ padding: '15px 20px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontWeight: 600, fontSize: 13.5, color: 'var(--text)' }}>
-                        <div style={{ width: 32, height: 32, borderRadius: 9, background: sv.iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{sv.icon}</div>
-                        {sv.name}
-                      </div>
-                    </td>
-                    <td style={{ padding: '15px 20px', textAlign: 'center', fontSize: 13, color: 'var(--text2)' }}>{sv.min} / {sv.max}</td>
-                    <td style={{ padding: '15px 20px', textAlign: 'center' }}>
-                      <span style={{ fontWeight: 800, fontSize: 16, background: 'var(--blue)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>{sv.price}</span>
-                    </td>
-                    <td style={{ padding: '15px 20px', textAlign: 'center' }}>
-                      <button onClick={() => router.push('/register')} style={{ background: 'var(--blue-l)', border: 'none', borderRadius: 8, padding: '6px 14px', fontSize: 12.5, fontWeight: 700, color: '#1D4ED8', cursor: 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif" }}>Order</button>
-                    </td>
+            <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+              <table className="svc-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ background: dark ? 'rgba(255,255,255,.03)' : 'var(--bg2)' }}>
+                    <th className="hide-mobile" style={{ padding: '16px 20px', textAlign: 'left', fontSize: 11.5, fontWeight: 700, color: 'var(--text3)', letterSpacing: '.06em', borderBottom: '1px solid var(--border)' }}>ID</th>
+                    <th style={{ padding: '16px 20px', textAlign: 'left', fontSize: 11.5, fontWeight: 700, color: 'var(--text3)', letterSpacing: '.06em', borderBottom: '1px solid var(--border)' }}>SERVICE</th>
+                    <th style={{ padding: '16px 20px', textAlign: 'center', fontSize: 11.5, fontWeight: 700, color: 'var(--text3)', letterSpacing: '.06em', borderBottom: '1px solid var(--border)' }}>MIN / MAX</th>
+                    <th style={{ padding: '16px 20px', textAlign: 'center', fontSize: 11.5, fontWeight: 700, color: 'var(--text3)', letterSpacing: '.06em', borderBottom: '1px solid var(--border)' }}>MULAI DARI</th>
+                    <th style={{ padding: '16px 20px', textAlign: 'center', fontSize: 11.5, fontWeight: 700, color: 'var(--text3)', letterSpacing: '.06em', borderBottom: '1px solid var(--border)' }}></th>
                   </tr>
-                ))}
-                {filteredServices.length === 0 && (
-                  <tr>
-                    <td colSpan={5} style={{ padding: '32px 20px', textAlign: 'center', color: 'var(--text3)', fontSize: 13.5 }}>
-                      Tidak ada layanan yang cocok dengan "{serviceQuery}". Coba kata kunci lain — total ada 2.000+ layanan setelah daftar.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {filteredServices.map((sv, i) => (
+                    <tr key={sv.id} className="service-row" style={{ borderBottom: i < filteredServices.length - 1 ? '1px solid var(--border)' : 'none' }}>
+                      <td className="hide-mobile" style={{ padding: '15px 20px', fontFamily: "'JetBrains Mono',monospace", fontSize: 12, fontWeight: 700, color: 'var(--text3)' }}>#{sv.id}</td>
+                      <td style={{ padding: '15px 20px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontWeight: 600, fontSize: 13.5, color: 'var(--text)' }}>
+                          <div style={{ width: 32, height: 32, borderRadius: 9, background: sv.iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{sv.icon}</div>
+                          {sv.name}
+                        </div>
+                      </td>
+                      <td style={{ padding: '15px 20px', textAlign: 'center', fontSize: 13, color: 'var(--text2)' }}>{sv.min} / {sv.max}</td>
+                      <td style={{ padding: '15px 20px', textAlign: 'center' }}>
+                        <span style={{ fontWeight: 800, fontSize: 16, background: 'var(--blue)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>{sv.price}</span>
+                      </td>
+                      <td style={{ padding: '15px 20px', textAlign: 'center' }}>
+                        <button onClick={() => router.push('/register')} style={{ background: 'var(--blue-l)', border: 'none', borderRadius: 8, padding: '6px 14px', fontSize: 12.5, fontWeight: 700, color: '#1D4ED8', cursor: 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif" }}>Order</button>
+                      </td>
+                    </tr>
+                  ))}
+                  {filteredServices.length === 0 && (
+                    <tr>
+                      <td colSpan={5} style={{ padding: '32px 20px', textAlign: 'center', color: 'var(--text3)', fontSize: 13.5 }}>
+                        Tidak ada layanan yang cocok dengan "{serviceQuery}". Coba kata kunci lain — total ada 2.000+ layanan setelah daftar.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
             <div style={{ padding: '16px 20px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'center' }}>
               <button onClick={() => router.push('/register')} style={{ background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13.5, fontFamily: "'Plus Jakarta Sans',sans-serif", display: 'inline-flex', alignItems: 'center', gap: 7, color: 'var(--blue)' }}>
                 <span onClick={() => router.push('/register')} style={{ cursor: 'pointer' }}>Lihat 2.000+ layanan — Daftar gratis <ArrowRight size={14} style={{ color: 'var(--blue)', display: 'inline-block', verticalAlign: 'middle' }} /></span>
@@ -573,7 +575,8 @@ export default function Landing() {
             </div>
 
           </div>
-          <style>{`
+          <style dangerouslySetInnerHTML={{
+            __html: `
           @keyframes scrollUp35 { 0% { transform: translateY(0); } 100% { transform: translateY(-50%); } }
           @keyframes scrollUp50 { 0% { transform: translateY(0); } 100% { transform: translateY(-50%); } }
           @keyframes scrollUp42 { 0% { transform: translateY(0); } 100% { transform: translateY(-50%); } }
@@ -589,7 +592,13 @@ export default function Landing() {
             transition: transform 0.3s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.3s ease, border-color 0.3s ease;
           }
           .feature-card:hover { transform: translateY(-6px) scale(1.01); box-shadow: 0 20px 48px rgba(37,99,235,.12); border-color: rgba(37,99,235,.2); }
-        `}</style>
+          @media (max-width: 600px) {
+            .svc-table th, .svc-table td { padding-left: 10px !important; padding-right: 10px !important; padding-top: 12px !important; padding-bottom: 12px !important; }
+            .svc-table td > div { font-size: 12px !important; gap: 8px !important; }
+            .svc-table td > div > div { width: 26px !important; height: 26px !important; border-radius: 7px !important; }
+            .svc-table td span { font-size: 14px !important; }
+          }
+        ` }} />
         </div>
 
 

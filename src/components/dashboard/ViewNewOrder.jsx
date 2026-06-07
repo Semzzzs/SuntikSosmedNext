@@ -92,16 +92,25 @@ function SearchSelect({ options, value, onChange, placeholder, disabled }) {
             </div>
             {!q && <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 6, paddingLeft: 2 }}>{options.length} layanan — ketik untuk cari</div>}
           </div>
-          <div style={{ maxHeight: 240, overflowY: 'auto' }} className="ns">
+          <div style={{ maxHeight: 280, overflowY: 'auto' }} className="ns">
             {filtered.length === 0 && <div style={{ padding: '14px', textAlign: 'center', fontSize: 13, color: 'var(--text3)' }}>Tidak ditemukan</div>}
             {visible.map(o => (
               <div key={o.value} onClick={() => { onChange(o.value); setOpen(false); setQ(''); }}
                 style={{ padding: '9px 14px', fontSize: 12.5, fontWeight: o.value === value ? 700 : 400, color: o.value === value ? 'var(--blue)' : 'var(--text)', cursor: 'pointer', background: o.value === value ? 'var(--blue-l)' : 'transparent', transition: 'background .1s', borderBottom: '1px solid var(--border)' }}
                 onMouseEnter={e => { if (o.value !== value) e.currentTarget.style.background = 'var(--bg2)'; }}
                 onMouseLeave={e => { if (o.value !== value) e.currentTarget.style.background = 'transparent'; }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-                  <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.label}</span>
-                  {o.sub && <span style={{ fontSize: 11, color: 'var(--text3)', flexShrink: 0, fontFamily: 'monospace' }}>{o.sub}</span>}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                  <span style={{
+                    flex: 1,
+                    minWidth: 0,
+                    lineHeight: 1.4,
+                    display: '-webkit-box',
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: 'vertical',
+                    overflow: 'hidden',
+                    wordBreak: 'break-word',
+                  }}>{o.label}</span>
+                  {o.sub && <span style={{ fontSize: 11, color: 'var(--text3)', flexShrink: 0, fontFamily: 'monospace', marginTop: 1 }}>{o.sub}</span>}
                 </div>
               </div>
             ))}
@@ -516,28 +525,71 @@ export default function ViewNewOrder({ user, setMenu }) {
                   </div>
                 </div>
 
-                {/* Deskripsi gaya smmsoc */}
+                {/* Deskripsi gaya smmsoc — utamakan field resmi API, fallback ke parse nama */}
                 {(() => {
                   const n = selectedService.name || '';
-                  const desc = selectedService.description || '';
-                  // Parse info dari nama service
+                  const desc = selectedService.description || selectedService.desc || '';
                   const lines = [];
-                  const linkType = n.toLowerCase().includes('follower') || n.toLowerCase().includes('subscriber') || n.toLowerCase().includes('member')
-                    ? 'Username / Profile Link' : n.toLowerCase().includes('comment') ? 'Post Link + Custom Comments'
-                      : n.toLowerCase().includes('like') || n.toLowerCase().includes('view') || n.toLowerCase().includes('play') ? 'Post / Video Link' : 'Link / Username';
+
+                  // ── Link/input type: utamakan field "type" dari API ──
+                  const apiType = String(selectedService.type || '').toLowerCase();
+                  let linkType;
+                  if (apiType.includes('comment') || n.toLowerCase().includes('comment')) {
+                    linkType = 'Post Link + Custom Comments';
+                  } else if (apiType.includes('mention') || apiType.includes('package')) {
+                    linkType = 'Link / Username';
+                  } else if (n.toLowerCase().includes('follower') || n.toLowerCase().includes('subscriber') || n.toLowerCase().includes('member')) {
+                    linkType = 'Username / Profile Link';
+                  } else if (n.toLowerCase().includes('like') || n.toLowerCase().includes('view') || n.toLowerCase().includes('play')) {
+                    linkType = 'Post / Video Link';
+                  } else {
+                    linkType = 'Link / Username';
+                  }
                   lines.push(`- Link: ${linkType}`);
+
+                  // ── Lokasi & kualitas: hanya dari nama (tidak ada field resminya) ──
                   if (n.match(/global/i)) lines.push('- Location: Global');
                   else if (n.match(/indonesia|indo/i)) lines.push('- Location: Indonesia');
                   if (n.match(/hq|high.?quality/i)) lines.push('- Quality: High Quality');
                   else if (n.match(/real/i)) lines.push('- Quality: Real Accounts');
+
+                  // ── Start & Speed: tidak ada field resmi, hanya tebak dari nama ──
                   const startMatch = n.match(/(\d+[-–]\d+\s*(?:hour|min|day|jam|hari|menit)s?)/i);
                   if (startMatch) lines.push(`- Start: ${startMatch[0]}`);
                   else if (n.match(/instant|instan/i)) lines.push('- Start: 0-1 Hours');
                   const speedMatch = n.match(/day\s*(\d+[km]?)/i);
                   if (speedMatch) lines.push(`- Speed: ${speedMatch[0]}`);
-                  if (n.match(/no.?refill/i)) lines.push('- Refill: No Refill');
-                  else if (n.match(/refill/i)) lines.push('- Refill: Lifetime Refill');
-                  const finalDesc = desc || lines.join('\n');
+
+                  // ── Refill: utamakan field resmi "refill" (boolean), fallback ke nama ──
+                  // API kirim refill sebagai boolean true/false atau string "true"/"false"
+                  const refillRaw = selectedService.refill;
+                  const hasRefillField = refillRaw !== undefined && refillRaw !== null;
+                  if (hasRefillField) {
+                    const isRefill = refillRaw === true || refillRaw === 'true' || refillRaw === 1 || refillRaw === '1';
+                    lines.push(`- Refill: ${isRefill ? 'Garansi Refill' : 'No Refill'}`);
+                  } else if (n.match(/no.?refill/i)) {
+                    lines.push('- Refill: No Refill');
+                  } else if (n.match(/refill/i)) {
+                    lines.push('- Refill: Lifetime Refill');
+                  }
+
+                  // ── Cancel: dari field resmi "cancel" ──
+                  const cancelRaw = selectedService.cancel;
+                  if (cancelRaw !== undefined && cancelRaw !== null) {
+                    const canCancel = cancelRaw === true || cancelRaw === 'true' || cancelRaw === 1 || cancelRaw === '1';
+                    lines.push(`- Cancel: ${canCancel ? 'Bisa dibatalkan' : 'Tidak bisa dibatalkan'}`);
+                  }
+
+                  // ── Dripfeed: dari field resmi "dripfeed" ──
+                  const dripRaw = selectedService.dripfeed;
+                  if (dripRaw !== undefined && dripRaw !== null) {
+                    const hasDrip = dripRaw === true || dripRaw === 'true' || dripRaw === 1 || dripRaw === '1';
+                    if (hasDrip) lines.push('- Dripfeed: Tersedia');
+                  }
+
+                  // Jika API punya deskripsi sendiri, tampilkan itu DI ATAS info parsed
+                  const parsedBlock = lines.join('\n');
+                  const finalDesc = desc ? `${desc}\n\n${parsedBlock}` : parsedBlock;
 
                   return (
                     <div style={{ padding: '12px 14px', background: 'var(--bg2)', borderRadius: 12, border: '1px solid var(--border)' }}>
@@ -575,6 +627,16 @@ export default function ViewNewOrder({ user, setMenu }) {
                         if (mins < 1440) return `~${Math.round(mins / 60)} jam`;
                         return `~${Math.round(mins / 1440)} hari`;
                       })()
+                    }] : []),
+                    // ── Refill dari field resmi API ──
+                    ...(selectedService.refill !== undefined && selectedService.refill !== null ? [{
+                      label: 'Refill', value: (selectedService.refill === true || selectedService.refill === 'true' || selectedService.refill === 1 || selectedService.refill === '1')
+                        ? 'Ada garansi' : 'Tidak ada'
+                    }] : []),
+                    // ── Cancel dari field resmi API ──
+                    ...(selectedService.cancel !== undefined && selectedService.cancel !== null ? [{
+                      label: 'Cancel', value: (selectedService.cancel === true || selectedService.cancel === 'true' || selectedService.cancel === 1 || selectedService.cancel === '1')
+                        ? 'Bisa dibatalkan' : 'Tidak bisa'
                     }] : []),
                   ].map((row, i) => (
                     <div key={i} style={{ display: 'flex', borderBottom: '1px solid var(--border)' }}>

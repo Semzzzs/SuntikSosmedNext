@@ -1,4 +1,5 @@
 import { useRouter } from 'next/router';
+import Head from 'next/head';
 import { Component } from 'react';
 import { ThemeProvider } from '@/context/ThemeContext';
 import { ApiProvider } from '@/context/ApiContext';
@@ -49,6 +50,14 @@ export default function MyApp({ Component, pageProps }) {
 
   return (
     <ErrorBoundary>
+      <Head>
+        {/* ✅ Viewport — lokasi yang benar (next/head), bukan _document.
+            viewport-fit=cover agar safe-area iPhone aktif. Tanpa user-scalable=no = accessible. */}
+        <meta
+          name="viewport"
+          content="width=device-width, initial-scale=1, viewport-fit=cover"
+        />
+      </Head>
       <AuthProvider>
         <ApiProvider>
           <ThemeProvider

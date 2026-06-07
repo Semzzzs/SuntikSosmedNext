@@ -4,8 +4,8 @@ export default function Document() {
   return (
     <Html lang="id">
       <Head>
-        {/* ✅ Viewport — tanpa user-scalable=no agar accessible */}
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        {/* ❌ Viewport DIPINDAH ke _app.jsx (next/head).
+            Next.js melarang <meta name="viewport"> di _document.js */}
 
         {/* ✅ PWA & Mobile */}
         <meta name="mobile-web-app-capable" content="yes" />
