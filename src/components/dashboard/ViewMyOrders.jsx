@@ -94,9 +94,11 @@ export default function ViewMyOrders() {
       const { meta } = getOrderData();
 
       if (!txError && txData && txData.length > 0) {
-        // Kumpulkan order_id numerik yang valid untuk fetch live status ke SMMSOC
+        // Kumpulkan order_id numerik untuk fetch live status ke SMMSOC.
+        // ✅ Hanya order yang BELUM final (status final tak akan berubah lagi → hemat call).
+        const FINAL = new Set(['Completed', 'Canceled', 'Refunded']);
         const orderIds = txData
-          .filter(t => t.order_id && /^\d+$/.test(String(t.order_id)))
+          .filter(t => t.order_id && /^\d+$/.test(String(t.order_id)) && !FINAL.has(normalizeStatus(t.status)))
           .map(t => String(t.order_id));
 
         let liveStatus = {};
@@ -113,14 +115,17 @@ export default function ViewMyOrders() {
         }
 
         const parsed = txData.map(t => {
-          const live = t.order_id ? liveStatus[t.order_id] : null;
+          const live = (t.order_id && liveStatus[t.order_id]) ? liveStatus[t.order_id] : null;
           const localMeta = meta[t.order_id] || {};
+          // ✅ Kalau live status ada → pakai itu. Kalau gagal/tidak ada → fallback ke status tersimpan
+          //    di Supabase (jangan paksa jadi 'Pending' — itu bikin order Completed tampil Menunggu).
+          const effStatus = live?.status ? normalizeStatus(live.status) : normalizeStatus(t.status);
           return {
             id: t.order_id || t.id,
-            status: normalizeStatus(live?.status),
-            charge: live?.charge || t.charge,
-            startCount: live?.start_count,
-            remains: live?.remains,
+            status: effStatus,
+            charge: live?.charge ?? t.charge,
+            startCount: live?.start_count ?? null,
+            remains: live?.remains ?? null,
             error: live?.error,
             serviceName: localMeta.serviceName || t.description?.replace(/^Order #\d+ - /, '') || '—',
             link: t.link || localMeta.link || '—',

@@ -283,7 +283,7 @@ export default async function handler(req, res) {
                 key: 'markup',
                 value: String(val),
                 updated_at: new Date().toISOString()
-            });
+            }, { onConflict: 'key' });
             if (error) return res.status(500).json({ error: error.message });
             return res.status(200).json({ ok: true });
         }
@@ -309,7 +309,7 @@ export default async function handler(req, res) {
                 key: 'disabled_services',
                 value: JSON.stringify(next),
                 updated_at: new Date().toISOString()
-            });
+            }, { onConflict: 'key' });
             if (error) return res.status(500).json({ error: error.message });
             await logAudit(supabase, req, { action: 'toggle_service', target: serviceId, detail: { enabled: !!enabled } });
             return res.status(200).json({ ok: true, disabled: next });
@@ -325,7 +325,7 @@ export default async function handler(req, res) {
                 key: 'blocked_emails',
                 value: JSON.stringify(blocked_emails),
                 updated_at: new Date().toISOString()
-            });
+            }, { onConflict: 'key' });
             if (error) return res.status(500).json({ error: error.message });
             await logAudit(supabase, req, { action: 'toggle_block', target: email, detail: { blocked: blocked_emails.includes(email) } });
             return res.status(200).json({ ok: true });
@@ -348,7 +348,7 @@ export default async function handler(req, res) {
                     key: 'blocked_emails',
                     value: JSON.stringify(list),
                     updated_at: new Date().toISOString()
-                });
+                }, { onConflict: 'key' });
             }
 
             // ✅ Hapus juga akun Supabase Auth (fix bug: sebelumnya akun masih bisa login)
@@ -460,7 +460,7 @@ export default async function handler(req, res) {
             const rules = { categories: cleanMap(body.categories), services: cleanMap(body.services) };
             const { error } = await supabase.from('settings').upsert({
                 key: 'markup_rules', value: JSON.stringify(rules), updated_at: new Date().toISOString()
-            });
+            }, { onConflict: 'key' });
             if (error) return res.status(500).json({ error: error.message });
             return res.status(200).json({ ok: true, rules });
         }
@@ -471,7 +471,7 @@ export default async function handler(req, res) {
             if (!val || val < 1000 || val > 1000000) return res.status(400).json({ error: 'Kurs tidak valid.' });
             const { error } = await supabase.from('settings').upsert({
                 key: 'rate_override', value: String(val), updated_at: new Date().toISOString()
-            });
+            }, { onConflict: 'key' });
             if (error) return res.status(500).json({ error: error.message });
             return res.status(200).json({ ok: true });
         }
@@ -490,7 +490,7 @@ export default async function handler(req, res) {
 
             const { error } = await supabase.from('settings').upsert({
                 key: 'admin_password_hash', value: hashPassword(next), updated_at: new Date().toISOString()
-            });
+            }, { onConflict: 'key' });
             if (error) return res.status(500).json({ error: error.message });
             return res.status(200).json({ ok: true });
         }

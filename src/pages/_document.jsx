@@ -38,6 +38,11 @@ export default function Document() {
         {/* ✅ Google Search Console */}
         <meta name="google-site-verification" content="e1LldDJ8ItgQUcLStZOtTdyFfib-7gjgPUDQGK6iGO8" />
 
+        {/* ✅ Fonts — Sora untuk headline (body tetap Plus Jakarta Sans) */}
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&display=swap" rel="stylesheet" />
+
         {/* ✅ Favicon */}
         <link rel="icon" href="/favicon.ico" />
       </Head>

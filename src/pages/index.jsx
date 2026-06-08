@@ -3,7 +3,8 @@ import { useEffect, useRef, useState } from 'react';
 import {
   Target, Moon, Sun, ArrowRight, UserPlus, Wallet, ShoppingCart,
   Instagram, Youtube, Twitter, Facebook, Play, Star, Sparkles,
-  ShieldCheck, TrendingUp, CheckCircle, Zap, Globe, Lock, Search
+  ShieldCheck, TrendingUp, CheckCircle, Zap, Globe, Lock, Search, ChevronDown,
+  Menu, X, Home, LayoutGrid, HelpCircle
 } from 'lucide-react';
 import { useTheme } from '@/context/ThemeContext';
 
@@ -137,11 +138,132 @@ const STEPS = [
   },
 ];
 
+// ── Data testimoni ──
+const TESTI_COLUMNS = [
+  {
+    speed: 35,
+    items: [
+      { name: 'Rina Maharani', role: 'Content Creator · Instagram', avatar: 'R', color: '#E1306C', text: 'Followers Instagram saya naik dari 2K ke 15K dalam sebulan. Kualitasnya beneran bagus, engagement juga ikut naik!' },
+      { name: 'Budi Santoso', role: 'UMKM Owner · TikTok', avatar: 'B', color: '#000000', text: 'Awalnya ragu, tapi setelah coba TikTok Views hasilnya memuaskan. Video saya jadi masuk FYP dan penjualan naik signifikan.' },
+      { name: 'Dewi Permata', role: 'Influencer · YouTube', avatar: 'D', color: '#FF0000', text: 'Subscribe YouTube saya nambah 5000 dalam seminggu. Proses order mudah dan saldo bisa top up via QRIS, praktis!' },
+    ],
+  },
+  {
+    speed: 50,
+    items: [
+      { name: 'Agus Firmansyah', role: 'Digital Marketer · Twitter', avatar: 'A', color: '#1DA1F2', text: 'Retweet dan likes Twitter naik drastis. Client saya senang banget karena campaign mereka jadi viral. Recommended!' },
+      { name: 'Sari Indah', role: 'Artis Lokal · Spotify', avatar: 'S', color: '#1DB954', text: 'Plays Spotify lagu saya melonjak setelah pakai SuntikSosmed. Sekarang lagu saya masuk beberapa playlist editorial!' },
+      { name: 'Kevin Wijaya', role: 'Startup Founder · LinkedIn', avatar: 'K', color: '#0A66C2', text: 'Dashboard-nya simple dan informatif. Bisa pantau progress order real-time. Customer support juga responsif.' },
+      { name: 'Maya Putri', role: 'Beauty Influencer · Instagram', avatar: 'M', color: '#E1306C', text: 'Udah coba beberapa SMM panel, SuntikSosmed yang paling worth it. Harga terjangkau, followers real, dan gak drop!' },
+    ],
+  },
+  {
+    speed: 42,
+    items: [
+      { name: 'Reza Pratama', role: 'Gaming YouTuber', avatar: 'R', color: '#FF0000', text: 'Channel gaming saya dari 500 subscriber sekarang udah 12K. Order gampang, tinggal masukin link dan pilih paket!' },
+      { name: 'Fitri Handayani', role: 'Online Shop · Facebook', avatar: 'F', color: '#1877F2', text: 'Page likes toko online saya naik dan otomatis terlihat lebih terpercaya di mata calon pembeli. Penjualan meningkat!' },
+      { name: 'Dimas Arya', role: 'Musisi · TikTok & Spotify', avatar: 'D', color: '#000000', text: 'Pakai untuk boost TikTok dan Spotify sekaligus. Hasilnya konsisten dan tidak ada drop sama sekali setelah 2 bulan.' },
+    ],
+  },
+];
+// Daftar datar untuk carousel mobile
+const TESTI_FLAT = TESTI_COLUMNS.flatMap(c => c.items);
+
+// ── Ikon brand yang tidak ada di lucide ──
+const WhatsAppIcon = ({ size = 16 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 21l1.65-3.8a9 9 0 1 1 3.4 2.9l-5.05.9" />
+    <path d="M9 10a.5.5 0 0 0 1 0v-1a.5.5 0 0 0-1 0v1a5 5 0 0 0 5 5h1a.5.5 0 0 0 0-1h-1a.5.5 0 0 0 0 1" />
+  </svg>
+);
+const TikTokIcon = ({ size = 16 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 7.917v4.034a9.948 9.948 0 0 1-5-1.951v4.5a6.5 6.5 0 1 1-8-6.326v4.326a2.5 2.5 0 1 0 4 2v-11.5h4.083a6.005 6.005 0 0 0 4.917 4.917z" />
+  </svg>
+);
+
+// ── Akun sosial media ──
+const SOCIALS = [
+  { id: 'ig', label: 'Instagram', url: 'https://instagram.com/suntiksosmed.store' },
+  { id: 'wa', label: 'WhatsApp', url: 'https://wa.me/6283843306230' },
+  { id: 'tt', label: 'TikTok', url: 'https://tiktok.com/@suntiksosmedstore' },
+];
+const socialIcon = (id, size) =>
+  id === 'ig' ? <Instagram size={size} /> : id === 'wa' ? <WhatsAppIcon size={size} /> : <TikTokIcon size={size} />;
+
+// ── Kartu testimoni ──
+function TestiCard({ t, dark }) {
+  return (
+    <div className="card" style={{ padding: '22px 20px', position: 'relative', overflow: 'hidden', height: '100%', background: dark ? 'var(--bg2)' : 'var(--white)', border: dark ? '1px solid var(--border2)' : '1px solid var(--border)', borderRadius: 18 }}>
+      <div aria-hidden style={{ position: 'absolute', top: 6, right: 16, fontSize: 56, lineHeight: 1, fontFamily: 'Georgia, serif', color: dark ? 'rgba(255,255,255,.05)' : 'rgba(37,99,235,.08)', pointerEvents: 'none' }}>{'\u201D'}</div>
+      <div style={{ display: 'flex', gap: 2, marginBottom: 12 }}>
+        {[0, 1, 2, 3, 4].map(i => <Star key={i} size={13} fill="#F59E0B" style={{ color: '#F59E0B' }} />)}
+      </div>
+      <p style={{ fontSize: 13.5, color: 'var(--text2)', lineHeight: 1.75, marginBottom: 18, position: 'relative' }}>{t.text}</p>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ width: 38, height: 38, borderRadius: '50%', background: t.color, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 14, flexShrink: 0 }}>{t.avatar}</div>
+        <div>
+          <div style={{ fontWeight: 700, fontSize: 13.5, color: 'var(--text)' }}>{t.name}</div>
+          <div style={{ fontSize: 11.5, color: 'var(--text3)' }}>{t.role}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── FAQ accordion item ──
+function FaqItem({ q, a, dark }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ background: 'var(--white)', border: `1px solid ${open ? 'var(--blue)' : 'var(--border)'}`, borderRadius: 14, overflow: 'hidden', transition: 'border-color .2s' }}>
+      <button onClick={() => setOpen(o => !o)}
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, width: '100%', padding: '18px 20px', background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left', fontFamily: "'Plus Jakarta Sans',sans-serif" }}>
+        <span style={{ fontSize: 14.5, fontWeight: 700, color: 'var(--text)' }}>{q}</span>
+        <ChevronDown size={18} style={{ color: open ? 'var(--blue)' : 'var(--text3)', flexShrink: 0, transform: open ? 'rotate(180deg)' : 'rotate(0)', transition: 'transform .25s' }} />
+      </button>
+      <div style={{ maxHeight: open ? 300 : 0, overflow: 'hidden', transition: 'max-height .3s ease' }}>
+        <p style={{ padding: '0 20px 18px', fontSize: 13.5, lineHeight: 1.7, color: 'var(--text2)' }}>{a}</p>
+      </div>
+    </div>
+  );
+}
+
 export default function Landing() {
   const router = useRouter();
   const { dark, toggle } = useTheme();
   const navScrolled = useNavbarScroll();
   const [serviceQuery, setServiceQuery] = useState('');
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  // Kunci scroll body saat drawer mobile terbuka
+  useEffect(() => {
+    document.body.style.overflow = menuOpen ? 'hidden' : '';
+    return () => { document.body.style.overflow = ''; };
+  }, [menuOpen]);
+
+  const NAV_LINKS = [
+    { label: 'Beranda', id: 'hero', icon: <Home size={17} /> },
+    { label: 'Layanan', id: 'layanan', icon: <LayoutGrid size={17} /> },
+    { label: 'Panduan', id: 'panduan', icon: <Zap size={17} /> },
+    { label: 'Testimoni', id: 'testimoni', icon: <Star size={17} /> },
+    { label: 'FAQ', id: 'faq', icon: <HelpCircle size={17} /> },
+  ];
+  const goTo = (id) => {
+    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
+    setMenuOpen(false);
+  };
+
+  // Scroll-spy: tandai section yang sedang dilihat
+  const [activeSection, setActiveSection] = useState('hero');
+  useEffect(() => {
+    const ids = ['hero', 'layanan', 'panduan', 'testimoni', 'faq'];
+    const obs = new IntersectionObserver(
+      (entries) => entries.forEach(e => { if (e.isIntersecting) setActiveSection(e.target.id); }),
+      { rootMargin: '-45% 0px -45% 0px' }
+    );
+    ids.forEach(id => { const el = document.getElementById(id); if (el) obs.observe(el); });
+    return () => obs.disconnect();
+  }, []);
 
   const filteredServices = SERVICES.filter(sv => {
     const q = serviceQuery.trim().toLowerCase();
@@ -156,9 +278,11 @@ export default function Landing() {
       <div style={{ position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none', overflow: 'hidden' }}>
         {/* Light mode: richer gradient base */}
         {!dark && <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(160deg, #EEF4FF 0%, #F8FAFF 40%, #F0F7FF 100%)' }} />}
-        <div style={{ position: 'absolute', top: -120, left: -100, width: 600, height: 600, borderRadius: '50%', background: dark ? 'radial-gradient(circle, rgba(37,99,235,.13) 0%, transparent 70%)' : 'radial-gradient(circle, rgba(37,99,235,.18) 0%, transparent 65%)', animation: 'blobFloat 12s ease-in-out infinite' }} />
-        <div style={{ position: 'absolute', top: 200, right: -150, width: 500, height: 500, borderRadius: '50%', background: dark ? 'radial-gradient(circle, rgba(37,99,235,.08) 0%, transparent 70%)' : 'radial-gradient(circle, rgba(99,102,241,.12) 0%, transparent 65%)', animation: 'blobFloat 15s ease-in-out 2s infinite' }} />
-        <div style={{ position: 'absolute', bottom: -100, left: '30%', width: 400, height: 400, borderRadius: '50%', background: dark ? 'radial-gradient(circle, rgba(37,99,235,.05) 0%, transparent 70%)' : 'radial-gradient(circle, rgba(59,130,246,.1) 0%, transparent 65%)', animation: 'blobFloat 10s ease-in-out 4s infinite' }} />
+        {/* Dark mode: central hero glow ala fintech landing — kuat & terpusat di atas */}
+        {dark && <div style={{ position: 'absolute', top: -200, left: '50%', transform: 'translateX(-50%)', width: 1100, height: 700, borderRadius: '50%', background: 'radial-gradient(ellipse, rgba(37,99,235,.22) 0%, rgba(37,99,235,.08) 35%, transparent 65%)', filter: 'blur(20px)' }} />}
+        <div style={{ position: 'absolute', top: -120, left: -100, width: 600, height: 600, borderRadius: '50%', background: dark ? 'radial-gradient(circle, rgba(37,99,235,.16) 0%, transparent 70%)' : 'radial-gradient(circle, rgba(37,99,235,.18) 0%, transparent 65%)', animation: 'blobFloat 12s ease-in-out infinite' }} />
+        <div style={{ position: 'absolute', top: 200, right: -150, width: 500, height: 500, borderRadius: '50%', background: dark ? 'radial-gradient(circle, rgba(59,130,246,.12) 0%, transparent 70%)' : 'radial-gradient(circle, rgba(99,102,241,.12) 0%, transparent 65%)', animation: 'blobFloat 15s ease-in-out 2s infinite' }} />
+        <div style={{ position: 'absolute', bottom: -100, left: '30%', width: 400, height: 400, borderRadius: '50%', background: dark ? 'radial-gradient(circle, rgba(99,102,241,.08) 0%, transparent 70%)' : 'radial-gradient(circle, rgba(59,130,246,.1) 0%, transparent 65%)', animation: 'blobFloat 10s ease-in-out 4s infinite' }} />
         {/* Extra light mode accent blob */}
         {!dark && <div style={{ position: 'absolute', top: '40%', left: '20%', width: 300, height: 300, borderRadius: '50%', background: 'radial-gradient(circle, rgba(139,92,246,.07) 0%, transparent 70%)', animation: 'blobFloat 18s ease-in-out 3s infinite' }} />}
       </div>
@@ -182,103 +306,112 @@ export default function Landing() {
             <img src="/logo.png" alt="SS" style={{ width: 26, height: 26, borderRadius: 6, objectFit: 'cover', flexShrink: 0 }} />
             <span>Suntik<span style={{ background: 'var(--blue)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Sosmed</span></span>
           </div>
-          <div className="hide-mobile" style={{ display: 'flex', gap: 4, fontSize: 14, fontWeight: 600 }}>
-            {[
-              { label: 'Beranda', id: 'hero' },
-              { label: 'Layanan', id: 'layanan' },
-              { label: 'Panduan', id: 'panduan' },
-              { label: 'Testimoni', id: 'testimoni' },
-            ].map(({ label, id }) => (
+          <div className="nav-desktop-only" style={{ alignItems: 'center', gap: 4, fontSize: 14, fontWeight: 600 }}>
+            {NAV_LINKS.map(({ label, id }) => (
               <a key={label} href={`#${id}`}
-                onClick={e => { e.preventDefault(); document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' }); }}
+                onClick={e => { e.preventDefault(); goTo(id); }}
                 style={{ color: 'var(--text2)', textDecoration: 'none', padding: '7px 14px', borderRadius: 9, background: 'transparent', transition: 'background .15s', cursor: 'pointer' }}>{label}</a>
             ))}
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-            <button onClick={toggle} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text2)', display: 'flex', padding: '4px', flexShrink: 0 }}>
-              {dark ? <Sun size={16} /> : <Moon size={16} />}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+            <button onClick={toggle} aria-label="Ganti tema" className="nav-icon-btn" style={{ background: 'var(--bg2)', border: '1px solid var(--border)', cursor: 'pointer', color: 'var(--text2)', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 40, height: 40, borderRadius: 11, flexShrink: 0 }}>
+              {dark ? <Sun size={18} /> : <Moon size={18} />}
             </button>
-            <button onClick={() => router.push('/login')} style={{ background: 'none', border: '1.5px solid var(--border)', cursor: 'pointer', fontWeight: 700, fontSize: 12, color: 'var(--text2)', fontFamily: "'Plus Jakarta Sans',sans-serif", padding: '6px 12px', borderRadius: 9, whiteSpace: 'nowrap', transition: 'all .15s' }}>
-              Masuk
-            </button>
-            <button onClick={() => router.push('/register')} style={{ background: 'var(--blue)', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 12, color: '#fff', fontFamily: "'Plus Jakarta Sans',sans-serif", padding: '6px 12px', borderRadius: 9, whiteSpace: 'nowrap', transition: 'all .15s', display: 'flex', alignItems: 'center', gap: 4 }}>
-              Daftar
+            <div className="nav-desktop-only" style={{ alignItems: 'center', gap: 6 }}>
+              <button onClick={() => router.push('/login')} style={{ background: 'none', border: '1.5px solid var(--border)', cursor: 'pointer', fontWeight: 700, fontSize: 12, color: 'var(--text2)', fontFamily: "'Plus Jakarta Sans',sans-serif", padding: '6px 12px', borderRadius: 9, whiteSpace: 'nowrap', transition: 'all .15s' }}>
+                Masuk
+              </button>
+              <button onClick={() => router.push('/register')} style={{ background: 'var(--blue)', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 12, color: '#fff', fontFamily: "'Plus Jakarta Sans',sans-serif", padding: '6px 12px', borderRadius: 9, whiteSpace: 'nowrap', transition: 'all .15s', display: 'flex', alignItems: 'center', gap: 4 }}>
+                Daftar
+              </button>
+            </div>
+            <button className="nav-mobile-only nav-icon-btn" aria-label="Buka menu" onClick={() => setMenuOpen(true)} style={{ background: 'var(--blue-l)', border: '1px solid rgba(37,99,235,.22)', cursor: 'pointer', color: 'var(--blue)', alignItems: 'center', justifyContent: 'center', width: 40, height: 40, borderRadius: 11, flexShrink: 0 }}>
+              <Menu size={19} />
             </button>
           </div>
         </div>
       </nav>
 
-      {/* ── HERO ── */}
-      <div id="hero" style={{ position: 'relative', zIndex: 10, maxWidth: 1160, margin: '0 auto', padding: '40px 16px 0' }}>
-
-        {/* Floating LEFT widget - hidden on mobile */}
-        <div className="fltA hide-mobile" style={{ position: 'absolute', left: 24, top: 80, width: 240, zIndex: 20, display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {/* Notif pill */}
-          <div style={{ background: 'var(--white)', border: '1px solid var(--border)', borderRadius: 50, padding: '8px 16px 8px 8px', boxShadow: '0 8px 32px rgba(37,99,235,.12)', display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ width: 34, height: 34, borderRadius: '50%', background: 'linear-gradient(135deg,#f97316,#ef4444)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0 }}>🔥</div>
-            <span style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text)' }}>+12.500 followers hari ini!</span>
+      {/* ── MOBILE DRAWER ── */}
+      <div style={{ position: 'fixed', inset: 0, zIndex: 100, pointerEvents: menuOpen ? 'auto' : 'none' }}>
+        {/* Backdrop */}
+        <div onClick={() => setMenuOpen(false)}
+          style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,.55)', opacity: menuOpen ? 1 : 0, transition: 'opacity .3s ease' }} />
+        {/* Panel */}
+        <div style={{
+          position: 'absolute', top: 0, right: 0, bottom: 0, width: 'min(82vw, 320px)',
+          background: 'var(--white)', borderLeft: '1px solid var(--border)',
+          transform: menuOpen ? 'translateX(0)' : 'translateX(100%)',
+          transition: 'transform .32s cubic-bezier(0.16,1,0.3,1)',
+          display: 'flex', flexDirection: 'column', padding: '16px 14px',
+          boxShadow: '-16px 0 48px rgba(0,0,0,.28)',
+          paddingTop: 'calc(16px + env(safe-area-inset-top))',
+          paddingBottom: 'calc(16px + env(safe-area-inset-bottom))',
+        }}>
+          {/* Header */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 6px 14px', borderBottom: '1px solid var(--border)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 800, fontSize: 16, color: 'var(--text)' }}>
+              <img src="/logo.png" alt="SS" style={{ width: 26, height: 26, borderRadius: 6, objectFit: 'cover' }} />
+              <span>Suntik<span style={{ color: 'var(--blue)' }}>Sosmed</span></span>
+            </div>
+            <button onClick={() => setMenuOpen(false)} aria-label="Tutup menu"
+              style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 9, width: 34, height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--text2)' }}>
+              <X size={18} />
+            </button>
           </div>
-          {/* Stats card */}
-          <div className="card" style={{ padding: '18px 20px', boxShadow: '0 8px 32px rgba(37,99,235,.1)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-              <span style={{ fontSize: 11.5, color: 'var(--text3)', fontWeight: 700 }}>Pertumbuhan Akun</span>
-              <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--green)', background: 'var(--green-l)', padding: '2px 8px', borderRadius: 20 }}>↑ 38%</span>
-            </div>
-            <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--text)', marginBottom: 2 }}>1.250.000</div>
-            <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 12 }}>Total followers didapat</div>
-            {/* Mini bar chart */}
-            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 40 }}>
-              {[30, 45, 35, 60, 50, 75, 85].map((h, i) => (
-                <div key={i} style={{ flex: 1, height: `${h}%`, borderRadius: '3px 3px 0 0', background: i === 6 ? 'var(--blue)' : 'var(--blue-l2)', transition: 'height .3s' }} />
-              ))}
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: 'var(--text3)', marginTop: 4 }}>
-              {['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'].map(d => <span key={d}>{d}</span>)}
-            </div>
-          </div>
-        </div>
 
-        {/* Floating RIGHT widget - hidden on mobile */}
-        <div className="fltB hide-mobile" style={{ position: 'absolute', right: 24, top: 60, width: 220, zIndex: 20, display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {/* Active orders */}
-          <div className="card" style={{ padding: '14px 16px', boxShadow: '0 8px 32px rgba(37,99,235,.1)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-              <span style={{ fontSize: 12.5, fontWeight: 800, color: 'var(--text)' }}>Order Aktif</span>
-              <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--blue)', background: 'var(--blue-l)', padding: '2px 8px', borderRadius: 20 }}>3 berjalan</span>
+          {/* Links */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 14 }}>
+            {NAV_LINKS.map(({ label, id, icon }) => {
+              const active = activeSection === id;
+              return (
+                <a key={label} href={`#${id}`} onClick={e => { e.preventDefault(); goTo(id); }}
+                  style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 12, textDecoration: 'none', fontSize: 14.5, fontWeight: 700, cursor: 'pointer', transition: 'all .18s', background: active ? 'var(--blue-l)' : 'transparent', color: active ? 'var(--blue)' : 'var(--text2)' }}>
+                  <span style={{ width: 34, height: 34, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, background: active ? 'var(--blue)' : 'var(--bg2)', color: active ? '#fff' : 'var(--text3)', transition: 'all .18s' }}>{icon}</span>
+                  {label}
+                  {active && <ArrowRight size={15} style={{ marginLeft: 'auto', color: 'var(--blue)' }} />}
+                </a>
+              );
+            })}
+          </div>
+
+          {/* Kartu sosial-proof */}
+          <div style={{ marginTop: 16, background: dark ? 'var(--bg2)' : 'linear-gradient(135deg,#EEF4FF,#E0EAFF)', border: '1px solid var(--border)', borderRadius: 14, padding: '14px 16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+              {[0, 1, 2, 3, 4].map(i => <Star key={i} size={13} fill="#F59E0B" style={{ color: '#F59E0B' }} />)}
+              <span style={{ fontSize: 12.5, fontWeight: 800, color: 'var(--text)', marginLeft: 4 }}>4.8/5</span>
             </div>
-            {[
-              { avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=60&h=60&fit=crop', name: '@budi.creator', progress: 75, label: 'IG Followers' },
-              { avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=60&h=60&fit=crop', name: '@sari.id', progress: 40, label: 'TikTok Views' },
-            ].map((u, i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: i === 0 ? 10 : 0 }}>
-                <img src={u.avatar} loading="lazy" style={{ width: 30, height: 30, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} alt="" />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                    <span style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.name}</span>
-                    <span style={{ fontSize: 10, color: 'var(--text3)', flexShrink: 0, marginLeft: 4 }}>{u.progress}%</span>
-                  </div>
-                  <div style={{ height: 5, background: 'var(--bg2)', borderRadius: 10, overflow: 'hidden' }}>
-                    <div style={{ height: '100%', width: `${u.progress}%`, background: 'linear-gradient(90deg, var(--blue), #60a5fa)', borderRadius: 10 }} />
-                  </div>
-                  <span style={{ fontSize: 9.5, color: 'var(--text3)', marginTop: 2, display: 'block' }}>{u.label}</span>
-                </div>
-              </div>
+            <div style={{ fontSize: 12.5, color: 'var(--text2)', fontWeight: 600, lineHeight: 1.5 }}>Dipercaya 50.000+ kreator & bisnis di Indonesia.</div>
+          </div>
+
+          {/* Sosial media */}
+          <div style={{ marginTop: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, paddingTop: 18 }}>
+            {SOCIALS.map(s => (
+              <a key={s.id} href={s.url} target="_blank" rel="noreferrer" aria-label={s.label}
+                style={{ width: 36, height: 36, borderRadius: 10, background: 'var(--bg2)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text3)', textDecoration: 'none', transition: 'all .15s' }}
+                onMouseEnter={e => { e.currentTarget.style.color = 'var(--blue)'; e.currentTarget.style.borderColor = 'rgba(37,99,235,.4)'; }}
+                onMouseLeave={e => { e.currentTarget.style.color = 'var(--text3)'; e.currentTarget.style.borderColor = 'var(--border)'; }}>
+                {socialIcon(s.id, 16)}
+              </a>
             ))}
           </div>
-          {/* Satisfied user */}
-          <div className="card" style={{ padding: '14px 16px', boxShadow: '0 8px 32px rgba(37,99,235,.1)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-              <img src="https://images.unsplash.com/photo-1599566150163-29194dcaad36?w=60&h=60&fit=crop" loading="lazy" style={{ width: 38, height: 38, borderRadius: '50%', objectFit: 'cover' }} alt="" />
-              <div>
-                <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--text)' }}>Rahmat W.</div>
-                <div style={{ display: 'flex', gap: 1 }}>
-                  {[1, 2, 3, 4, 5].map(s => <span key={s} style={{ color: '#F59E0B', fontSize: 11 }}>★</span>)}
-                </div>
-              </div>
-            </div>
-            <p style={{ fontSize: 11.5, color: 'var(--text2)', lineHeight: 1.6, fontStyle: 'italic' }}>"Order selesai dalam 10 menit, kualitas followers top banget!"</p>
+
+          {/* CTA bawah */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingTop: 14, marginTop: 14, borderTop: '1px solid var(--border)' }}>
+            <button onClick={() => { setMenuOpen(false); router.push('/login'); }}
+              style={{ width: '100%', background: 'var(--bg2)', border: '1.5px solid var(--border)', borderRadius: 12, padding: '12px', fontSize: 14, fontWeight: 700, color: 'var(--text)', cursor: 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif" }}>
+              Masuk
+            </button>
+            <button onClick={() => { setMenuOpen(false); router.push('/register'); }}
+              style={{ width: '100%', background: 'var(--blue)', border: 'none', borderRadius: 12, padding: '12px', fontSize: 14, fontWeight: 800, color: '#fff', cursor: 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif", display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, boxShadow: '0 8px 24px rgba(37,99,235,.4)' }}>
+              <UserPlus size={15} /> Daftar Sekarang Gratis
+            </button>
           </div>
         </div>
+      </div>
+
+      {/* ── HERO ── */}
+      <div id="hero" style={{ position: 'relative', zIndex: 10, maxWidth: 1160, margin: '0 auto', padding: '40px 16px 0' }}>
 
         {/* Center hero text */}
         <div className="fu" style={{ textAlign: 'center', padding: '0', position: 'relative', maxWidth: 700, margin: '0 auto' }}>
@@ -288,7 +421,7 @@ export default function Landing() {
             <span style={{ color: 'var(--blue)' }}>SuntikSosmed v2.0 Sudah Hadir!</span>
           </div>
 
-          <h1 style={{ fontSize: 'clamp(28px, 4vw, 48px)', fontWeight: 800, textShadow: dark ? 'none' : '0 2px 8px rgba(37,99,235,.08)', lineHeight: 1.12, color: 'var(--text)', marginBottom: 18, letterSpacing: '-1.5px' }}>
+          <h1 style={{ fontSize: 'clamp(32px, 8vw, 48px)', fontWeight: 800, textShadow: dark ? 'none' : '0 2px 8px rgba(37,99,235,.08)', lineHeight: 1.15, color: 'var(--text)', marginBottom: 18, letterSpacing: '-1px' }}>
             <span className="grad-text">SuntikSosmed</span> — Platform SMM<br /><span className="grad-text">Terbaik &amp; Terpercaya</span> di Indonesia
           </h1>
           <p style={{ color: 'var(--text2)', fontSize: 15, lineHeight: 1.7, marginBottom: 28, maxWidth: 460, margin: '0 auto 28px' }}>
@@ -296,7 +429,7 @@ export default function Landing() {
           </p>
 
           <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginBottom: 24, flexWrap: 'wrap' }}>
-            <button onClick={() => router.push('/register')} style={{ background: 'var(--blue)', border: 'none', borderRadius: 50, padding: '10px 20px', fontSize: 13.5, fontWeight: 800, color: '#fff', cursor: 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif", display: 'inline-flex', alignItems: 'center', gap: 7, boxShadow: '0 8px 24px rgba(37,99,235,.35)', transition: 'transform .2s, box-shadow .2s', width: 'fit-content' }}>
+            <button onClick={() => router.push('/register')} style={{ background: 'var(--blue)', border: 'none', borderRadius: 50, padding: '10px 20px', fontSize: 13.5, fontWeight: 800, color: '#fff', cursor: 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif", display: 'inline-flex', alignItems: 'center', gap: 7, boxShadow: '0 8px 30px rgba(37,99,235,.5), 0 0 0 1px rgba(59,130,246,.3)', transition: 'transform .2s, box-shadow .2s', width: 'fit-content' }}>
               Daftar Sekarang Gratis! <UserPlus size={13} />
             </button>
             <button onClick={() => router.push('/login')} style={{ background: 'var(--white)', border: '1.5px solid var(--border)', borderRadius: 50, padding: '10px 20px', fontSize: 13.5, fontWeight: 700, cursor: 'pointer', color: 'var(--text)', fontFamily: "'Plus Jakarta Sans',sans-serif", boxShadow: 'var(--shadow)', width: 'fit-content', display: 'inline-flex', alignItems: 'center' }}>
@@ -376,7 +509,7 @@ export default function Landing() {
       </RevealSection>
 
       <RevealSection variant="fade" duration={500}>
-        <div id="panduan" style={{ position: 'relative', zIndex: 10, background: dark ? 'rgba(255,255,255,.02)' : 'rgba(37,99,235,.03)', borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)', padding: '48px 16px' }}>
+        <div id="panduan" style={{ position: 'relative', zIndex: 10, padding: '48px 16px' }}>
           <div style={{ maxWidth: 1160, margin: '0 auto' }}>
             <div style={{ textAlign: 'center', marginBottom: 52 }}>
               <div style={{ display: 'inline-block', background: 'linear-gradient(135deg,rgba(16,185,129,.1),rgba(5,150,105,.1))', border: '1px solid rgba(16,185,129,.2)', borderRadius: 50, padding: '5px 16px', fontSize: 12.5, fontWeight: 700, color: '#10B981', marginBottom: 14 }}>CARA KERJA</div>
@@ -484,14 +617,14 @@ export default function Landing() {
         </div>
 
         {/* ── TESTIMONIALS (Animated Scroll) ── */}
-        <div id="testimoni" style={{ position: 'relative', zIndex: 10, padding: '80px 0', background: 'var(--white)', overflow: 'hidden' }}>
+        <div id="testimoni" style={{ position: 'relative', zIndex: 10, padding: '80px 0', background: 'var(--bg)', overflow: 'hidden' }}>
           {/* Blob decorations */}
           <div style={{ position: 'absolute', top: '10%', left: '-5%', width: 400, height: 400, borderRadius: '50%', background: 'radial-gradient(circle, rgba(37,99,235,.08) 0%, transparent 70%)', filter: 'blur(40px)', pointerEvents: 'none' }} />
           <div style={{ position: 'absolute', top: '40%', right: '-5%', width: 350, height: 350, borderRadius: '50%', background: 'radial-gradient(circle, rgba(16,185,129,.07) 0%, transparent 70%)', filter: 'blur(40px)', pointerEvents: 'none' }} />
           <div style={{ position: 'absolute', bottom: '10%', left: '30%', width: 300, height: 300, borderRadius: '50%', background: 'radial-gradient(circle, rgba(139,92,246,.06) 0%, transparent 70%)', filter: 'blur(50px)', pointerEvents: 'none' }} />
           {/* Top & bottom fade masks */}
-          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 120, background: 'linear-gradient(to bottom, var(--white), transparent)', zIndex: 2, pointerEvents: 'none' }} />
-          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 120, background: 'linear-gradient(to top, var(--white), transparent)', zIndex: 2, pointerEvents: 'none' }} />
+          <div className="testi-mask" style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 120, background: 'linear-gradient(to bottom, var(--white), transparent)', zIndex: 2, pointerEvents: 'none' }} />
+          <div className="testi-mask" style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 120, background: 'linear-gradient(to top, var(--white), transparent)', zIndex: 2, pointerEvents: 'none' }} />
 
           <div style={{ maxWidth: 1160, margin: '0 auto', padding: '0 24px', textAlign: 'center', marginBottom: 52 }}>
             <div style={{ display: 'inline-block', background: 'linear-gradient(135deg,rgba(37,99,235,.1),rgba(37,99,235,.05))', border: '1px solid rgba(37,99,235,.2)', borderRadius: 50, padding: '5px 16px', fontSize: 12.5, fontWeight: 700, color: 'var(--blue)', marginBottom: 14 }}>TESTIMONI</div>
@@ -499,85 +632,66 @@ export default function Landing() {
             <p style={{ fontSize: 15, color: 'var(--text2)' }}>Ribuan kreator dan bisnis sudah mempercayakan pertumbuhan sosial media mereka ke SuntikSosmed.</p>
           </div>
 
-          {/* 3 scrolling columns */}
+          {/* DESKTOP: 3 kolom berjalan · MOBILE: carousel geser */}
           <div style={{ maxWidth: 1160, margin: '0 auto', padding: '0 24px' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 16, height: 600, overflow: 'hidden' }}>
-              {[
-                {
-                  speed: 35,
-                  items: [
-                    { name: 'Rina Maharani', role: 'Content Creator · Instagram', avatar: 'R', color: '#E1306C', text: 'Followers Instagram saya naik dari 2K ke 15K dalam sebulan. Kualitasnya beneran bagus, engagement juga ikut naik!' },
-                    { name: 'Budi Santoso', role: 'UMKM Owner · TikTok', avatar: 'B', color: '#000000', text: 'Awalnya ragu, tapi setelah coba TikTok Views hasilnya memuaskan. Video saya jadi masuk FYP dan penjualan naik signifikan.' },
-                    { name: 'Dewi Permata', role: 'Influencer · YouTube', avatar: 'D', color: '#FF0000', text: 'Subscribe YouTube saya nambah 5000 dalam seminggu. Proses order mudah dan saldo bisa top up via QRIS, praktis!' },
-                    { name: 'Rina Maharani', role: 'Content Creator · Instagram', avatar: 'R', color: '#E1306C', text: 'Followers Instagram saya naik dari 2K ke 15K dalam sebulan. Kualitasnya beneran bagus, engagement juga ikut naik!' },
-                    { name: 'Budi Santoso', role: 'UMKM Owner · TikTok', avatar: 'B', color: '#000000', text: 'Awalnya ragu, tapi setelah coba TikTok Views hasilnya memuaskan. Video saya jadi masuk FYP dan penjualan naik signifikan.' },
-                    { name: 'Dewi Permata', role: 'Influencer · YouTube', avatar: 'D', color: '#FF0000', text: 'Subscribe YouTube saya nambah 5000 dalam seminggu. Proses order mudah dan saldo bisa top up via QRIS, praktis!' },
-                  ]
-                },
-                {
-                  speed: 50,
-                  items: [
-                    { name: 'Agus Firmansyah', role: 'Digital Marketer · Twitter', avatar: 'A', color: '#1DA1F2', text: 'Retweet dan likes Twitter naik drastis. Client saya senang banget karena campaign mereka jadi viral. Recommended!' },
-                    { name: 'Sari Indah', role: 'Artis Lokal · Spotify', avatar: 'S', color: '#1DB954', text: 'Plays Spotify lagu saya melonjak setelah pakai SuntikSosmed. Sekarang lagu saya masuk beberapa playlist editorial!' },
-                    { name: 'Kevin Wijaya', role: 'Startup Founder · LinkedIn', avatar: 'K', color: '#0A66C2', text: 'Dashboard-nya simple dan informatif. Bisa pantau progress order real-time. Customer support juga responsif.' },
-                    { name: 'Maya Putri', role: 'Beauty Influencer · Instagram', avatar: 'M', color: '#E1306C', text: 'Udah coba beberapa SMM panel, SuntikSosmed yang paling worth it. Harga terjangkau, followers real, dan gak drop!' },
-                    { name: 'Agus Firmansyah', role: 'Digital Marketer · Twitter', avatar: 'A', color: '#1DA1F2', text: 'Retweet dan likes Twitter naik drastis. Client saya senang banget karena campaign mereka jadi viral. Recommended!' },
-                    { name: 'Sari Indah', role: 'Artis Lokal · Spotify', avatar: 'S', color: '#1DB954', text: 'Plays Spotify lagu saya melonjak setelah pakai SuntikSosmed. Sekarang lagu saya masuk beberapa playlist editorial!' },
-                  ]
-                },
-                {
-                  speed: 42,
-                  items: [
-                    { name: 'Reza Pratama', role: 'Gaming YouTuber', avatar: 'R', color: '#FF0000', text: 'Channel gaming saya dari 500 subscriber sekarang udah 12K. Order gampang, tinggal masukin link dan pilih paket!' },
-                    { name: 'Fitri Handayani', role: 'Online Shop · Facebook', avatar: 'F', color: '#1877F2', text: 'Page likes toko online saya naik dan otomatis terlihat lebih terpercaya di mata calon pembeli. Penjualan meningkat!' },
-                    { name: 'Dimas Arya', role: 'Musisi · TikTok & Spotify', avatar: 'D', color: '#000000', text: 'Pakai untuk boost TikTok dan Spotify sekaligus. Hasilnya konsisten dan tidak ada drop sama sekali setelah 2 bulan.' },
-                    { name: 'Reza Pratama', role: 'Gaming YouTuber', avatar: 'R', color: '#FF0000', text: 'Channel gaming saya dari 500 subscriber sekarang udah 12K. Order gampang, tinggal masukin link dan pilih paket!' },
-                    { name: 'Fitri Handayani', role: 'Online Shop · Facebook', avatar: 'F', color: '#1877F2', text: 'Page likes toko online saya naik dan otomatis terlihat lebih terpercaya di mata calon pembeli. Penjualan meningkat!' },
-                    { name: 'Dimas Arya', role: 'Musisi · TikTok & Spotify', avatar: 'D', color: '#000000', text: 'Pakai untuk boost TikTok dan Spotify sekaligus. Hasilnya konsisten dan tidak ada drop sama sekali setelah 2 bulan.' },
-                  ]
-                }
-              ].map((col, ci) => (
-                <div key={ci} className={ci > 0 ? 'hide-mobile' : ''} style={{ overflow: 'hidden', height: '100%' }}>
-                  <div style={{
-                    display: 'flex', flexDirection: 'column', gap: 14,
-                    animation: `scrollUp${col.speed} ${col.speed}s linear infinite`,
-                  }}>
-                    {col.items.map((t, i) => (
-                      <div key={i} className="card" style={{ padding: '20px 18px', flexShrink: 0 }}>
-                        {/* Text first */}
-                        <p style={{ fontSize: 13.5, color: 'var(--text2)', lineHeight: 1.75, marginBottom: 16 }}>{t.text}</p>
-                        {/* Avatar bottom */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                          <div style={{ width: 36, height: 36, borderRadius: '50%', background: t.color, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 14, flexShrink: 0 }}>{t.avatar}</div>
-                          <div>
-                            <div style={{ fontWeight: 700, fontSize: 13.5, color: 'var(--text)' }}>{t.name}</div>
-                            <div style={{ fontSize: 11.5, color: 'var(--text3)' }}>{t.role}</div>
-                          </div>
-                        </div>
-                      </div>
+            <div className="testi-desktop" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 16, height: 600, overflow: 'hidden' }}>
+              {TESTI_COLUMNS.map((col, ci) => (
+                <div key={ci} style={{ overflow: 'hidden', height: '100%' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 14, animation: `scrollUp${col.speed} ${col.speed}s linear infinite` }}>
+                    {[...col.items, ...col.items].map((t, i) => (
+                      <TestiCard key={i} t={t} dark={dark} />
                     ))}
                   </div>
                 </div>
               ))}
             </div>
 
+            <div className="testi-mobile" style={{ overflow: 'hidden', WebkitMaskImage: 'linear-gradient(to right, transparent, #000 7%, #000 93%, transparent)', maskImage: 'linear-gradient(to right, transparent, #000 7%, #000 93%, transparent)' }}>
+              <div className="testi-marquee" style={{ display: 'flex', gap: 14, width: 'max-content', animation: 'scrollLeftTesti 42s linear infinite' }}>
+                {[...TESTI_FLAT, ...TESTI_FLAT].map((t, i) => (
+                  <div key={i} style={{ flex: '0 0 280px', width: 280 }}>
+                    <TestiCard t={t} dark={dark} />
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
           <style dangerouslySetInnerHTML={{
             __html: `
           @keyframes scrollUp35 { 0% { transform: translateY(0); } 100% { transform: translateY(-50%); } }
           @keyframes scrollUp50 { 0% { transform: translateY(0); } 100% { transform: translateY(-50%); } }
           @keyframes scrollUp42 { 0% { transform: translateY(0); } 100% { transform: translateY(-50%); } }
+          @keyframes scrollLeftTesti { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
+          .testi-marquee:hover, .testi-marquee:active { animation-play-state: paused; }
           @keyframes blobFloat {
             0%, 100% { transform: translateY(0) scale(1); }
             33% { transform: translateY(-18px) scale(1.03); }
             66% { transform: translateY(10px) scale(0.97); }
           }
           html { scroll-behavior: smooth; }
+          .root h1, .root h2 { font-family: 'Sora','Plus Jakarta Sans',sans-serif; }
+          .nav-desktop-only { display: flex; }
+          .nav-mobile-only { display: none; }
+          .nav-icon-btn { transition: transform .12s ease, border-color .15s ease, background .15s ease; }
+          .nav-icon-btn:hover { border-color: rgba(37,99,235,.45); }
+          .nav-icon-btn:active { transform: scale(.92); }
+          .testi-desktop { display: grid; }
+          .testi-mobile { display: none; }
+          @media (max-width: 768px) {
+            .testi-desktop { display: none; }
+            .testi-mobile { display: block; }
+            .testi-mask { display: none; }
+          }
+          @media (max-width: 820px) {
+            .nav-desktop-only { display: none !important; }
+            .nav-mobile-only { display: flex !important; }
+          }
           .hero-btn-main:hover { transform: translateY(-2px) scale(1.03); box-shadow: 0 12px 32px rgba(37,99,235,.45) !important; }
           .feature-card { 
             background: var(--white); border: 1px solid var(--border); border-radius: 20px; padding: 28px 24px;
             transition: transform 0.3s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.3s ease, border-color 0.3s ease;
           }
+          .root.dark .feature-card { background: var(--bg2); border-color: var(--border2); }
           .feature-card:hover { transform: translateY(-6px) scale(1.01); box-shadow: 0 20px 48px rgba(37,99,235,.12); border-color: rgba(37,99,235,.2); }
           @media (max-width: 600px) {
             .svc-table th, .svc-table td { padding-left: 10px !important; padding-right: 10px !important; padding-top: 12px !important; padding-bottom: 12px !important; }
@@ -592,6 +706,63 @@ export default function Landing() {
 
       </RevealSection>
 
+      {/* ── METODE PEMBAYARAN ── */}
+      <RevealSection variant="up" duration={700}>
+        <div style={{ position: 'relative', zIndex: 10, maxWidth: 1160, margin: '0 auto', padding: '56px 16px' }}>
+          <div style={{ textAlign: 'center', marginBottom: 32 }}>
+            <div style={{ display: 'inline-block', background: 'linear-gradient(135deg,rgba(16,185,129,.1),rgba(5,150,105,.1))', border: '1px solid rgba(16,185,129,.2)', borderRadius: 50, padding: '5px 16px', fontSize: 12.5, fontWeight: 700, color: '#10B981', marginBottom: 14 }}>PEMBAYARAN MUDAH</div>
+            <h2 style={{ fontSize: 'clamp(22px, 4vw, 34px)', fontWeight: 800, color: 'var(--text)', letterSpacing: '-.5px', marginBottom: 10 }}>Bayar Pakai Apa Aja</h2>
+            <p style={{ fontSize: 15, color: 'var(--text2)', maxWidth: 520, margin: '0 auto' }}>Top up saldo lewat QRIS — bisa dibayar dari semua bank & e-wallet di Indonesia. Saldo masuk otomatis & instan.</p>
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 12, maxWidth: 760, margin: '0 auto' }}>
+            {[
+              { file: 'Qris', alt: 'QRIS' },
+              { file: 'Dana', alt: 'DANA' },
+              { file: 'Ovo', alt: 'OVO' },
+              { file: 'Gopay', alt: 'GoPay' },
+              { file: 'Shoppe', alt: 'ShopeePay' },
+              { file: 'Linkaja', alt: 'LinkAja' },
+              { file: 'Bca', alt: 'BCA' },
+              { file: 'Bni', alt: 'BNI' },
+              { file: 'Bri', alt: 'BRI' },
+              { file: 'Mandiri', alt: 'Mandiri' },
+            ].map(m => (
+              <div key={m.file} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 104, height: 56, padding: '0 16px', background: '#fff', border: '1px solid var(--border)', borderRadius: 12, boxShadow: dark ? 'none' : '0 2px 10px rgba(37,99,235,.06)' }}>
+                <img src={`/payments/${m.file}.png`} alt={m.alt} loading="lazy" style={{ maxWidth: '100%', maxHeight: 30, objectFit: 'contain' }} />
+              </div>
+            ))}
+          </div>
+        </div>
+      </RevealSection>
+
+      {/* ── FAQ ── */}
+      <RevealSection variant="up" duration={700}>
+        <div id="faq" style={{ position: 'relative', zIndex: 10, maxWidth: 760, margin: '0 auto', padding: '40px 16px 64px' }}>
+          <div style={{ textAlign: 'center', marginBottom: 36 }}>
+            <div style={{ display: 'inline-block', background: 'linear-gradient(135deg,rgba(37,99,235,.1),rgba(37,99,235,.05))', border: '1px solid rgba(37,99,235,.2)', borderRadius: 50, padding: '5px 16px', fontSize: 12.5, fontWeight: 700, color: 'var(--blue)', marginBottom: 14 }}>FAQ</div>
+            <h2 style={{ fontSize: 'clamp(22px, 4vw, 34px)', fontWeight: 800, color: 'var(--text)', letterSpacing: '-.5px', marginBottom: 10 }}>Pertanyaan Umum</h2>
+            <p style={{ fontSize: 15, color: 'var(--text2)' }}>Hal-hal yang sering ditanyakan sebelum mulai order.</p>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {[
+              { q: 'Apa itu SuntikSosmed?', a: 'SuntikSosmed adalah platform SMM (Social Media Marketing) yang menyediakan layanan tambah followers, likes, views, komentar, dan engagement untuk Instagram, TikTok, YouTube, Facebook, Twitter/X, Telegram, Spotify, dan media sosial lainnya. Harga mulai dari Rp1 per 1.000, dengan lebih dari 2.000 pilihan layanan dan proses otomatis 24 jam.' },
+              { q: 'Bagaimana cara order?', a: 'Cukup 4 langkah: (1) Daftar akun gratis, (2) Top up saldo lewat QRIS, (3) Pilih layanan yang kamu mau lalu masukkan link atau username target beserta jumlahnya, (4) Klik order. Pesanan langsung masuk antrian dan diproses otomatis tanpa perlu menunggu konfirmasi manual.' },
+              { q: 'Berapa lama pesanan selesai?', a: 'Kecepatan tergantung jenis layanan dan antrian dari provider. Sebagian besar pesanan mulai diproses dalam hitungan menit setelah order dibuat, namun ada juga layanan yang butuh waktu lebih lama tergantung jumlah dan jenisnya. Kamu bisa memantau progres pesanan secara real-time di halaman "My Orders".' },
+              { q: 'Apakah aman untuk akun saya?', a: 'Aman. Kami tidak pernah meminta password atau akses login ke akun media sosial kamu — cukup link postingan atau username yang bersifat publik. Pastikan akun kamu tidak dalam mode privat saat order agar layanan dapat diproses dengan benar.' },
+              { q: 'Metode pembayaran apa saja yang didukung?', a: 'Top up saldo dilakukan lewat QRIS, yang bisa dibayar dari hampir semua bank dan e-wallet di Indonesia: DANA, OVO, GoPay, ShopeePay, LinkAja, BCA, BNI, BRI, Mandiri, dan lainnya. Setelah pembayaran berhasil, saldo masuk otomatis ke akun kamu secara instan.' },
+              { q: 'Berapa minimum deposit?', a: 'Minimum deposit sangat terjangkau, mulai dari Rp5.000. Saldo yang kamu top up bisa dipakai untuk order layanan apa saja sesuai kebutuhan, tanpa masa kedaluwarsa.' },
+              { q: 'Apakah ada garansi refill?', a: 'Banyak layanan kami dilengkapi garansi refill — artinya jika followers atau likes berkurang (drop) dalam periode garansi, kamu bisa mengajukan refill gratis. Ketersediaan dan durasi garansi tertera jelas di setiap layanan saat kamu memilihnya sebelum order.' },
+              { q: 'Apakah followers/likes-nya real?', a: 'Kami menyediakan berbagai kualitas layanan, dari yang reguler hingga premium dengan akun berkualitas tinggi (HQ/real-looking). Kualitas dan karakteristik tiap layanan dijelaskan pada nama dan deskripsi layanan, jadi kamu bisa memilih sesuai kebutuhan dan budget.' },
+              { q: 'Bagaimana kalau pesanan bermasalah?', a: 'Jika ada kendala dengan pesanan, kamu bisa menghubungi tim support kami lewat fitur Tickets di dashboard, atau lewat kontak yang tersedia. Kami berusaha merespons dan membantu menyelesaikan setiap kendala secepat mungkin.' },
+              { q: 'Apakah bisa untuk reseller?', a: 'Bisa. Dengan harga modal yang murah dan saldo deposit, banyak pengguna kami menjadikan SuntikSosmed sebagai sumber untuk usaha reseller jasa SMM mereka sendiri. Semakin sering order, semakin hemat.' },
+            ].map((item, i) => (
+              <FaqItem key={i} q={item.q} a={item.a} dark={dark} />
+            ))}
+          </div>
+        </div>
+      </RevealSection>
+
+      {/* ── CTA PENUTUP ── */}
       <RevealSection variant="scale" delay={50} duration={750}>
         <div style={{ position: 'relative', zIndex: 10, maxWidth: 1160, margin: '0 auto', padding: '0 16px 60px' }}>
           <div style={{ background: 'var(--blue)', borderRadius: 28, padding: 'clamp(32px, 6vw, 64px) clamp(20px, 5vw, 48px)', textAlign: 'center', position: 'relative', overflow: 'hidden' }}>
@@ -622,7 +793,6 @@ export default function Landing() {
             </div>
           </div>
         </div>
-
       </RevealSection>
 
       {/* ── FOOTER ── */}
@@ -636,27 +806,23 @@ export default function Landing() {
               Suntik<span style={{ color: 'var(--blue)' }}>Sosmed</span>
             </div>
             <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-              {/* TODO: ganti id target / href ke halaman asli kalau sudah ada (Syarat, Privasi, Docs API) */}
-              {['Syarat Layanan', 'Kebijakan Privasi', 'Dokumentasi API'].map(t => (
-                <a key={t} href="#panduan"
-                  onClick={e => { e.preventDefault(); document.getElementById('panduan')?.scrollIntoView({ behavior: 'smooth' }); }}
-                  style={{ color: 'var(--text3)', textDecoration: 'none', fontSize: 12, fontWeight: 500, transition: 'color .15s', cursor: 'pointer' }}>{t}</a>
+              {[
+                { label: 'Layanan', id: 'layanan' },
+                { label: 'Cara Kerja', id: 'panduan' },
+                { label: 'FAQ', id: 'faq' },
+              ].map(({ label, id }) => (
+                <a key={label} href={`#${id}`}
+                  onClick={e => { e.preventDefault(); document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' }); }}
+                  style={{ color: 'var(--text3)', textDecoration: 'none', fontSize: 12, fontWeight: 500, transition: 'color .15s', cursor: 'pointer' }}>{label}</a>
               ))}
             </div>
           </div>
           <div style={{ borderTop: '1px solid var(--border)', paddingTop: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
             <p style={{ color: 'var(--text3)', fontSize: 11.5 }}>© 2026 SuntikSosmed.com. Hak cipta dilindungi.</p>
             <div style={{ display: 'flex', gap: 6 }}>
-              {/* TODO: isi URL sosial media asli di bawah ini */}
-              {[
-                { ic: <Instagram key="ig" size={14} />, url: '' },
-                { ic: <Youtube key="yt" size={14} />, url: '' },
-                { ic: <Twitter key="tw" size={14} />, url: '' },
-                { ic: <Facebook key="fb" size={14} />, url: '' },
-              ].map(({ ic, url }, i) => (
-                <a key={i} href={url || undefined} target={url ? '_blank' : undefined} rel={url ? 'noreferrer' : undefined}
-                  onClick={e => { if (!url) e.preventDefault(); }}
-                  style={{ width: 28, height: 28, borderRadius: 7, background: 'var(--bg2)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text3)', textDecoration: 'none', cursor: url ? 'pointer' : 'default' }}>{ic}</a>
+              {SOCIALS.map(s => (
+                <a key={s.id} href={s.url} target="_blank" rel="noreferrer" aria-label={s.label}
+                  style={{ width: 28, height: 28, borderRadius: 7, background: 'var(--bg2)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text3)', textDecoration: 'none', cursor: 'pointer' }}>{socialIcon(s.id, 14)}</a>
               ))}
             </div>
           </div>

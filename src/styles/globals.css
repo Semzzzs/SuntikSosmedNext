@@ -617,14 +617,61 @@ a {
   .addfunds-sidebar-balance {
     display: none !important;
   }
+
+  /* QR payment step: stack QR di atas, info di bawah (full width) */
+  .qris-pay-wrap {
+    flex-direction: column !important;
+    gap: 14px !important;
+  }
+
+  .qris-pay-wrap>.card,
+  .qris-info-side {
+    flex: 1 1 100% !important;
+    max-width: 100% !important;
+    width: 100% !important;
+  }
+}
+
+/* ══════════════════════════════════════
+   GLOBAL MOBILE POLISH — berlaku semua menu
+   ══════════════════════════════════════ */
+@media (max-width: 768px) {
+
+  /* Touch target minimum 44px untuk semua tombol & link interaktif */
+  button,
+  a[role="button"],
+  .btn {
+    min-height: 44px;
+  }
+
+  /* Cegah elemen melebar keluar layar (horizontal scroll tak diinginkan) */
+  .card,
+  .fu {
+    max-width: 100%;
+  }
+
+  /* Heading dashboard tidak kebesaran di HP (hanya di dalam dashboard, bukan landing) */
+  .main-content h1,
+  .main-scroll h1 {
+    font-size: clamp(18px, 5.5vw, 22px) !important;
+    line-height: 1.25 !important;
+  }
+}
+
+/* HP kecil (≤400px) — rapatkan sedikit agar muat */
+@media (max-width: 400px) {
+  .card {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+  }
 }
 
 /* ── Landing Page Mobile ── */
 @media (max-width: 768px) {
 
-  /* Hide floating widgets */
-  .hide-mobile {
-    display: none !important;
+  /* Testimoni landing: height lebih pendek di HP (hindari ruang kosong) */
+  .testi-grid-landing {
+    height: 460px !important;
   }
 
   /* Navbar compact */

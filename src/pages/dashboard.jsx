@@ -45,7 +45,7 @@ export default function DashboardPage() {
     if (typeof window === 'undefined') return 'New Order';
     return sessionStorage.getItem('dashboard_menu') || 'New Order';
   });
-  const [sideOpen, setSideOpen] = useState(true);
+  const [sideOpen, setSideOpen] = useState(false);
 
   const setMenuAndSave = (m) => {
     setMenu(m);
@@ -68,6 +68,8 @@ export default function DashboardPage() {
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768);
     check();
+    // Saat pertama load: desktop sidebar kebuka, mobile/tablet ketutup
+    setSideOpen(window.innerWidth >= 1024);
     window.addEventListener('resize', check);
     return () => window.removeEventListener('resize', check);
   }, []);
@@ -201,12 +203,12 @@ export default function DashboardPage() {
 
   return (
     <div className={`root${dark ? ' dark' : ''}`} style={{ display: 'flex', height: '100vh', overflow: 'hidden', fontFamily: "'Plus Jakarta Sans',sans-serif" }}>
-      {sideOpen && typeof window !== 'undefined' && window.innerWidth < 1024 && (
+      {sideOpen && isMobile && (
         <div onClick={() => setSideOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.4)', zIndex: 30 }} />
       )}
 
       {/* SIDEBAR */}
-      <aside style={{ width: sideOpen ? 240 : 0, minWidth: sideOpen ? 240 : 0, background: 'var(--white)', borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', overflow: 'hidden', transition: 'all .25s', position: typeof window !== 'undefined' && window.innerWidth < 768 ? 'fixed' : 'relative', top: 0, left: 0, bottom: 0, zIndex: 40 }}>
+      <aside style={{ width: sideOpen ? 240 : 0, minWidth: sideOpen ? 240 : 0, background: 'var(--white)', borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', overflow: 'hidden', transition: 'all .25s', position: isMobile ? 'fixed' : 'relative', top: 0, left: 0, bottom: 0, zIndex: 40 }}>
         <div style={{ padding: '20px 18px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div onClick={() => router.push('/')} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontWeight: 800, fontSize: 18, color: 'var(--text)' }}>
             <div style={{ width: 30, height: 30, borderRadius: 8, background: 'var(--blue)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

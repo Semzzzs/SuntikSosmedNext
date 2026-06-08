@@ -432,25 +432,47 @@ export default function ViewAddFunds({ user, balance: balanceProp = null }) {
 
   if (done) {
     const newBalance = (balanceIDR || 0); // saldo sudah ter-update via auto-poll/refetch
+    const trxId = qrisData?.trx_id || '—';
+    const nowStr = new Date().toLocaleString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
     return (
-      <div className="fu" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 'min(60vh, 460px)', padding: 16 }}>
+      <div className="fu" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 'min(70vh, 560px)', padding: 16 }}>
         <style>{`
           @keyframes popIn{0%{transform:scale(.6);opacity:0}60%{transform:scale(1.08)}100%{transform:scale(1);opacity:1}}
           @keyframes ringPulse{0%{box-shadow:0 0 0 0 rgba(16,185,129,.35)}70%{box-shadow:0 0 0 16px rgba(16,185,129,0)}100%{box-shadow:0 0 0 0 rgba(16,185,129,0)}}
         `}</style>
-        <div className="card" style={{ padding: 'clamp(28px, 6vw, 44px) clamp(20px, 5vw, 38px)', textAlign: 'center', maxWidth: 420, width: '100%' }}>
-          <div style={{ width: 76, height: 76, borderRadius: '50%', background: 'var(--green-l)', border: '2px solid var(--green)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px', animation: 'popIn .5s ease-out, ringPulse 1.8s ease-out .4s' }}>
-            <CheckCircle size={38} style={{ color: 'var(--green)' }} />
+        <div className="card" style={{ padding: 'clamp(28px, 6vw, 40px) clamp(22px, 5vw, 36px)', maxWidth: 400, width: '100%' }}>
+          {/* Centang + judul */}
+          <div style={{ textAlign: 'center', marginBottom: 26 }}>
+            <div style={{ width: 70, height: 70, borderRadius: '50%', background: 'var(--green-l)', border: '2px solid var(--green)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 18px', animation: 'popIn .5s ease-out, ringPulse 1.8s ease-out .4s' }}>
+              <CheckCircle size={34} style={{ color: 'var(--green)' }} />
+            </div>
+            <h2 style={{ fontSize: 'clamp(17px, 5vw, 20px)', fontWeight: 800, color: 'var(--text)', marginBottom: 6, lineHeight: 1.3 }}>Pembayaran Berhasil</h2>
+            <p style={{ fontSize: 13, color: 'var(--text3)', lineHeight: 1.6 }}>Saldo kamu sudah otomatis ditambahkan.</p>
           </div>
-          <h2 style={{ fontSize: 'clamp(18px, 5vw, 21px)', fontWeight: 800, color: 'var(--text)', marginBottom: 8 }}>Pembayaran Berhasil!</h2>
-          <p style={{ fontSize: 13.5, color: 'var(--text2)', lineHeight: 1.7, marginBottom: 20 }}>
-            Deposit <strong>{formatIDR(numIDR)}</strong> berhasil. Saldo kamu sudah ditambahkan.
-          </p>
 
-          {/* Kartu saldo baru */}
-          <div style={{ background: 'var(--blue)', borderRadius: 14, padding: '16px 18px', marginBottom: 22, color: '#fff' }}>
-            <div style={{ fontSize: 11, fontWeight: 700, opacity: .85, letterSpacing: '.05em', marginBottom: 4 }}>SALDO KAMU SEKARANG</div>
-            <div style={{ fontSize: 'clamp(22px, 6vw, 28px)', fontWeight: 800 }}>{formatIDR(newBalance)}</div>
+          {/* Detail key-value */}
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            {[
+              { label: 'ID Transaksi', value: <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12.5 }}>{trxId}</span> },
+              { label: 'Metode', value: method === 'qris' ? 'QRIS' : method?.toUpperCase() },
+              { label: 'Tanggal', value: nowStr },
+            ].map((row, i) => (
+              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, padding: '13px 0', borderBottom: '1px solid var(--border)' }}>
+                <span style={{ fontSize: 13, color: 'var(--text3)', fontWeight: 500, flexShrink: 0 }}>{row.label}</span>
+                <span style={{ fontSize: 13, color: 'var(--text)', fontWeight: 700, textAlign: 'right', wordBreak: 'break-all' }}>{row.value}</span>
+              </div>
+            ))}
+            {/* Total */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '15px 0 0' }}>
+              <span style={{ fontSize: 14, color: 'var(--text)', fontWeight: 800 }}>Total Deposit</span>
+              <span style={{ fontSize: 17, color: 'var(--green)', fontWeight: 800 }}>{formatIDR(numIDR)}</span>
+            </div>
+          </div>
+
+          {/* Saldo sekarang */}
+          <div style={{ background: 'var(--blue)', borderRadius: 14, padding: '14px 18px', margin: '22px 0', color: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: 12, fontWeight: 700, opacity: .9 }}>Saldo Kamu Sekarang</span>
+            <span style={{ fontSize: 'clamp(18px, 5vw, 22px)', fontWeight: 800 }}>{formatIDR(newBalance)}</span>
           </div>
 
           <button className="btn btn-blue" onClick={() => { setDone(false); setStep(1); setAmountIDR(''); }} style={{ width: '100%', borderRadius: 11, padding: 13 }}>
@@ -498,7 +520,7 @@ export default function ViewAddFunds({ user, balance: balanceProp = null }) {
       </div>
 
       {step === 3 && qrisData && (
-        <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+        <div className="qris-pay-wrap" style={{ display: 'flex', gap: 24, alignItems: 'flex-start', flexWrap: 'wrap' }}>
           {/* QR CENTER */}
           <div className="card" style={{ flex: '1 1 300px', maxWidth: 420, padding: 'clamp(18px, 4vw, 28px)', textAlign: 'center', minWidth: 0 }}>
             <div style={{ fontWeight: 800, fontSize: 17, color: 'var(--text)', marginBottom: 4 }}>Scan QR Code</div>
@@ -547,7 +569,7 @@ export default function ViewAddFunds({ user, balance: balanceProp = null }) {
             <div style={{ fontSize: 11.5, color: 'var(--text3)', wordBreak: 'break-all' }}>Ref: {qrisData.reference_id}</div>
           </div>
           {/* INFO SIDEBAR */}
-          <div style={{ flex: '1 1 240px', display: 'flex', flexDirection: 'column', gap: 14, minWidth: 0 }}>
+          <div className="qris-info-side" style={{ flex: '1 1 240px', display: 'flex', flexDirection: 'column', gap: 14, minWidth: 0 }}>
             <div style={{ background: 'linear-gradient(135deg, var(--blue), #1D4ED8)', borderRadius: 18, padding: '22px 20px', color: '#fff' }}>
               <div style={{ fontSize: 11, color: 'rgba(255,255,255,.65)', fontWeight: 600, marginBottom: 4 }}>SALDO SAAT INI</div>
               <div style={{ fontSize: 28, fontWeight: 800, marginBottom: 4 }}>{balanceIDR !== null ? formatIDR(balanceIDR) : '—'}</div>

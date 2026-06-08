@@ -143,7 +143,8 @@ export default function ViewNewOrder({ user, setMenu }) {
   const effectiveApiKey = apiKeyLocal || apiKey;
   const api = useSmmApi();
   const [rate, setRate] = useState(17687); // fallback IDR rate
-  const [markup, setMarkup] = useState(1); // markup dari admin, default 1x (no markup)
+  const [markup, setMarkup] = useState(1); // markup global dari admin, default 1x (no markup)
+  const [markupRules, setMarkupRules] = useState({ categories: {}, services: {} }); // markup per-service/kategori
   const [searchQuery, setSearchQuery] = useState('');
   const [bulkText, setBulkText] = useState('');
   const [bulkLoading, setBulkLoading] = useState(false);
@@ -172,18 +173,22 @@ export default function ViewNewOrder({ user, setMenu }) {
     fetch('/api/rate').then(r => r.json()).then(d => { if (d.rate) setRate(d.rate); }).catch(() => { });
   }, []);
 
-  // Load markup + smm_api_url dari Supabase settings
-  // ✅ Fix: smm_api_key TIDAK diambil ke client — key ada di server env (SMM_API_KEY)
-  // /api/smm sudah baca langsung dari process.env.SMM_API_KEY
+  // Load markup + rules via server endpoint (pakai service role, lolos RLS).
+  // smm_api_url tetap dari Supabase (bukan rahasia).
   useEffect(() => {
     const loadSettings = async () => {
-      const { data } = await supabase.from('settings').select('key, value')
-        .in('key', ['markup', 'smm_api_url']);
-      if (!data) return;
-      data.forEach(row => {
-        if (row.key === 'markup') setMarkup(parseFloat(row.value));
-        if (row.key === 'smm_api_url' && row.value) setConfig(row.value);
-      });
+      // markup global + per-service/kategori dari server (konsisten dgn /api/smm)
+      try {
+        const r = await fetch('/api/smm?action=get_public_markup');
+        const d = await r.json();
+        if (d?.markup) setMarkup(parseFloat(d.markup));
+        if (d?.rules) setMarkupRules(d.rules);
+      } catch { }
+      // smm_api_url (non-rahasia) — boleh dari Supabase
+      try {
+        const { data } = await supabase.from('settings').select('key, value').in('key', ['smm_api_url']);
+        data?.forEach(row => { if (row.key === 'smm_api_url' && row.value) setConfig(row.value); });
+      } catch { }
     };
     loadSettings();
   }, []);
@@ -235,18 +240,36 @@ export default function ViewNewOrder({ user, setMenu }) {
   // ✅ Fix: hapus guard apiUrl/effectiveApiKey — /api/smm baca SMM_API_KEY dari env server
   // Client tidak perlu tahu API key, cukup kirim auth token user
   useEffect(() => {
-    setLoadingServices(true);
+    const CACHE_KEY = 'smm_services_cache';
+    // 1. Tampilkan cache dulu kalau ada → instan, tanpa "Memuat layanan..."
+    let hasCache = false;
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = JSON.parse(sessionStorage.getItem(CACHE_KEY) || 'null');
+        if (Array.isArray(cached) && cached.length) {
+          setServices(cached);
+          hasCache = true;
+        }
+      } catch { }
+    }
+    // 2. Spinner hanya muncul saat belum ada cache (load pertama)
+    if (!hasCache) setLoadingServices(true);
     setError('');
+    // 3. Revalidate di belakang — data terbaru tetap di-fetch & cache diperbarui
     api.getServices()
-      .then(svcs => { setServices(Array.isArray(svcs) ? svcs : []); })
-      .catch(e => { setError(e.message); })
+      .then(svcs => {
+        const arr = Array.isArray(svcs) ? svcs : [];
+        setServices(arr);
+        try { sessionStorage.setItem(CACHE_KEY, JSON.stringify(arr)); } catch { }
+      })
+      .catch(e => { if (!hasCache) setError(e.message); }) // jangan timpa data cache kalau revalidate gagal
       .finally(() => { setLoadingServices(false); });
   }, []);
 
   const handleOrder = async () => {
     if (!selectedService || !link || !qty) { setError('Lengkapi semua field terlebih dahulu.'); return; }
     // Validasi saldo sebelum order
-    const totalIDRCheck = Math.round(parseInt(qty) * parseFloat(selectedService.rate || 0) / 1000 * (rate || 17687) * markup);
+    const totalIDRCheck = Math.round(parseInt(qty) * parseFloat(selectedService.rate || 0) / 1000 * (rate || 17687) * resolveMarkup(selectedService));
     if (balance !== null && totalIDRCheck > balance) {
       setError(`Saldo tidak cukup. Saldo kamu Rp ${Math.round(balance).toLocaleString('id-ID')}, dibutuhkan Rp ${totalIDRCheck.toLocaleString('id-ID')}.`);
       return;
@@ -280,7 +303,7 @@ export default function ViewNewOrder({ user, setMenu }) {
           sessionStorage.setItem('smm_order_ids', JSON.stringify(session.slice(0, 100)));
         }
         // Simpan transaksi order ke Supabase
-        const totalIDR = Math.round(parseInt(qty) * parseFloat(selectedService.rate || 0) / 1000 * (rate || 17687) * markup);
+        const totalIDR = Math.round(parseInt(qty) * parseFloat(selectedService.rate || 0) / 1000 * (rate || 17687) * resolveMarkup(selectedService));
         await supabase.from('transactions').insert({
           email: user?.email || '',
           user_id: user?.id || null,
@@ -325,7 +348,7 @@ export default function ViewNewOrder({ user, setMenu }) {
         }
         // ✅ Simpan bulk order ke Supabase
         const svc = services.find(s => String(s.service) === String(serviceId));
-        const totalIDR = svc ? Math.round(parseInt(orderQty) * parseFloat(svc.rate || 0) / 1000 * (rate || 17687) * markup) : 0;
+        const totalIDR = svc ? Math.round(parseInt(orderQty) * parseFloat(svc.rate || 0) / 1000 * (rate || 17687) * resolveMarkup(svc)) : 0;
         await supabase.from('transactions').insert({
           email: user?.email || '',
           user_id: user?.id || null,
@@ -363,18 +386,33 @@ export default function ViewNewOrder({ user, setMenu }) {
 
   const price = selectedService ? (parseFloat(selectedService.rate || 0) / 1000) : 0;
   const toIDR = (usd) => Math.round(usd * rate);
+
+  // Markup efektif untuk sebuah service: service → kategori → global (sama logika dengan server /api/smm)
+  const resolveMarkup = (svc) => {
+    if (!svc) return markup;
+    const sid = String(svc.service);
+    if (markupRules.services && markupRules.services[sid] != null) return parseFloat(markupRules.services[sid]);
+    if (svc.category && markupRules.categories && markupRules.categories[svc.category] != null) return parseFloat(markupRules.categories[svc.category]);
+    return markup;
+  };
   const formatIDR = (usd) => {
     const val = toIDR(usd);
     return val > 0 ? `Rp ${val.toLocaleString('id-ID')}` : 'Rp 0';
   };
   const categories = [...new Set(platformFilteredServices.map(s => s.category))].filter(Boolean);
 
-  const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' && window.innerWidth < 768);
+  const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768);
+    check();
     window.addEventListener('resize', check);
     return () => window.removeEventListener('resize', check);
   }, []);
+
+  // Shimmer bar kecil untuk angka yang masih loading (ganti "...")
+  const Shimmer = ({ w = 60, h = 22 }) => (
+    <span style={{ display: 'inline-block', width: w, height: h, borderRadius: 6, background: 'var(--bg2)', animation: 'pulse 1.4s ease-in-out infinite', verticalAlign: 'middle' }} />
+  );
 
   return (
     <div className="fu">
@@ -388,9 +426,9 @@ export default function ViewNewOrder({ user, setMenu }) {
       {/* Stat cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12, marginBottom: 20 }} className="stat-grid">
         {[
-          { icon: <CreditCard size={20} />, iconBg: 'var(--blue-l)', iconColor: 'var(--blue)', label: 'Saldo Akun', value: balance !== null ? `Rp ${(typeof balance === 'number' ? balance : Math.round(parseFloat(balance || 0) * rate)).toLocaleString('id-ID')}` : '...', action: 'Tambah Saldo', actionColor: 'var(--blue)', actionBg: 'var(--blue-l)', target: 'Add Funds', fullWidth: true },
-          { icon: <Package size={20} />, iconBg: 'var(--green-l)', iconColor: 'var(--green)', label: 'Total Layanan', value: services.length > 0 ? services.length : (loadingServices ? '...' : '—'), action: 'Buat Order', actionColor: 'var(--green)', actionBg: 'var(--green-l)', target: 'New Order' },
-          { icon: <Activity size={20} />, iconBg: 'var(--red-l)', iconColor: 'var(--red)', label: 'Pesanan Saya', value: orderCount !== null ? orderCount : '...', action: 'Lihat Pesanan', actionColor: 'var(--red)', actionBg: 'var(--red-l)', target: 'My Orders' },
+          { icon: <CreditCard size={20} />, iconBg: 'var(--blue-l)', iconColor: 'var(--blue)', label: 'Saldo Akun', value: balance !== null ? `Rp ${(typeof balance === 'number' ? balance : Math.round(parseFloat(balance || 0) * rate)).toLocaleString('id-ID')}` : <Shimmer w={110} />, action: 'Tambah Saldo', actionColor: 'var(--blue)', actionBg: 'var(--blue-l)', target: 'Add Funds', fullWidth: true },
+          { icon: <Package size={20} />, iconBg: 'var(--green-l)', iconColor: 'var(--green)', label: 'Total Layanan', value: services.length > 0 ? services.length : (loadingServices ? <Shimmer w={44} /> : '—'), action: 'Buat Order', actionColor: 'var(--green)', actionBg: 'var(--green-l)', target: 'New Order' },
+          { icon: <Activity size={20} />, iconBg: 'var(--red-l)', iconColor: 'var(--red)', label: 'Pesanan Saya', value: orderCount !== null ? orderCount : <Shimmer w={36} />, action: 'Lihat Pesanan', actionColor: 'var(--red)', actionBg: 'var(--red-l)', target: 'My Orders' },
         ].map((s, i) => (
           <div key={i} className="card" style={{ padding: '14px 16px', gridColumn: s.fullWidth ? 'span 2' : 'span 1' }} data-stat-full={s.fullWidth ? '1' : '0'}>
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, marginBottom: 10 }}>
@@ -424,8 +462,8 @@ export default function ViewNewOrder({ user, setMenu }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18 }}>
           <div style={{ width: 38, height: 38, borderRadius: 11, background: 'var(--blue)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}><ShoppingCart size={18} /></div>
           <h2 style={{ fontSize: 16, fontWeight: 800, color: 'var(--text)' }}>Place your order</h2>
-          {loadingServices && <span style={{ width: 16, height: 16, border: '2px solid var(--border)', borderTop: '2px solid var(--blue)', borderRadius: '50%' }} className="spin" />}
-          {loadingServices && (
+          {loadingServices && services.length === 0 && <span style={{ width: 16, height: 16, border: '2px solid var(--border)', borderTop: '2px solid var(--blue)', borderRadius: '50%' }} className="spin" />}
+          {loadingServices && services.length === 0 && (
             <span style={{ fontSize: 12, color: 'var(--text3)', fontWeight: 600 }}>Memuat layanan...</span>
           )}
         </div>
@@ -436,14 +474,14 @@ export default function ViewNewOrder({ user, setMenu }) {
           ))}
         </div>
 
-        {tab === 'New Order' && loadingServices && (
+        {tab === 'New Order' && loadingServices && services.length === 0 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 14 }}>
             {[1, 2, 3].map(i => (
               <div key={i} style={{ height: 52, borderRadius: 10, background: 'var(--bg2)', animation: 'pulse 1.4s ease-in-out infinite', animationDelay: `${i * 0.15}s` }} />
             ))}
           </div>
         )}
-        {tab === 'New Order' && (
+        {tab === 'New Order' && !(loadingServices && services.length === 0) && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             {/* Platform Filter */}
             <div>
@@ -513,7 +551,7 @@ export default function ViewNewOrder({ user, setMenu }) {
                   <div>
                     <div style={{ fontSize: 11, color: 'var(--text3)', fontWeight: 600, marginBottom: 2 }}>Harga layanan</div>
                     <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--blue)' }}>
-                      Rp {Math.round(parseFloat(selectedService.rate || 0) * (rate || 17687) * markup).toLocaleString('id-ID')}
+                      Rp {Math.round(parseFloat(selectedService.rate || 0) * (rate || 17687) * resolveMarkup(selectedService)).toLocaleString('id-ID')}
                       <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text3)', marginLeft: 4 }}>/ 1.000</span>
                     </div>
                   </div>
@@ -685,7 +723,7 @@ export default function ViewNewOrder({ user, setMenu }) {
                   const q = parseInt(qty) || 0;
                   const p = selectedService ? parseFloat(selectedService.rate || 0) / 1000 : 0;
                   const r = rate || 17687;
-                  const total = Math.round(q * p * r * markup);
+                  const total = Math.round(q * p * r * resolveMarkup(selectedService));
                   return q > 0 && p > 0 ? `Rp ${total.toLocaleString('id-ID')}` : 'Rp 0';
                 })()}
               </span>
@@ -715,7 +753,7 @@ export default function ViewNewOrder({ user, setMenu }) {
                   onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg2)'; e.currentTarget.style.borderColor = 'var(--border)'; }}>
                   <div>
                     <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', marginBottom: 2 }}>{s.name}</div>
-                    <div style={{ fontSize: 11.5, color: 'var(--text3)' }}>ID: {s.service} · Rp {Math.round(parseFloat(s.rate || 0) * rate * markup / 1000).toLocaleString('id-ID')}/1K · Min: {s.min} | Max: {s.max}</div>
+                    <div style={{ fontSize: 11.5, color: 'var(--text3)' }}>ID: {s.service} · Rp {Math.round(parseFloat(s.rate || 0) * rate * resolveMarkup(s) / 1000).toLocaleString('id-ID')}/1K · Min: {s.min} | Max: {s.max}</div>
                   </div>
                   <ArrowRight size={14} style={{ color: 'var(--text3)', flexShrink: 0 }} />
                 </div>

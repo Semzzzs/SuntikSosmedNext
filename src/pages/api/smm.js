@@ -34,6 +34,23 @@ export default async function handler(req, res) {
     // ✅ Admin: verifikasi JWT (bukan raw ADMIN_SECRET)
     const isAdmin = verifyAdminJWT(authHeader);
 
+    // ✅ Endpoint publik: baca markup global + rules (pakai service role agar lolos RLS).
+    //    Dipakai user page untuk menampilkan harga yang benar tanpa akses langsung ke tabel settings.
+    if (req.query.action === 'get_public_markup') {
+        try {
+            const supa = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+            const { data: mk } = await supa.from('settings').select('value').eq('key', 'markup').maybeSingle();
+            const { data: rl } = await supa.from('settings').select('value').eq('key', 'markup_rules').maybeSingle();
+            let markup = mk?.value ? parseFloat(mk.value) : 1;
+            if (isNaN(markup) || markup < 1) markup = 1;
+            let rules = { categories: {}, services: {} };
+            try { if (rl?.value) { const p = JSON.parse(rl.value); rules = { categories: p.categories || {}, services: p.services || {} }; } } catch { }
+            return res.status(200).json({ markup, rules });
+        } catch (e) {
+            return res.status(200).json({ markup: 1, rules: { categories: {}, services: {} } });
+        }
+    }
+
     // ✅ Kalau bukan admin, cek Supabase user token
     // Kecuali action=services — boleh tanpa login (untuk landing page)
     const publicAction = req.query.action === 'services';

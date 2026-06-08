@@ -526,16 +526,39 @@ export default function AdminPanel() {
 
     const saveMarkup = async () => {
         const val = parseFloat(markupInput);
-        if (isNaN(val) || val < 1) return;
+        if (isNaN(val) || val < 1) { showToast('Markup tidak valid (minimal 1).', 'error'); return; }
+        const prev = markup; // simpan nilai lama untuk rollback kalau gagal
         setMarkup(val);
-        // ✅ Simpan via server-side API — bukan direct Supabase
-        const res = await adminFetch('/api/admin-api?action=save_markup', {
-            method: 'POST',
-            body: JSON.stringify({ value: val }),
-        });
-        if (res.status === 401) { logout(); return; }
-        setMarkupSaved(true);
-        setTimeout(() => setMarkupSaved(false), 2000);
+        try {
+            // ✅ Simpan via server-side API — bukan direct Supabase
+            const res = await adminFetch('/api/admin-api?action=save_markup', {
+                method: 'POST',
+                body: JSON.stringify({ value: val }),
+            });
+            if (res.status === 401) { logout(); return; }
+
+            let ok = res.ok;
+            // ✅ Verifikasi body: pastikan server benar-benar menyimpan, bukan sekadar status 200
+            try {
+                const d = await res.json();
+                if (d && (d.error || d.success === false)) ok = false;
+            } catch { /* body kosong tapi res.ok → anggap sukses */ }
+
+            if (!ok) {
+                // ❌ Gagal simpan: kembalikan nilai lama agar UI tidak menyesatkan
+                setMarkup(prev);
+                setMarkupInput(String(prev));
+                showToast('Gagal menyimpan markup. Coba lagi.', 'error');
+                return;
+            }
+
+            setMarkupSaved(true);
+            setTimeout(() => setMarkupSaved(false), 2000);
+        } catch (e) {
+            setMarkup(prev);
+            setMarkupInput(String(prev));
+            showToast('Gagal menyimpan markup (koneksi/server).', 'error');
+        }
     };
 
     // Simpan kurs USD/IDR. Butuh endpoint backend: POST /api/admin-api?action=save_rate { value }
@@ -1451,50 +1474,55 @@ export default function AdminPanel() {
                     {/* ── MARKUP ── */}
                     {menu === 'Markup' && (
                         <div>
-                            <div style={{ marginBottom: 20 }}>
-                                <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text)', marginBottom: 3 }}>Markup Settings</h1>
+                            <div style={{ marginBottom: 24 }}>
+                                <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text)', marginBottom: 4 }}>Markup Settings</h1>
                                 <p style={{ fontSize: 13.5, color: 'var(--text2)' }}>Set keuntungan dari harga modal ke harga yang ditampilkan ke user.</p>
                             </div>
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 20 }}>
-                                <div className="card" style={{ padding: 26 }}>
-                                    <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text)', marginBottom: 18 }}>Set Markup Multiplier</div>
-                                    <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--text2)', marginBottom: 8 }}>Multiplier (2 = 2x harga modal)</label>
-                                    <input className="inp" type="number" step="0.1" min="1" style={{ fontSize: 22, fontWeight: 800, textAlign: 'center', marginBottom: 14 }} value={markupInput} onChange={e => setMarkupInput(e.target.value)} />
-                                    <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 24 }}>
+                                <div className="card" style={{ padding: 30 }}>
+                                    <div style={{ fontWeight: 800, fontSize: 15, color: 'var(--text)', marginBottom: 4 }}>Set Markup Multiplier</div>
+                                    <p style={{ fontSize: 12.5, color: 'var(--text3)', marginBottom: 22 }}>Berlaku untuk semua layanan kecuali yang punya override.</p>
+                                    <label style={{ display: 'block', fontSize: 11.5, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: 10 }}>Multiplier (2 = 2× harga modal)</label>
+                                    <input className="inp" type="number" step="0.1" min="1" style={{ fontSize: 30, fontWeight: 800, textAlign: 'center', padding: '18px 14px', marginBottom: 18 }} value={markupInput} onChange={e => setMarkupInput(e.target.value)} />
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 9, marginBottom: 24 }}>
                                         {[1.5, 2, 2.5, 3, 4, 5].map(m => (
                                             <button key={m} onClick={() => setMarkupInput(String(m))}
-                                                style={{ padding: '7px 16px', borderRadius: 9, border: `1.5px solid ${markupInput === String(m) ? 'var(--blue)' : 'var(--border)'}`, background: markupInput === String(m) ? 'var(--blue)' : 'transparent', color: markupInput === String(m) ? '#fff' : 'var(--text2)', fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif" }}>
-                                                {m}x
+                                                style={{ padding: '11px 0', borderRadius: 11, border: `1.5px solid ${markupInput === String(m) ? 'var(--blue)' : 'var(--border)'}`, background: markupInput === String(m) ? 'var(--blue)' : 'transparent', color: markupInput === String(m) ? '#fff' : 'var(--text2)', fontWeight: 700, fontSize: 14, cursor: 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif", transition: 'all .15s' }}>
+                                                {m}×
                                             </button>
                                         ))}
                                     </div>
                                     {markupSaved ? (
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '11px 16px', background: 'var(--green-l)', borderRadius: 10, color: 'var(--green)', fontWeight: 700, fontSize: 13 }}>
-                                            <CheckCircle size={15} /> Markup tersimpan!
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '14px 16px', background: 'var(--green-l)', borderRadius: 12, color: 'var(--green)', fontWeight: 700, fontSize: 13.5 }}>
+                                            <CheckCircle size={16} /> Markup tersimpan!
                                         </div>
                                     ) : (
-                                        <button className="btn btn-blue" onClick={saveMarkup} style={{ width: '100%', padding: 12, borderRadius: 10 }}>
-                                            <Save size={15} /> Simpan Markup
+                                        <button className="btn btn-blue" onClick={saveMarkup} style={{ width: '100%', padding: 14, borderRadius: 12, fontSize: 14 }}>
+                                            <Save size={16} /> Simpan Markup
                                         </button>
                                     )}
                                 </div>
-                                <div className="card" style={{ padding: 26 }}>
-                                    <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text)', marginBottom: 18 }}>Preview Harga (markup {markupInput}x)</div>
+                                <div className="card" style={{ padding: 30 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                                        <div style={{ fontWeight: 800, fontSize: 15, color: 'var(--text)' }}>Preview Harga</div>
+                                        <span style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--blue)', background: 'var(--blue-l)', padding: '4px 10px', borderRadius: 20 }}>{markupInput}× markup</span>
+                                    </div>
+                                    <p style={{ fontSize: 12.5, color: 'var(--text3)', marginBottom: 14 }}>Contoh perhitungan harga jadi ke user.</p>
                                     {[
                                         { name: 'Instagram Followers HQ', rate: 0.19 },
                                         { name: 'TikTok Views Ultra Fast', rate: 0.0007 },
                                         { name: 'YouTube Subscribers', rate: 15.835 },
                                         { name: 'TikTok Followers', rate: 1.00 },
                                         { name: 'Spotify Plays', rate: 0.09 },
-                                    ].map(s => {
+                                    ].map((s, i, arr) => {
                                         const modal = Math.round(s.rate * rate);
                                         const user = Math.round(s.rate * rate * parseFloat(markupInput || markup));
                                         return (
-                                            <div key={s.name} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid var(--border)', fontSize: 12.5 }}>
-                                                <div style={{ color: 'var(--text)', fontWeight: 600 }}>{s.name}</div>
+                                            <div key={s.name} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '13px 0', borderBottom: i === arr.length - 1 ? 'none' : '1px solid var(--border)' }}>
+                                                <div style={{ color: 'var(--text)', fontWeight: 600, fontSize: 13 }}>{s.name}</div>
                                                 <div style={{ textAlign: 'right' }}>
-                                                    <div style={{ color: 'var(--red)', fontWeight: 600 }}>Modal: Rp {modal.toLocaleString('id-ID')}</div>
-                                                    <div style={{ color: 'var(--green)', fontWeight: 700 }}>User: Rp {user.toLocaleString('id-ID')}</div>
+                                                    <div style={{ color: 'var(--text3)', fontWeight: 500, fontSize: 11.5, textDecoration: 'line-through' }}>Rp {modal.toLocaleString('id-ID')}</div>
+                                                    <div style={{ color: 'var(--green)', fontWeight: 800, fontSize: 14 }}>Rp {user.toLocaleString('id-ID')}</div>
                                                 </div>
                                             </div>
                                         );
@@ -1503,69 +1531,84 @@ export default function AdminPanel() {
                             </div>
 
                             {/* Markup per Kategori & per Service */}
-                            <div className="card" style={{ padding: 26, marginTop: 20 }}>
-                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6, flexWrap: 'wrap', gap: 10 }}>
-                                    <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text)' }}>Markup per Kategori / Service</div>
-                                    <button className="btn btn-blue" onClick={saveMarkupRules} disabled={savingRules} style={{ padding: '8px 16px', borderRadius: 9, fontSize: 13, opacity: savingRules ? 0.6 : 1 }}>
-                                        <Save size={14} /> {savingRules ? 'Menyimpan...' : 'Simpan Rules'}
+                            <div className="card" style={{ padding: 30, marginTop: 24 }}>
+                                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 6, flexWrap: 'wrap', gap: 12 }}>
+                                    <div>
+                                        <div style={{ fontWeight: 800, fontSize: 15, color: 'var(--text)', marginBottom: 4 }}>Markup per Kategori / Service</div>
+                                        <p style={{ fontSize: 12.5, color: 'var(--text3)', maxWidth: 520 }}>Kosongkan untuk pakai markup global ({markup}×). Prioritas: <b style={{ color: 'var(--text2)' }}>service → kategori → global</b>.</p>
+                                    </div>
+                                    <button className="btn btn-blue" onClick={saveMarkupRules} disabled={savingRules} style={{ padding: '10px 18px', borderRadius: 11, fontSize: 13.5, opacity: savingRules ? 0.6 : 1, flexShrink: 0 }}>
+                                        <Save size={15} /> {savingRules ? 'Menyimpan...' : 'Simpan Rules'}
                                     </button>
                                 </div>
-                                <p style={{ fontSize: 12.5, color: 'var(--text3)', marginBottom: 18 }}>Kosongkan untuk pakai markup global ({markup}x). Prioritas: override service → kategori → global.</p>
 
-                                <div style={{ fontWeight: 700, fontSize: 12.5, color: 'var(--text2)', marginBottom: 10 }}>Per Kategori</div>
+                                <div style={{ height: 1, background: 'var(--border)', margin: '22px 0' }} />
+
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+                                    <div style={{ fontWeight: 800, fontSize: 13, color: 'var(--text)' }}>Per Kategori</div>
+                                    <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text3)', background: 'var(--bg2)', padding: '2px 9px', borderRadius: 20 }}>{cats.filter(c => c !== 'All').length}</span>
+                                </div>
                                 {cats.filter(c => c !== 'All').length === 0 ? (
                                     <div style={{ fontSize: 12.5, color: 'var(--text3)', marginBottom: 16 }}>Belum ada kategori (services belum termuat).</div>
                                 ) : (
-                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 10, marginBottom: 22 }}>
-                                        {cats.filter(c => c !== 'All').map(c => (
-                                            <div key={c} style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--bg2)', borderRadius: 10, padding: '8px 12px' }}>
-                                                <div style={{ flex: 1, minWidth: 0, fontSize: 12.5, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={c}>{c}</div>
-                                                <input className="inp" type="number" step="0.1" min="1" placeholder={`${markup}x`} value={rulesDraft.categories[c] ?? ''} onChange={e => {
-                                                    const v = e.target.value;
-                                                    setRulesDraft(d => { const categories = { ...d.categories }; if (v === '') delete categories[c]; else categories[c] = parseFloat(v); return { ...d, categories }; });
-                                                }} style={{ width: 80, height: 34, padding: '0 8px', textAlign: 'center', fontWeight: 700 }} />
-                                            </div>
-                                        ))}
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 12, marginBottom: 30 }}>
+                                        {cats.filter(c => c !== 'All').map(c => {
+                                            const overridden = rulesDraft.categories[c] != null;
+                                            return (
+                                                <div key={c} style={{ display: 'flex', alignItems: 'center', gap: 12, background: 'var(--bg2)', border: `1px solid ${overridden ? 'var(--blue)' : 'var(--border)'}`, borderRadius: 12, padding: '12px 14px', transition: 'border-color .15s' }}>
+                                                    <div style={{ flex: 1, minWidth: 0, fontSize: 13, color: 'var(--text)', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={c}>{c}</div>
+                                                    <input className="inp" type="number" step="0.1" min="1" placeholder={`${markup}×`} value={rulesDraft.categories[c] ?? ''} onChange={e => {
+                                                        const v = e.target.value;
+                                                        setRulesDraft(d => { const categories = { ...d.categories }; if (v === '') delete categories[c]; else categories[c] = parseFloat(v); return { ...d, categories }; });
+                                                    }} style={{ width: 76, height: 38, padding: '0 8px', textAlign: 'center', fontWeight: 800, flexShrink: 0 }} />
+                                                </div>
+                                            );
+                                        })}
                                     </div>
                                 )}
 
-                                <div style={{ fontWeight: 700, fontSize: 12.5, color: 'var(--text2)', marginBottom: 10 }}>Override per Service</div>
-                                <div style={{ position: 'relative', marginBottom: 12 }}>
-                                    <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text3)' }} />
-                                    <input className="inp" style={{ paddingLeft: 36 }} placeholder="Cari service untuk override (nama / ID)..." value={svcOverrideSearch} onChange={e => setSvcOverrideSearch(e.target.value)} />
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                                    <div style={{ fontWeight: 800, fontSize: 13, color: 'var(--text)' }}>Override per Service</div>
+                                    {Object.keys(rulesDraft.services).length > 0 && (
+                                        <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--blue)', background: 'var(--blue-l)', padding: '2px 9px', borderRadius: 20 }}>{Object.keys(rulesDraft.services).length} aktif</span>
+                                    )}
+                                </div>
+                                <div style={{ position: 'relative', marginBottom: 14 }}>
+                                    <Search size={15} style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', color: 'var(--text3)' }} />
+                                    <input className="inp" style={{ paddingLeft: 38, height: 42 }} placeholder="Cari service untuk override (nama / ID)..." value={svcOverrideSearch} onChange={e => setSvcOverrideSearch(e.target.value)} />
                                 </div>
                                 {svcOverrideSearch.trim() && (
-                                    <div style={{ border: '1px solid var(--border)', borderRadius: 10, maxHeight: 180, overflowY: 'auto', marginBottom: 14 }}>
+                                    <div style={{ border: '1px solid var(--border)', borderRadius: 12, maxHeight: 200, overflowY: 'auto', marginBottom: 16 }}>
                                         {services.filter(s => {
                                             const q = svcOverrideSearch.toLowerCase();
                                             return (s.name?.toLowerCase().includes(q) || String(s.service).includes(svcOverrideSearch)) && rulesDraft.services[String(s.service)] == null;
                                         }).slice(0, 20).map(s => (
                                             <button key={s.service} onClick={() => { setRulesDraft(d => ({ ...d, services: { ...d.services, [String(s.service)]: resolveMarkup(s) } })); setSvcOverrideSearch(''); }}
-                                                style={{ display: 'flex', width: '100%', alignItems: 'center', gap: 8, padding: '8px 12px', border: 'none', borderBottom: '1px solid var(--border)', background: 'transparent', cursor: 'pointer', textAlign: 'left', fontFamily: "'Plus Jakarta Sans',sans-serif" }}>
-                                                <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 11, color: 'var(--text3)' }}>{s.service}</span>
+                                                style={{ display: 'flex', width: '100%', alignItems: 'center', gap: 10, padding: '11px 14px', border: 'none', borderBottom: '1px solid var(--border)', background: 'transparent', cursor: 'pointer', textAlign: 'left', fontFamily: "'Plus Jakarta Sans',sans-serif" }}>
+                                                <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 11, color: 'var(--text3)', flexShrink: 0 }}>{s.service}</span>
                                                 <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</span>
-                                                <span style={{ fontSize: 11, color: 'var(--blue)', fontWeight: 700 }}>+ override</span>
+                                                <span style={{ fontSize: 11, color: 'var(--blue)', fontWeight: 700, flexShrink: 0 }}>+ override</span>
                                             </button>
                                         ))}
                                     </div>
                                 )}
                                 {Object.keys(rulesDraft.services).length === 0 ? (
-                                    <div style={{ fontSize: 12.5, color: 'var(--text3)' }}>Belum ada override per-service.</div>
+                                    <div style={{ fontSize: 12.5, color: 'var(--text3)', padding: '16px', textAlign: 'center', background: 'var(--bg2)', borderRadius: 12, border: '1px dashed var(--border)' }}>Belum ada override per-service. Cari layanan di atas untuk menambahkan.</div>
                                 ) : (
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                                         {Object.entries(rulesDraft.services).map(([sid, mult]) => {
                                             const svc = services.find(s => String(s.service) === sid);
                                             return (
-                                                <div key={sid} style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--bg2)', borderRadius: 10, padding: '8px 12px' }}>
-                                                    <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 11, color: 'var(--text3)' }}>{sid}</span>
-                                                    <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{svc?.name || '(service tidak ada di daftar)'}</span>
+                                                <div key={sid} style={{ display: 'flex', alignItems: 'center', gap: 12, background: 'var(--bg2)', border: '1px solid var(--blue)', borderRadius: 12, padding: '12px 14px' }}>
+                                                    <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 11, color: 'var(--text3)', flexShrink: 0 }}>{sid}</span>
+                                                    <span style={{ flex: 1, minWidth: 0, fontSize: 13, color: 'var(--text)', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{svc?.name || '(service tidak ada di daftar)'}</span>
                                                     <input className="inp" type="number" step="0.1" min="1" value={mult} onChange={e => {
                                                         const v = parseFloat(e.target.value);
                                                         setRulesDraft(d => ({ ...d, services: { ...d.services, [sid]: isNaN(v) ? 1 : v } }));
-                                                    }} style={{ width: 80, height: 34, padding: '0 8px', textAlign: 'center', fontWeight: 700 }} />
+                                                    }} style={{ width: 76, height: 38, padding: '0 8px', textAlign: 'center', fontWeight: 800, flexShrink: 0 }} />
                                                     <button onClick={() => setRulesDraft(d => { const s2 = { ...d.services }; delete s2[sid]; return { ...d, services: s2 }; })}
-                                                        style={{ background: 'var(--red-l)', border: 'none', borderRadius: 8, padding: '7px', cursor: 'pointer', color: 'var(--red)', display: 'flex' }}>
-                                                        <Trash2 size={14} />
+                                                        style={{ background: 'var(--red-l)', border: 'none', borderRadius: 9, padding: '9px', cursor: 'pointer', color: 'var(--red)', display: 'flex', flexShrink: 0 }}>
+                                                        <Trash2 size={15} />
                                                     </button>
                                                 </div>
                                             );
