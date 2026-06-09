@@ -3,7 +3,8 @@ import { useRouter } from 'next/router';
 import {
   ShoppingCart, Package, CreditCard,
   ChevronRight, ChevronLeft, Bell, Moon, Sun, LogOut, Settings,
-  Target, ChevronDown, X, Menu, Ticket, Phone, BarChart2, ArrowLeftRight, HelpCircle, MessageCircle, Newspaper
+  Target, ChevronDown, X, Menu, Ticket, Phone, BarChart2, ArrowLeftRight, HelpCircle, MessageCircle, Newspaper,
+  Check, Megaphone, Pin, Info, CheckCircle, AlertCircle, Zap, Clock
 } from 'lucide-react';
 import { useTheme } from '@/context/ThemeContext';
 import { supabase } from '@/lib/supabase';
@@ -35,6 +36,124 @@ function ViewSkeleton() {
   );
 }
 
+
+// ── Popup "Berita Terbaru": daftar pengumuman dari Supabase, muncul tiap buka dashboard ──
+// Diam kalau user sudah "jangan tampilkan lagi", TAPI muncul lagi kalau ada pengumuman baru.
+const NEWS_TYPES = {
+  info: { label: 'Info', color: '#2563EB', darkColor: '#60A5FA', icon: <Info size={15} /> },
+  success: { label: 'Sukses', color: '#059669', darkColor: '#34D399', icon: <CheckCircle size={15} /> },
+  warning: { label: 'Peringatan', color: '#D97706', darkColor: '#FCD34D', icon: <AlertCircle size={15} /> },
+  promo: { label: 'Promo', color: '#7C3AED', darkColor: '#A78BFA', icon: <Zap size={15} /> },
+};
+
+function NewsPopup({ dark, items, onClose }) {
+  const [dontShow, setDontShow] = useState(false);
+
+  const formatDate = (iso) => {
+    try {
+      return new Date(iso).toLocaleString('id-ID', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    } catch { return ''; }
+  };
+
+  const finish = () => {
+    try {
+      if (dontShow) localStorage.setItem('ss_news_dismissed', '1');
+      // Tandai pengumuman terbaru sebagai "sudah dilihat" — agar tahu kalau ada yang lebih baru nanti.
+      const latest = items[0]?.updated_at;
+      if (latest) localStorage.setItem('ss_news_last_seen', latest);
+    } catch { }
+    onClose();
+  };
+
+  return (
+    <div className={`root${dark ? ' dark' : ''}`} onClick={finish}
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.6)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 16, fontFamily: "'Plus Jakarta Sans',sans-serif", animation: 'nwFade .25s ease' }}>
+      <style>{`
+        @keyframes nwFade { from { opacity: 0 } to { opacity: 1 } }
+        @keyframes nwPop { from { opacity: 0; transform: translateY(16px) scale(.98) } to { opacity: 1; transform: none } }
+        .nw-scroll::-webkit-scrollbar { width: 8px }
+        .nw-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px }
+      `}</style>
+
+      <div onClick={e => e.stopPropagation()}
+        style={{ background: 'var(--white)', border: '1px solid var(--border)', borderRadius: 20, width: 540, maxWidth: '100%', maxHeight: '86vh', display: 'flex', flexDirection: 'column', boxShadow: '0 30px 80px rgba(0,0,0,.45)', overflow: 'hidden', animation: 'nwPop .35s cubic-bezier(.34,1.56,.64,1)' }}>
+
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '18px 22px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
+          <div style={{ width: 40, height: 40, borderRadius: 11, background: 'linear-gradient(135deg,#2563EB,#1D4ED8)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 14px rgba(37,99,235,.3)', flexShrink: 0 }}>
+            <Megaphone size={19} style={{ color: '#fff' }} />
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <h2 style={{ fontSize: 17, fontWeight: 800, color: 'var(--text)', lineHeight: 1.2 }}>Berita Terbaru</h2>
+            <p style={{ fontSize: 12.5, color: 'var(--text3)' }}>Info & promo terbaru dari admin</p>
+          </div>
+          <button onClick={finish} aria-label="Tutup"
+            style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 10, padding: 7, cursor: 'pointer', color: 'var(--text3)', display: 'flex', flexShrink: 0 }}>
+            <X size={17} />
+          </button>
+        </div>
+
+        {/* List (scrollable) */}
+        <div className="nw-scroll" style={{ overflowY: 'auto', padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {items.length === 0 ? (
+            <div style={{ padding: '48px 16px', textAlign: 'center' }}>
+              <div style={{ width: 56, height: 56, borderRadius: 16, background: 'var(--blue-l)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px' }}>
+                <Bell size={24} style={{ color: 'var(--blue)' }} />
+              </div>
+              <p style={{ fontWeight: 800, fontSize: 15, color: 'var(--text)', marginBottom: 5 }}>Belum ada pengumuman</p>
+              <p style={{ fontSize: 13, color: 'var(--text3)' }}>Pantau terus ya, info & promo terbaru muncul di sini.</p>
+            </div>
+          ) : items.map(a => {
+            const t = NEWS_TYPES[a.type] || NEWS_TYPES.info;
+            const color = dark ? t.darkColor : t.color;
+            const tint = dark ? `${color}1F` : `${color}14`;      // background lembut warna tipe
+            return (
+              <div key={a.id} style={{ borderRadius: 16, border: '1px solid var(--border)', background: 'var(--white)', overflow: 'hidden', boxShadow: dark ? '0 1px 3px rgba(0,0,0,.3)' : '0 1px 3px rgba(0,0,0,.05)' }}>
+
+                {/* Header berwarna */}
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '14px 16px', background: `linear-gradient(135deg, ${tint}, transparent 75%)`, borderBottom: '1px solid var(--border)' }}>
+                  <span style={{ width: 38, height: 38, borderRadius: 11, background: tint, border: `1px solid ${color}33`, display: 'flex', alignItems: 'center', justifyContent: 'center', color, flexShrink: 0, marginTop: 1 }}>{t.icon}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 5 }}>
+                      <span style={{ fontWeight: 700, fontSize: 14.5, color: 'var(--text)', lineHeight: 1.25 }}>{a.title}</span>
+                      {a.pinned && (
+                        <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '.03em', color: dark ? '#FCD34D' : '#92400E', background: dark ? 'rgba(252,211,77,.14)' : '#FEF3C7', padding: '2px 7px', borderRadius: 6, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                          <Pin size={9} /> PENTING
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11.5, color: 'var(--text3)', fontWeight: 500 }}>
+                      <Clock size={11} /> {formatDate(a.updated_at)}
+                    </div>
+                  </div>
+                  <span style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: '.03em', textTransform: 'uppercase', color, background: tint, border: `1px solid ${color}33`, padding: '3px 9px', borderRadius: 7, flexShrink: 0 }}>{t.label}</span>
+                </div>
+
+                {/* Isi */}
+                <p style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.7, margin: 0, padding: '13px 16px 15px', whiteSpace: 'pre-wrap' }}>{a.content || '—'}</p>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Footer */}
+        <div style={{ padding: '14px 22px', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexShrink: 0, flexWrap: 'wrap' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 9, cursor: 'pointer', fontSize: 12.5, color: 'var(--text3)', fontWeight: 600, userSelect: 'none' }}>
+            <span onClick={() => setDontShow(v => !v)}
+              style={{ width: 19, height: 19, borderRadius: 6, border: `1.5px solid ${dontShow ? 'var(--blue)' : 'var(--border)'}`, background: dontShow ? 'var(--blue)' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all .15s' }}>
+              {dontShow && <Check size={13} style={{ color: '#fff' }} />}
+            </span>
+            <span onClick={() => setDontShow(v => !v)}>Jangan tampilkan lagi</span>
+          </label>
+          <button onClick={finish}
+            style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '11px 22px', borderRadius: 12, border: 'none', background: 'var(--blue)', color: '#fff', fontSize: 13.5, fontWeight: 700, cursor: 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif", boxShadow: '0 6px 18px rgba(37,99,235,.35)' }}>
+            Mengerti
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 export default function DashboardPage() {
   const router = useRouter();
   const { dark, toggle } = useTheme();
@@ -53,6 +172,8 @@ export default function DashboardPage() {
   };
   const { notifications, unreadCount, markAllRead, markRead } = useNotifications(user);
   const [notifOpen, setNotifOpen] = useState(false);
+  const [showNews, setShowNews] = useState(false);
+  const [newsItems, setNewsItems] = useState([]);
   const [toast, setToast] = useState(null);
 
   useEffect(() => {
@@ -136,6 +257,36 @@ export default function DashboardPage() {
     const interval = setInterval(loadBalance, 30000);
     return () => clearInterval(interval);
   }, []);
+
+  // ── Berita Terbaru: muncul tiap buka dashboard, kecuali user "jangan tampilkan lagi" ──
+  // Pengecualian: kalau ada pengumuman baru (updated_at lebih baru dari yang terakhir dilihat), tetap muncul.
+  useEffect(() => {
+    if (!user) return;
+    let alive = true;
+    (async () => {
+      try {
+        const { data } = await supabase.from('announcements').select('*')
+          .order('pinned', { ascending: false })
+          .order('updated_at', { ascending: false });
+        if (!alive) return;
+        const items = data || [];
+        setNewsItems(items);
+        if (items.length === 0) return;
+
+        const latest = items[0]?.updated_at || '';
+        let dismissed = false, lastSeen = '';
+        try {
+          dismissed = localStorage.getItem('ss_news_dismissed') === '1';
+          lastSeen = localStorage.getItem('ss_news_last_seen') || '';
+        } catch { }
+
+        // Ada berita baru? (latest > lastSeen) — paksa muncul walau sudah dismissed.
+        const hasNew = latest && latest !== lastSeen && (!lastSeen || new Date(latest) > new Date(lastSeen));
+        if (!dismissed || hasNew) setShowNews(true);
+      } catch { }
+    })();
+    return () => { alive = false; };
+  }, [user]);
 
   const logout = async () => {
     const logoutEmail = authUser?.email;
@@ -469,6 +620,15 @@ export default function DashboardPage() {
           );
         })}
       </nav>
+
+      {/* BERITA TERBARU */}
+      {showNews && (
+        <NewsPopup
+          dark={dark}
+          items={newsItems}
+          onClose={() => setShowNews(false)}
+        />
+      )}
     </div>
   );
 }

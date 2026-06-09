@@ -111,6 +111,7 @@ export default function AdminPanel() {
 
     const [markup, setMarkup] = useState(2.5);
     const [markupInput, setMarkupInput] = useState('2.5');
+    const [markupLoaded, setMarkupLoaded] = useState(false); // false sampai nilai markup asli dari DB ke-load
     const [markupSaved, setMarkupSaved] = useState(false);
     const [users, setUsers] = useState([]);
     const [chartRange, setChartRange] = useState('30d');
@@ -246,7 +247,8 @@ export default function AdminPanel() {
                 .then(data => {
                     if (data?.value) { setMarkup(parseFloat(data.value)); setMarkupInput(data.value); }
                 })
-                .catch(() => { });
+                .catch(() => { })
+                .finally(() => setMarkupLoaded(true));
             adminFetch('/api/admin-api?action=get_markup_rules')
                 .then(r => r.json())
                 .then(data => {
@@ -790,6 +792,18 @@ export default function AdminPanel() {
                         {passError && <div style={{ fontSize: 12, color: 'var(--red)', marginBottom: 10 }}>{passError}</div>}
                         <button className="btn btn-blue" type="submit" style={{ width: '100%', padding: 12, borderRadius: 10 }}>Masuk</button>
                     </form>
+                </div>
+            </div>
+        );
+    }
+
+    // ── LOADING (tahan render sampai markup asli dari DB siap, supaya tidak ada flash nilai default 2.5) ──
+    if (!markupLoaded) {
+        return (
+            <div className={`root${dark ? ' dark' : ''}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: 'var(--bg)' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
+                    <RefreshCw size={26} style={{ color: 'var(--blue)', animation: 'spin 1s linear infinite' }} />
+                    <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text3)' }}>Memuat konfigurasi...</span>
                 </div>
             </div>
         );

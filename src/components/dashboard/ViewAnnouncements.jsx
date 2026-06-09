@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Megaphone, Pin, Info, CheckCircle, AlertCircle, Zap, Bell } from 'lucide-react';
+import { Megaphone, Pin, Info, CheckCircle, AlertCircle, Zap, Bell, Clock } from 'lucide-react';
 import { useTheme } from '@/context/ThemeContext';
 import { supabase } from '@/lib/supabase';
 
@@ -54,63 +54,61 @@ export default function ViewAnnouncements() {
     const Card = ({ a }) => {
         const t = TYPES[a.type] || TYPES.info;
         const color = dark ? t.darkColor : t.color;
+        const tint = dark ? `${color}1F` : `${color}14`;
         const content = a.content || '';
-        const isLong = content.length > 180;
+        const isLong = content.length > 220;
         const isOpen = expanded[a.id];
 
         return (
             <div style={{
-                borderRadius: 14,
+                borderRadius: 16,
                 border: '1px solid var(--border)',
                 background: 'var(--white)',
                 overflow: 'hidden',
-                transition: 'box-shadow .2s',
+                transition: 'box-shadow .2s, transform .2s',
             }}
-                onMouseEnter={e => e.currentTarget.style.boxShadow = dark ? '0 4px 20px rgba(0,0,0,.4)' : '0 4px 20px rgba(0,0,0,.08)'}
-                onMouseLeave={e => e.currentTarget.style.boxShadow = 'none'}>
+                onMouseEnter={e => { e.currentTarget.style.boxShadow = dark ? '0 6px 24px rgba(0,0,0,.4)' : '0 6px 24px rgba(0,0,0,.08)'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
+                onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'none'; }}>
 
-                {/* Left accent bar */}
-                <div style={{ display: 'flex' }}>
-                    <div style={{ width: 4, background: color, flexShrink: 0 }} />
-                    <div style={{ flex: 1, padding: '16px 18px' }}>
-
-                        {/* Header */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-                            <div style={{ width: 32, height: 32, borderRadius: 9, background: 'var(--bg2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color, flexShrink: 0 }}>
-                                {t.icon}
-                            </div>
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
-                                    <span style={{ fontWeight: 700, fontSize: 14, color: dark ? '#f1f5f9' : '#0f172a' }}>{a.title}</span>
-                                    <span style={{ fontSize: 11, fontWeight: 700, color, background: dark ? 'rgba(255,255,255,0.08)' : `${color}15`, padding: '2px 8px', borderRadius: 20 }}>
-                                        {t.label}
-                                    </span>
-                                    {a.pinned && (
-                                        <span style={{ fontSize: 11, fontWeight: 700, color: dark ? '#FCD34D' : '#92400E', background: dark ? 'rgba(252,211,77,0.12)' : '#FEF3C7', padding: '2px 8px', borderRadius: 20, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-                                            <Pin size={9} /> Penting
-                                        </span>
-                                    )}
-                                </div>
-                                <span style={{ fontSize: 11.5, color: dark ? '#475569' : '#94a3b8' }}>🕐 {formatDate(a.updated_at)}</span>
-                            </div>
-                        </div>
-
-                        {/* Content */}
-                        <p style={{
-                            fontSize: 13.5, color: dark ? '#94a3b8' : '#475569',
-                            lineHeight: 1.75, margin: 0, whiteSpace: 'pre-wrap',
-                            display: '-webkit-box',
-                            WebkitLineClamp: isLong && !isOpen ? 3 : 'unset',
-                            WebkitBoxOrient: 'vertical',
-                            overflow: isLong && !isOpen ? 'hidden' : 'visible',
-                        }}>{content}</p>
-                        {isLong && (
-                            <button onClick={() => setExpanded(e => ({ ...e, [a.id]: !e[a.id] }))}
-                                style={{ marginTop: 6, fontSize: 12.5, fontWeight: 700, color, background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: "'Plus Jakarta Sans',sans-serif" }}>
-                                {isOpen ? '▲ Lebih sedikit' : '▼ Baca selengkapnya'}
-                            </button>
-                        )}
+                {/* Header berwarna */}
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '15px 18px', background: `linear-gradient(135deg, ${tint}, transparent 75%)`, borderBottom: '1px solid var(--border)' }}>
+                    <div style={{ width: 40, height: 40, borderRadius: 12, background: tint, border: `1px solid ${color}33`, display: 'flex', alignItems: 'center', justifyContent: 'center', color, flexShrink: 0, marginTop: 1 }}>
+                        {t.icon}
                     </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 6 }}>
+                            <span style={{ fontWeight: 700, fontSize: 15, color: 'var(--text)', lineHeight: 1.25 }}>{a.title}</span>
+                            {a.pinned && (
+                                <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '.03em', color: dark ? '#FCD34D' : '#92400E', background: dark ? 'rgba(252,211,77,0.14)' : '#FEF3C7', padding: '2px 7px', borderRadius: 6, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                                    <Pin size={9} /> PENTING
+                                </span>
+                            )}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11.5, color: 'var(--text3)', fontWeight: 500 }}>
+                            <Clock size={11} /> {formatDate(a.updated_at)}
+                        </div>
+                    </div>
+                    <span style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: '.03em', textTransform: 'uppercase', color, background: tint, border: `1px solid ${color}33`, padding: '3px 10px', borderRadius: 7, flexShrink: 0 }}>
+                        {t.label}
+                    </span>
+                </div>
+
+                {/* Content */}
+                <div style={{ padding: '14px 18px 16px' }}>
+                    <p style={{
+                        fontSize: 13.5, color: 'var(--text2)',
+                        lineHeight: 1.75, margin: 0, whiteSpace: 'pre-wrap',
+                        display: '-webkit-box',
+                        WebkitLineClamp: isLong && !isOpen ? 3 : 'unset',
+                        WebkitBoxOrient: 'vertical',
+                        overflow: isLong && !isOpen ? 'hidden' : 'visible',
+                    }}>{content}</p>
+                    {isLong && (
+                        <button onClick={() => setExpanded(e => ({ ...e, [a.id]: !e[a.id] }))}
+                            style={{ marginTop: 10, fontSize: 12.5, fontWeight: 700, color, background: tint, border: `1px solid ${color}33`, borderRadius: 8, padding: '6px 12px', cursor: 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif" }}>
+                            {isOpen ? 'Lebih sedikit' : 'Baca selengkapnya'}
+                        </button>
+                    )}
                 </div>
             </div>
         );
@@ -131,17 +129,25 @@ export default function ViewAnnouncements() {
 
             {/* Stats */}
             {announcements.length > 0 && (
-                <div style={{ display: 'flex', gap: 10, marginBottom: 18, flexWrap: 'wrap' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12, marginBottom: 20 }}>
                     {[
-                        { label: 'Total', value: announcements.length, color: dark ? '#60A5FA' : '#2563EB' },
-                        { label: 'Penting', value: announcements.filter(a => a.pinned).length, color: dark ? '#FCD34D' : '#D97706' },
-                        { label: 'Promo', value: announcements.filter(a => a.type === 'promo').length, color: dark ? '#A78BFA' : '#7C3AED' },
-                    ].map(s => (
-                        <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '6px 14px', borderRadius: 10, background: 'var(--bg2)', border: '1px solid var(--border)' }}>
-                            <span style={{ fontWeight: 800, fontSize: 15, color: s.color }}>{s.value}</span>
-                            <span style={{ fontSize: 12, color: dark ? '#475569' : '#94a3b8', fontWeight: 600 }}>{s.label}</span>
-                        </div>
-                    ))}
+                        { label: 'Total Pengumuman', value: announcements.length, color: dark ? '#60A5FA' : '#2563EB', icon: <Megaphone size={18} /> },
+                        { label: 'Ditandai Penting', value: announcements.filter(a => a.pinned).length, color: dark ? '#FCD34D' : '#D97706', icon: <Pin size={18} /> },
+                        { label: 'Promo Aktif', value: announcements.filter(a => a.type === 'promo').length, color: dark ? '#A78BFA' : '#7C3AED', icon: <Zap size={18} /> },
+                    ].map(s => {
+                        const tint = dark ? `${s.color}1F` : `${s.color}14`;
+                        return (
+                            <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', borderRadius: 14, background: 'var(--white)', border: '1px solid var(--border)' }}>
+                                <div style={{ width: 40, height: 40, borderRadius: 11, background: tint, border: `1px solid ${s.color}33`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: s.color, flexShrink: 0 }}>
+                                    {s.icon}
+                                </div>
+                                <div style={{ minWidth: 0 }}>
+                                    <div style={{ fontWeight: 800, fontSize: 20, color: 'var(--text)', lineHeight: 1.1 }}>{s.value}</div>
+                                    <div style={{ fontSize: 11.5, color: 'var(--text3)', fontWeight: 600 }}>{s.label}</div>
+                                </div>
+                            </div>
+                        );
+                    })}
                 </div>
             )}
 

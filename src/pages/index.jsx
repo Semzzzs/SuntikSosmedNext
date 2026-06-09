@@ -416,9 +416,31 @@ export default function Landing() {
         {/* Center hero text */}
         <div className="fu" style={{ textAlign: 'center', padding: '0', position: 'relative', maxWidth: 700, margin: '0 auto' }}>
           {/* Badge */}
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: dark ? 'var(--blue-l)' : 'linear-gradient(135deg, #EEF4FF, #E0EAFF)', border: '1px solid rgba(37,99,235,.15)', borderRadius: 20, padding: '5px 14px 5px 5px', fontSize: 12, fontWeight: 700, marginBottom: 24, boxShadow: dark ? 'none' : '0 2px 12px rgba(37,99,235,.1)' }}>
-            <span style={{ background: 'var(--blue)', color: '#fff', borderRadius: 16, padding: '2px 10px', fontSize: 11 }}>Update Terbaru!</span>
-            <span style={{ color: 'var(--blue)' }}>SuntikSosmed v2.0 Sudah Hadir!</span>
+          <div className="hero-badge" style={{
+            display: 'inline-flex', alignItems: 'center', gap: 9,
+            background: dark
+              ? 'linear-gradient(135deg, rgba(37,99,235,.20), rgba(37,99,235,.07))'
+              : 'linear-gradient(135deg, #FFFFFF, #EAF1FF)',
+            border: dark ? '1px solid rgba(96,165,250,.28)' : '1px solid rgba(37,99,235,.24)',
+            borderRadius: 30, padding: '4px 13px 4px 4px',
+            fontSize: 12, fontWeight: 700, marginBottom: 24,
+            boxShadow: dark
+              ? '0 4px 22px rgba(37,99,235,.24), inset 0 1px 0 rgba(255,255,255,.06)'
+              : '0 6px 22px rgba(37,99,235,.20), inset 0 1px 0 rgba(255,255,255,.9)',
+          }}>
+            <span className="badge-shine" aria-hidden />
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', gap: 7,
+              background: 'linear-gradient(135deg, #3B82F6, #2563EB)',
+              color: '#fff', borderRadius: 30, padding: '4px 11px', fontSize: 11,
+              boxShadow: '0 2px 9px rgba(37,99,235,.45), inset 0 1px 0 rgba(255,255,255,.28)',
+              whiteSpace: 'nowrap', flexShrink: 0,
+            }}>
+              <span className="badge-dot" aria-hidden />
+              Update Terbaru!
+            </span>
+            <span style={{ color: dark ? '#93C5FD' : 'var(--blue)' }}>SuntikSosmed Sudah Hadir!</span>
+            <ArrowRight className="badge-chevron" size={13} style={{ color: dark ? '#93C5FD' : 'var(--blue)', flexShrink: 0 }} />
           </div>
 
           <h1 style={{ fontSize: 'clamp(32px, 8vw, 48px)', fontWeight: 800, textShadow: dark ? 'none' : '0 2px 8px rgba(37,99,235,.08)', lineHeight: 1.15, color: 'var(--text)', marginBottom: 18, letterSpacing: '-1px' }}>
@@ -670,6 +692,53 @@ export default function Landing() {
           }
           html { scroll-behavior: smooth; }
           .root h1, .root h2 { font-family: 'Sora','Plus Jakarta Sans',sans-serif; }
+
+          /* ── Hero announcement badge ── */
+          .hero-badge {
+            position: relative; overflow: hidden;
+            transition: transform .25s cubic-bezier(0.34,1.56,0.64,1), box-shadow .25s ease, border-color .25s ease;
+          }
+          .hero-badge:hover {
+            transform: translateY(-2px);
+            border-color: rgba(37,99,235,.4) !important;
+          }
+          .hero-badge .badge-shine {
+            position: absolute; top: 0; left: 0; width: 35%; height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(37,99,235,.20), transparent);
+            transform: translateX(-130%) skewX(-20deg);
+            animation: badgeShine 4.8s ease-in-out infinite; pointer-events: none;
+          }
+          .root.dark .hero-badge .badge-shine {
+            background: linear-gradient(90deg, transparent, rgba(147,197,253,.32), transparent);
+          }
+          .badge-dot { position: relative; width: 7px; height: 7px; flex-shrink: 0; }
+          .badge-dot::before, .badge-dot::after {
+            content: ''; position: absolute; inset: 0; border-radius: 50%; background: #fff;
+          }
+          .badge-dot::before { animation: badgePulse 1.8s ease-in-out infinite; }
+          .badge-dot::after  { animation: badgePing 1.8s cubic-bezier(0,0,.2,1) infinite; }
+          .badge-chevron { transition: transform .25s ease; }
+          .hero-badge:hover .badge-chevron { transform: translateX(3px); }
+          @keyframes badgeShine {
+            0% { transform: translateX(-130%) skewX(-20deg); }
+            55%, 100% { transform: translateX(420%) skewX(-20deg); }
+          }
+          @keyframes badgePulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(.55); opacity: .6; }
+          }
+          @keyframes badgePing {
+            0% { transform: scale(1); opacity: .55; }
+            80%, 100% { transform: scale(2.6); opacity: 0; }
+          }
+          @media (max-width: 420px) {
+            .hero-badge { font-size: 11px !important; gap: 7px !important; padding-right: 11px !important; }
+            .hero-badge .badge-chevron { display: none; }
+          }
+          @media (prefers-reduced-motion: reduce) {
+            .hero-badge .badge-shine, .badge-dot::before, .badge-dot::after { animation: none; }
+            .badge-dot::after { display: none; }
+          }
           .nav-desktop-only { display: flex; }
           .nav-mobile-only { display: none; }
           .nav-icon-btn { transition: transform .12s ease, border-color .15s ease, background .15s ease; }

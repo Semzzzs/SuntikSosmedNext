@@ -282,18 +282,30 @@ export default function ViewAddFunds({ user, balance: balanceProp = null }) {
           body: JSON.stringify({
             action: 'create_qris',
             reference_id: refId,
-            amount: Math.round(totalIDR),
+            // ✅ Kirim nominal MURNI (numIDR), bukan totalIDR.
+            // Channel QRIS Paymenku = Fee Mode "Customer", jadi Paymenku otomatis
+            // menambahkan fee (Rp 200 + 0.7%) di ATAS amount ini dan menagihkannya
+            // ke customer. Net yang diterima merchant = numIDR. Mengirim totalIDR
+            // menyebabkan fee dihitung dua kali (double-fee).
+            amount: Math.round(numIDR),
           }),
         });
         const data = await resp.json();
         if (data.status === 'success' && data.data) {
+          // Total tagihan sebenarnya = dari respons Paymenku (sudah termasuk fee Customer).
+          // Fallback ke estimasi (numIDR + fee) kalau field tidak tersedia.
+          const billedTotal =
+            data.data.total_amount ??
+            data.data.payment_info?.total_amount ??
+            data.data.amount ??
+            Math.round(totalIDR);
           const qrisPayload = {
             qr_url: data.data.payment_info?.qr_url,
             qr_string: data.data.payment_info?.qr_string,
             trx_id: data.data.trx_id,
             reference_id: refId,
-            amount: numIDR,
-            totalAmount: Math.round(totalIDR),
+            amount: numIDR,                       // saldo yang diterima user = nominal murni
+            totalAmount: Math.round(billedTotal), // total yang ditagih ke user (sudah +fee Paymenku)
             expiry: data.data.payment_info?.expiration_date,
           };
           setQrisData(qrisPayload);

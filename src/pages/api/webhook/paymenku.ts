@@ -72,18 +72,24 @@ export default async function handler(req: any, res: any) {
         // Cocokkan via trx_id (disimpan di qr_trx_id atau di description "QRIS_PENDING_<trx_id>").
         const { data: pendingRow } = await supabaseAdmin
             .from('transactions')
-            .select('id, email, user_id')
+            .select('id, email, user_id, amount, qr_amount')
             .or(`qr_trx_id.eq.${trx_id},description.eq.QRIS_PENDING_${trx_id}`)
             .maybeSingle();
 
         if (pendingRow && pendingRow.email) {
+            // ✅ Kreditkan saldo pakai NOMINAL DEPOSIT yang user minta (tersimpan di baris pending),
+            // BUKAN amount_received dari Paymenku. amount_received = net setelah potongan fee,
+            // yang bisa keliru kalau mode fee berubah. Nominal deposit user adalah sumber kebenaran.
+            const creditAmount = Math.round(
+                Number(pendingRow.qr_amount) || Number(pendingRow.amount) || amount
+            );
             // ✅ Email sudah benar dari awal — tinggal jadikan deposit success.
             const { error: updErr } = await supabaseAdmin
                 .from('transactions')
                 .update({
                     type: 'deposit',
                     status: 'success',
-                    amount: Math.round(amount),
+                    amount: creditAmount,
                     description: `Top up QRIS - Ref: ${reference_id} - TrxID: ${trx_id}`,
                 })
                 .eq('id', pendingRow.id);
@@ -91,7 +97,7 @@ export default async function handler(req: any, res: any) {
                 console.error('[Webhook] update pending row error:', updErr.message);
                 return res.status(500).json({ error: 'DB update failed' });
             }
-            console.log(`[Webhook] Deposit OK (via pending row): ${trx_id} - Rp ${amount} - ${pendingRow.email}`);
+            console.log(`[Webhook] Deposit OK (via pending row): ${trx_id} - Rp ${creditAmount} - ${pendingRow.email}`);
             return res.status(200).json({ received: true });
         }
 
