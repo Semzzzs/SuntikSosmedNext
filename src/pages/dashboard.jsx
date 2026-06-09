@@ -15,15 +15,13 @@ import { useNotifications } from '@/hooks/useNotifications';
 const ViewNewOrder = lazy(() => import('@/components/dashboard/ViewNewOrder'));
 const ViewMyOrders = lazy(() => import('@/components/dashboard/ViewMyOrders'));
 const ViewAddFunds = lazy(() => import('@/components/dashboard/ViewAddFunds'));
-const ViewNotifications = lazy(() => import('@/components/dashboard/ViewNotifications'));
 const ViewTickets = lazy(() => import('@/components/dashboard/ViewTickets'));
 const ViewContact = lazy(() => import('@/components/dashboard/ViewContact'));
 const ViewAnalytics = lazy(() => import('@/components/dashboard/ViewAnalytics'));
 const ViewTransactions = lazy(() => import('@/components/dashboard/ViewTransactions'));
 const ViewSettings = lazy(() => import('@/components/dashboard/ViewSettings'));
 const ViewAnnouncements = lazy(() => import('@/components/dashboard/ViewAnnouncements'));
-// Fix: ViewFAQ tidak ada — file yang benar adalah ViewNotifications
-const ViewFAQ = lazy(() => import('@/components/dashboard/ViewNotifications'));
+const ViewFAQ = lazy(() => import('@/components/dashboard/Faq'));
 
 // Skeleton saat view sedang di-load
 function ViewSkeleton() {
@@ -401,7 +399,7 @@ export default function DashboardPage() {
           </div>
         </nav>
 
-        <div style={{ padding: '10px 10px 16px', borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <div style={{ padding: isMobile ? '10px 10px 90px' : '10px 10px 16px', borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 2 }}>
           {navBottom.map(item => <SideLink key={item.id} item={item} />)}
           <button onClick={logout} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', borderRadius: 10, border: 'none', cursor: 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif", fontWeight: 600, fontSize: 13.5, color: 'var(--red)', background: 'transparent', transition: 'background .18s' }}
             onMouseEnter={e => e.currentTarget.style.background = 'var(--red-l)'}
@@ -505,7 +503,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <main className="ns main-scroll" style={{ flex: 1, overflowY: 'auto', padding: '24px 28px' }}
+        <main className="ns main-scroll" style={{ flex: 1, overflowY: 'auto', padding: '24px 28px', paddingBottom: isMobile ? '90px' : '24px' }}
           onClick={() => { if (notifOpen) setNotifOpen(false); if (profileOpen) setProfileOpen(false); }}>
           <Suspense fallback={<ViewSkeleton />}>
             {views[menu]}

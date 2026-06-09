@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Sun, Moon, User, Mail, Phone, Globe, Camera, Smartphone, Trash2, CheckCircle, Lock, Eye, EyeOff, AlertCircle } from 'lucide-react';
+import { Sun, Moon, User, Mail, Phone, Globe, Smartphone, Trash2, CheckCircle, Lock, Eye, EyeOff, AlertCircle } from 'lucide-react';
 import { useTheme } from '@/context/ThemeContext';
 import { supabase } from '@/lib/supabase';
 
@@ -106,7 +106,12 @@ export default function ViewSettings({ user, onLogout }) {
     setTimeout(() => setPwMsg({ type: '', text: '' }), 3000);
   };
 
-  const tabs = ['Profile', 'Security', 'Notifications', 'Appearance'];
+  const tabs = [
+    { id: 'Profile', label: 'Profil' },
+    { id: 'Security', label: 'Keamanan' },
+    { id: 'Notifications', label: 'Notifikasi' },
+    { id: 'Appearance', label: 'Tampilan' },
+  ];
 
   const Toggle = ({ on, onChange }) => (
     <div onClick={onChange} style={{ width: 42, height: 23, borderRadius: 12, background: on ? 'var(--blue)' : 'var(--bg2)', border: `1px solid ${on ? 'var(--blue)' : 'var(--border)'}`, display: 'flex', alignItems: 'center', padding: '2px 3px', cursor: 'pointer', flexShrink: 0, transition: 'background .2s' }}>
@@ -117,14 +122,14 @@ export default function ViewSettings({ user, onLogout }) {
   return (
     <div className="fu">
       <div style={{ marginBottom: 20 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text)', marginBottom: 3 }}>Settings</h1>
-        <p style={{ fontSize: 13.5, color: 'var(--text2)' }}>Manage your account preferences.</p>
+        <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text)', marginBottom: 3 }}>Pengaturan</h1>
+        <p style={{ fontSize: 13.5, color: 'var(--text2)' }}>Kelola preferensi akun kamu.</p>
       </div>
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: 6, marginBottom: 20, flexWrap: 'wrap' }}>
         {tabs.map(t => (
-          <button key={t} onClick={() => setTab(t)} style={{ padding: '7px 16px', borderRadius: 9, border: `1.5px solid ${tab === t ? 'var(--blue)' : 'var(--border)'}`, background: tab === t ? 'var(--blue-l)' : 'transparent', color: tab === t ? 'var(--blue)' : 'var(--text2)', fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif", transition: 'all .18s' }}>{t}</button>
+          <button key={t.id} onClick={() => setTab(t.id)} style={{ padding: '7px 16px', borderRadius: 9, border: `1.5px solid ${tab === t.id ? 'var(--blue)' : 'var(--border)'}`, background: tab === t.id ? 'var(--blue-l)' : 'transparent', color: tab === t.id ? 'var(--blue)' : 'var(--text2)', fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif", transition: 'all .18s' }}>{t.label}</button>
         ))}
       </div>
 
@@ -142,21 +147,21 @@ export default function ViewSettings({ user, onLogout }) {
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }}>
             <div>
-              <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--text2)', marginBottom: 7 }}>Full Name</label>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--text2)', marginBottom: 7 }}>Nama Lengkap</label>
               <div style={{ position: 'relative' }}>
                 <User size={13} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text3)' }} />
                 <input className="inp" defaultValue={user?.name || ''} style={{ paddingLeft: 34, fontSize: 13.5 }} readOnly />
               </div>
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--text2)', marginBottom: 7 }}>Email Address</label>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--text2)', marginBottom: 7 }}>Email</label>
               <div style={{ position: 'relative' }}>
                 <Mail size={13} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text3)' }} />
                 <input className="inp" defaultValue={user?.email || ''} style={{ paddingLeft: 34, fontSize: 13.5 }} readOnly />
               </div>
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--text2)', marginBottom: 7 }}>Phone Number</label>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--text2)', marginBottom: 7 }}>Nomor Telepon</label>
               <div style={{ position: 'relative' }}>
                 <Phone size={13} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text3)' }} />
                 <input className="inp" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+62 xxx xxxx xxxx" style={{ paddingLeft: 34, fontSize: 13.5 }} />
@@ -172,11 +177,11 @@ export default function ViewSettings({ user, onLogout }) {
           </div>
           {saved && (
             <div style={{ marginTop: 14, background: 'var(--green-l)', border: '1px solid rgba(16,185,129,.2)', borderRadius: 9, padding: '9px 13px', fontSize: 13, fontWeight: 600, color: 'var(--green)', display: 'flex', gap: 7, alignItems: 'center' }}>
-              <CheckCircle size={14} /> Profile saved!
+              <CheckCircle size={14} /> Profil tersimpan!
             </div>
           )}
           <button className="btn btn-blue" onClick={handleSaveProfile} style={{ marginTop: 18, borderRadius: 10, padding: '11px 22px' }}>
-            Save Changes <CheckCircle size={14} />
+            Simpan Perubahan <CheckCircle size={14} />
           </button>
         </div>
       )}
@@ -186,13 +191,13 @@ export default function ViewSettings({ user, onLogout }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div className="card" style={{ padding: 24 }}>
             <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text)', marginBottom: 18, display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Lock size={15} style={{ color: 'var(--blue)' }} /> Change Password
+              <Lock size={15} style={{ color: 'var(--blue)' }} /> Ubah Password
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {[
-                { l: 'Current Password', k: 'cur' },
-                { l: 'New Password', k: 'new' },
-                { l: 'Confirm New Password', k: 'con' },
+                { l: 'Password Saat Ini', k: 'cur' },
+                { l: 'Password Baru', k: 'new' },
+                { l: 'Konfirmasi Password Baru', k: 'con' },
               ].map(f => (
                 <div key={f.k}>
                   <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--text2)', marginBottom: 7 }}>{f.l}</label>
@@ -210,17 +215,17 @@ export default function ViewSettings({ user, onLogout }) {
                   {pwMsg.type === 'error' ? <AlertCircle size={14} /> : <CheckCircle size={14} />} {pwMsg.text}
                 </div>
               )}
-              <button className="btn btn-blue" onClick={handleUpdatePassword} style={{ borderRadius: 10, padding: '11px 22px', width: 'fit-content', marginTop: 4 }}>Update Password</button>
+              <button className="btn btn-blue" onClick={handleUpdatePassword} style={{ borderRadius: 10, padding: '11px 22px', width: 'fit-content', marginTop: 4 }}>Perbarui Password</button>
             </div>
           </div>
 
           <div className="card" style={{ padding: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
-              <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text)', marginBottom: 3 }}>Two-Factor Authentication</div>
-              <div style={{ fontSize: 13, color: 'var(--text2)' }}>Add an extra layer of security to your account.</div>
+              <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text)', marginBottom: 3 }}>Autentikasi Dua Faktor</div>
+              <div style={{ fontSize: 13, color: 'var(--text2)' }}>Tambah lapisan keamanan ekstra untuk akun kamu.</div>
             </div>
-            <button className="btn btn-outline" style={{ borderRadius: 9, padding: '9px 14px', fontSize: 13, flexShrink: 0 }}>
-              <Smartphone size={13} /> Enable 2FA
+            <button className="btn btn-outline" disabled title="Fitur ini belum tersedia" style={{ borderRadius: 9, padding: '9px 14px', fontSize: 13, flexShrink: 0, cursor: 'not-allowed', opacity: 0.6 }}>
+              <Smartphone size={13} /> Segera Hadir
             </button>
           </div>
         </div>
@@ -229,12 +234,12 @@ export default function ViewSettings({ user, onLogout }) {
       {/* ── NOTIFICATIONS ── */}
       {tab === 'Notifications' && (
         <div className="card" style={{ padding: 22 }}>
-          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 18, color: 'var(--text)' }}>Notification Preferences</div>
+          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 18, color: 'var(--text)' }}>Preferensi Notifikasi</div>
           {[
-            { key: 'orderCompleted', l: 'Order completed', d: 'Get notified when an order finishes' },
-            { key: 'orderDelayed', l: 'Order delayed', d: 'Alert if delivery takes longer than expected' },
-            { key: 'lowBalance', l: 'Low balance warning', d: 'Remind me when balance is below $10' },
-            { key: 'promoOffers', l: 'Promotional offers', d: 'Flash sales and special deals' },
+            { key: 'orderCompleted', l: 'Pesanan selesai', d: 'Beri tahu saat pesanan selesai diproses' },
+            { key: 'orderDelayed', l: 'Pesanan tertunda', d: 'Peringatkan jika pengiriman lebih lama dari biasanya' },
+            { key: 'lowBalance', l: 'Saldo menipis', d: 'Ingatkan saat saldo di bawah Rp5.000' },
+            { key: 'promoOffers', l: 'Penawaran promo', d: 'Flash sale & penawaran spesial' },
           ].map((n, i, arr) => (
             <div key={n.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 0', borderBottom: i < arr.length - 1 ? '1px solid var(--border)' : 'none' }}>
               <div>
@@ -251,11 +256,11 @@ export default function ViewSettings({ user, onLogout }) {
       {tab === 'Appearance' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div className="card" style={{ padding: 24 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', marginBottom: 14 }}>Color Theme</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', marginBottom: 14 }}>Tema Warna</div>
             <div style={{ display: 'flex', gap: 12 }}>
               {[
-                { id: false, label: 'Light Mode', icon: <Sun size={20} />, desc: 'Clean and bright' },
-                { id: true, label: 'Dark Mode', icon: <Moon size={20} />, desc: 'Easy on the eyes' },
+                { id: false, label: 'Mode Terang', icon: <Sun size={20} />, desc: 'Bersih & terang' },
+                { id: true, label: 'Mode Gelap', icon: <Moon size={20} />, desc: 'Nyaman di mata' },
               ].map(t => (
                 <button key={t.label} onClick={() => { if (dark !== t.id) toggle(); }}
                   style={{ flex: 1, padding: '18px 16px', borderRadius: 14, border: `2px solid ${dark === t.id ? 'var(--blue)' : 'var(--border)'}`, background: dark === t.id ? 'var(--blue-l)' : 'var(--bg2)', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, fontFamily: "'Plus Jakarta Sans',sans-serif", transition: 'all .18s' }}>
@@ -271,16 +276,16 @@ export default function ViewSettings({ user, onLogout }) {
           </div>
 
           <div className="card" style={{ padding: 20, border: '1.5px solid rgba(239,68,68,.2)', background: 'var(--red-l)' }}>
-            <div style={{ fontWeight: 700, fontSize: 13.5, color: 'var(--red)', marginBottom: 6 }}>Danger Zone</div>
+            <div style={{ fontWeight: 700, fontSize: 13.5, color: 'var(--red)', marginBottom: 6 }}>Zona Berbahaya</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {/* Sign out */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', marginBottom: 2 }}>Sign Out</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', marginBottom: 2 }}>Keluar</div>
                   <div style={{ fontSize: 12, color: 'var(--text3)' }}>Keluar dari sesi ini.</div>
                 </div>
                 <button onClick={onLogout} className="btn" style={{ background: 'transparent', color: 'var(--red)', border: '1.5px solid var(--red)', borderRadius: 9, padding: '8px 14px', fontSize: 13, flexShrink: 0 }}>
-                  Sign Out
+                  Keluar
                 </button>
               </div>
               {/* ✅ Fix High: "Delete Account" sekarang benar-benar request hapus akun */}
