@@ -240,23 +240,27 @@ export default function AdminPanel() {
             !!sessionStorage.getItem('admin_token');
         setAuthed(isAuthed);
         setAuthChecked(true);
-        // ✅ Load markup via server-side API (bukan direct Supabase dari client)
-        if (isAuthed) {
-            adminFetch('/api/admin-api?action=get_markup')
-                .then(r => r.json())
-                .then(data => {
-                    if (data?.value) { setMarkup(parseFloat(data.value)); setMarkupInput(data.value); }
-                })
-                .catch(() => { })
-                .finally(() => setMarkupLoaded(true));
-            adminFetch('/api/admin-api?action=get_markup_rules')
-                .then(r => r.json())
-                .then(data => {
-                    if (data?.rules) { setMarkupRules(data.rules); setRulesDraft(data.rules); }
-                })
-                .catch(() => { });
-        }
     }, []);
+
+    // ✅ Load markup & rules SETIAP authed berubah jadi true (bukan cuma saat mount).
+    // Fix: dulu effect ini pakai dep [] tapi baca isAuthed, jadi setelah login (tanpa reload)
+    // markup tak pernah ke-load dan markupLoaded stuck false.
+    useEffect(() => {
+        if (!authed) return;
+        adminFetch('/api/admin-api?action=get_markup')
+            .then(r => r.json())
+            .then(data => {
+                if (data?.value) { setMarkup(parseFloat(data.value)); setMarkupInput(data.value); }
+            })
+            .catch(() => { })
+            .finally(() => setMarkupLoaded(true));
+        adminFetch('/api/admin-api?action=get_markup_rules')
+            .then(r => r.json())
+            .then(data => {
+                if (data?.rules) { setMarkupRules(data.rules); setRulesDraft(data.rules); }
+            })
+            .catch(() => { });
+    }, [authed]);
 
     useEffect(() => {
         fetch('/api/rate').then(r => r.json()).then(d => { if (d.rate) setRate(d.rate); }).catch(() => { });
