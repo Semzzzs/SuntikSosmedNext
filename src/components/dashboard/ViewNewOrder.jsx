@@ -643,6 +643,28 @@ export default function ViewNewOrder({ user, setMenu }) {
                           <li>Jika ada kendala pada layanan, silakan hubungi support.</li>
                         </ul>
                       </div>
+
+                      {/* ── Catatan KHUSUS followers Instagram: matikan "Laporkan untuk ditinjau" ── */}
+                      {(() => {
+                        const hay = `${n} ${selectedService.category || ''} ${selectedPlatform || ''}`.toLowerCase();
+                        const isIgFollowers = hay.includes('instagram') &&
+                          (hay.includes('follower') || hay.includes('followers'));
+                        if (!isIgFollowers) return null;
+                        return (
+                          <div style={{ marginTop: 10, padding: '12px 14px', background: 'var(--red-l, rgba(239,68,68,.08))', border: '1px solid var(--red, #EF4444)', borderRadius: 10 }}>
+                            <div style={{ fontSize: 11.5, fontWeight: 800, color: 'var(--red, #EF4444)', marginBottom: 7, letterSpacing: '.03em' }}>🚨 PENTING 🚨</div>
+                            <div style={{ fontSize: 12.5, color: 'var(--text)', fontWeight: 700, marginBottom: 8 }}>
+                              Harap matikan <strong>"Laporkan untuk ditinjau"</strong> sebelum memesan!
+                            </div>
+                            <div style={{ fontSize: 12, color: 'var(--text2)', fontWeight: 600, marginBottom: 4 }}>Caranya:</div>
+                            <ol style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: 'var(--text2)', lineHeight: 1.8 }}>
+                              <li>Masuk ke <strong>Pengaturan dan privasi</strong></li>
+                              <li>Pilih <strong>Ikuti & Undang Teman</strong></li>
+                              <li>Nonaktifkan <strong>Laporkan untuk ditinjau</strong></li>
+                            </ol>
+                          </div>
+                        );
+                      })()}
                     </div>
                   );
                 })()}
