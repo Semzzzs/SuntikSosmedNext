@@ -6,6 +6,25 @@ import { ApiProvider } from '@/context/ApiContext';
 import { AuthProvider } from '@/context/AuthContext';
 import '@/styles/globals.css';
 
+// ✅ Structured Data (JSON-LD) — bantu Google paham brand & munculin sitelinks
+const orgSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'Organization',
+  name: 'SuntikSosmed',
+  url: 'https://suntiksosmed.store',
+  logo: 'https://suntiksosmed.store/logo.png',
+  description:
+    'Platform SMM #1 Indonesia. 2.000+ layanan followers, likes, views Instagram, TikTok, YouTube. Harga mulai Rp1/1000, proses instan, aman & terpercaya.',
+  sameAs: [],
+};
+
+const websiteSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'WebSite',
+  name: 'SuntikSosmed',
+  url: 'https://suntiksosmed.store',
+};
+
 // ✅ Error Boundary — cegah seluruh app crash saat satu view error
 class ErrorBoundary extends Component {
   constructor(props) {
@@ -46,7 +65,7 @@ class ErrorBoundary extends Component {
 
 export default function MyApp({ Component, pageProps }) {
   const router = useRouter();
-  const isAdmin = router.pathname.startsWith('/admin');
+  const isAdmin = router.pathname.startsWith('/Voltaraz');
 
   return (
     <ErrorBoundary>
@@ -63,6 +82,15 @@ export default function MyApp({ Component, pageProps }) {
         <meta
           name="description"
           content="SuntikSosmed — platform SMM #1 Indonesia. 2.000+ layanan followers, likes, views Instagram, TikTok, YouTube. Harga mulai Rp1/1000, proses instan, aman & terpercaya."
+        />
+        {/* ✅ JSON-LD structured data */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(orgSchema) }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteSchema) }}
         />
       </Head>
       <AuthProvider>
