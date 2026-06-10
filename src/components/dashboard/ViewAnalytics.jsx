@@ -11,10 +11,18 @@ export default function ViewAnalytics({ user }) {
 
   useEffect(() => {
     if (!user?.email) return;
+    let alive = true;
+
     // ✅ Load transactions + order count dari Supabase (akurat & lintas device)
     supabase.from('transactions').select('*').eq('email', user.email)
       .order('created_at', { ascending: false })
-      .then(({ data }) => { setTransactions(data || []); setLoaded(true); });
+      .then(({ data, error }) => {
+        if (!alive) return;
+        if (error) console.error('[Analytics] transactions:', error);
+        setTransactions(Array.isArray(data) ? data : []);
+        setLoaded(true);
+      })
+      .catch((e) => { if (alive) { console.error('[Analytics]', e); setLoaded(true); } });
 
     // ✅ Total Order dihitung dari transactions tipe order/purchase di Supabase,
     //    bukan dari localStorage (yang tidak ikut pindah device).
@@ -22,17 +30,23 @@ export default function ViewAnalytics({ user }) {
       .select('order_id, type, description')
       .eq('email', user.email)
       .in('type', ['order', 'purchase'])
-      .then(({ data }) => {
-        const valid = (data || []).filter(t =>
-          (t.order_id && /^\d+$/.test(String(t.order_id))) ||
-          (t.description && t.description.startsWith('Order #'))
+      .then(({ data, error }) => {
+        if (!alive) return;
+        if (error) console.error('[Analytics] orders:', error);
+        const valid = (Array.isArray(data) ? data : []).filter(t =>
+          (t?.order_id && /^\d+$/.test(String(t.order_id))) ||
+          (t?.description && t.description.startsWith('Order #'))
         );
         setOrders(valid);
-      });
+      })
+      .catch((e) => { if (alive) console.error('[Analytics]', e); });
+
+    return () => { alive = false; };
   }, [user]);
 
-  const totalDeposit = transactions.filter(t => ['deposit', 'bonus', 'refund'].includes(t.type) && t.status === 'success').reduce((s, t) => s + (t.amount || 0), 0);
-  const totalSpent = transactions.filter(t => ['order', 'purchase'].includes(t.type) && t.status === 'success').reduce((s, t) => s + (t.amount || 0), 0);
+  const tx = Array.isArray(transactions) ? transactions : [];
+  const totalDeposit = tx.filter(t => ['deposit', 'bonus', 'refund'].includes(t?.type) && t?.status === 'success').reduce((s, t) => s + (t.amount || 0), 0);
+  const totalSpent = tx.filter(t => ['order', 'purchase'].includes(t?.type) && t?.status === 'success').reduce((s, t) => s + (t.amount || 0), 0);
   const balance = totalDeposit - totalSpent;
 
   // Chart data - transaksi per hari 7 hari terakhir
@@ -41,16 +55,16 @@ export default function ViewAnalytics({ user }) {
     d.setDate(d.getDate() - (6 - i));
     d.setHours(0, 0, 0, 0);
     const dateKey = d.toISOString().slice(0, 10);
-    const dayTx = transactions.filter(t => t.created_at?.slice(0, 10) === dateKey);
-    const deposit = dayTx.filter(t => ['deposit', 'bonus', 'refund'].includes(t.type) && t.status === 'success').reduce((s, t) => s + (t.amount || 0), 0);
-    const spent = dayTx.filter(t => ['order', 'purchase'].includes(t.type) && t.status === 'success').reduce((s, t) => s + (t.amount || 0), 0);
+    const dayTx = tx.filter(t => t?.created_at?.slice(0, 10) === dateKey);
+    const deposit = dayTx.filter(t => ['deposit', 'bonus', 'refund'].includes(t?.type) && t?.status === 'success').reduce((s, t) => s + (t.amount || 0), 0);
+    const spent = dayTx.filter(t => ['order', 'purchase'].includes(t?.type) && t?.status === 'success').reduce((s, t) => s + (t.amount || 0), 0);
     return { label: d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }), deposit, spent };
   });
 
   const maxVal = Math.max(...last7.map(d => Math.max(d.deposit, d.spent)), 1);
   const periodDeposit = last7.reduce((s, d) => s + d.deposit, 0);
   const periodSpent = last7.reduce((s, d) => s + d.spent, 0);
-  const hasData = transactions.length > 0;
+  const hasData = tx.length > 0;
 
   const stats = [
     { label: 'Total Deposit', value: rp(totalDeposit), color: 'var(--green)', bg: 'var(--green-l)', icon: <CreditCard size={20} /> },
@@ -150,7 +164,7 @@ export default function ViewAnalytics({ user }) {
 
       <style dangerouslySetInnerHTML={{
         __html: `
-        .an-page { max-width: 920px; }
+        .an-page { max-width: 1200px; }
 
         /* Stat cards */
         .an-stats {

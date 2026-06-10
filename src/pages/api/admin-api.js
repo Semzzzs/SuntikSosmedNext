@@ -285,6 +285,7 @@ export default async function handler(req, res) {
                 updated_at: new Date().toISOString()
             }, { onConflict: 'key' });
             if (error) return res.status(500).json({ error: error.message });
+            await logAudit(supabase, req, { action: 'save_markup', target: null, detail: { value: val } });
             return res.status(200).json({ ok: true });
         }
 
@@ -391,6 +392,86 @@ export default async function handler(req, res) {
             return res.status(200).json({ ok: true });
         }
 
+        // Refund saldo untuk order yang dibatalkan / sebagian gagal
+        // Dipicu MANUAL oleh admin. Aman dari double-refund (cek refund existing per order_id).
+        if (action === 'refund_order') {
+            const order_id = String(body.order_id || '').trim();
+            if (!order_id) return res.status(400).json({ error: 'order_id wajib diisi.' });
+
+            // Ambil transaksi order asli (sumber kebenaran amount yang dibayar user)
+            const { data: orderRows } = await supabase
+                .from('transactions')
+                .select('id, email, amount, type, status, qty, remains, description, order_id')
+                .eq('order_id', order_id)
+                .eq('type', 'order')
+                .order('created_at', { ascending: true })
+                .limit(1);
+            const orderTx = (orderRows || [])[0];
+
+            if (!orderTx) return res.status(404).json({ error: `Order #${order_id} tidak ditemukan.` });
+            if (orderTx.status !== 'success') return res.status(400).json({ error: 'Order ini bukan transaksi sukses, tidak bisa direfund.' });
+
+            const paid = Math.round(orderTx.amount || 0);
+            if (paid <= 0) return res.status(400).json({ error: 'Nominal order tidak valid.' });
+
+            // ✅ Anti double-refund: cek apakah sudah pernah ada refund untuk order ini
+            const { data: existing } = await supabase
+                .from('transactions')
+                .select('id, amount')
+                .eq('order_id', order_id)
+                .eq('type', 'refund');
+            const alreadyRefunded = (existing || []).reduce((s, t) => s + Math.round(t.amount || 0), 0);
+            if (alreadyRefunded >= paid) {
+                return res.status(400).json({ error: 'Order ini sudah direfund penuh sebelumnya.' });
+            }
+
+            // Hitung jumlah refund yang diminta
+            // - mode 'full'    : refund seluruh sisa yang belum direfund
+            // - mode 'partial' : proporsional = paid * (remains / qty)
+            let refundAmt;
+            const mode = body.mode === 'partial' ? 'partial' : 'full';
+            if (mode === 'partial') {
+                const qty = parseInt(body.qty ?? orderTx.qty) || 0;
+                const remains = parseInt(body.remains ?? orderTx.remains) || 0;
+                if (qty <= 0 || remains <= 0) {
+                    return res.status(400).json({ error: 'Data qty/remains tidak valid untuk refund proporsional.' });
+                }
+                if (remains > qty) {
+                    return res.status(400).json({ error: 'Remains tidak boleh melebihi qty.' });
+                }
+                refundAmt = Math.round(paid * (remains / qty));
+            } else {
+                refundAmt = paid - alreadyRefunded; // sisa yang belum direfund
+            }
+
+            // ✅ Validasi server-side: total refund tidak boleh melebihi yang dibayar
+            if (refundAmt <= 0) return res.status(400).json({ error: 'Jumlah refund tidak valid.' });
+            if (alreadyRefunded + refundAmt > paid) {
+                refundAmt = paid - alreadyRefunded; // cap di sisa
+            }
+
+            const note = mode === 'partial'
+                ? `Refund proporsional Order #${order_id} (${body.remains ?? orderTx.remains}/${body.qty ?? orderTx.qty} gagal)`
+                : `Refund Order #${order_id} (dibatalkan)`;
+
+            const { error } = await supabase.from('transactions').insert({
+                email: orderTx.email,
+                type: 'refund',
+                amount: refundAmt,
+                description: note,
+                status: 'success',
+                order_id, // simpan agar bisa dilacak & cegah double-refund
+            });
+            if (error) return res.status(500).json({ error: error.message });
+
+            await logAudit(supabase, req, {
+                action: 'refund_order',
+                target: orderTx.email,
+                detail: { order_id, mode, amount: refundAmt },
+            });
+            return res.status(200).json({ ok: true, refunded: refundAmt, email: orderTx.email });
+        }
+
         // Deposit manual oleh admin
         if (action === 'manual_deposit') {
             const { email, amount, note } = body;
@@ -462,6 +543,7 @@ export default async function handler(req, res) {
                 key: 'markup_rules', value: JSON.stringify(rules), updated_at: new Date().toISOString()
             }, { onConflict: 'key' });
             if (error) return res.status(500).json({ error: error.message });
+            await logAudit(supabase, req, { action: 'save_markup_rules', target: null, detail: { categories: Object.keys(rules.categories).length, services: Object.keys(rules.services).length } });
             return res.status(200).json({ ok: true, rules });
         }
 
@@ -473,6 +555,7 @@ export default async function handler(req, res) {
                 key: 'rate_override', value: String(val), updated_at: new Date().toISOString()
             }, { onConflict: 'key' });
             if (error) return res.status(500).json({ error: error.message });
+            await logAudit(supabase, req, { action: 'save_rate', target: null, detail: { value: val } });
             return res.status(200).json({ ok: true });
         }
 
@@ -492,6 +575,7 @@ export default async function handler(req, res) {
                 key: 'admin_password_hash', value: hashPassword(next), updated_at: new Date().toISOString()
             }, { onConflict: 'key' });
             if (error) return res.status(500).json({ error: error.message });
+            await logAudit(supabase, req, { action: 'change_password', target: null, detail: null });
             return res.status(200).json({ ok: true });
         }
 

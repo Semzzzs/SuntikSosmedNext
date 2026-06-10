@@ -6,7 +6,7 @@ import {
     Layers, AlertCircle, CheckCircle, X, Search,
     ShoppingCart, TrendingUp, Zap, ArrowUpRight,
     Percent, Save, Trash2, MessageSquare, Megaphone,
-    RefreshCw, Eye, Ban, RotateCw, ChevronDown, Check
+    RefreshCw, Eye, Ban, RotateCw, ChevronDown, Check, Download, FileText
 } from 'lucide-react';
 import { useTheme } from '@/context/ThemeContext';
 import { useApi } from '@/context/ApiContext';
@@ -86,6 +86,55 @@ function Dropdown({ value, options, onChange, width = 180, placeholder = 'Pilih.
     );
 }
 
+// Skeleton tabel — tampil saat data sedang dimuat (refresh).
+// rows/cols bisa diatur agar mirip layout tabel aslinya.
+function TableSkeleton({ cols = 5, rows = 6, headers = null }) {
+    return (
+        <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+            <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                    <thead>
+                        <tr style={{ background: 'var(--bg2)', textAlign: 'left' }}>
+                            {Array.from({ length: cols }).map((_, i) => (
+                                <th key={i} style={{ padding: '11px 14px', fontWeight: 700, color: 'var(--text2)', whiteSpace: 'nowrap' }}>
+                                    {headers && headers[i] ? headers[i] : <span className="sk-line" style={{ width: 60, height: 11, display: 'inline-block' }} />}
+                                </th>
+                            ))}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {Array.from({ length: rows }).map((_, r) => (
+                            <tr key={r} style={{ borderTop: '1px solid var(--border)' }}>
+                                {Array.from({ length: cols }).map((_, c) => (
+                                    <td key={c} style={{ padding: '13px 14px' }}>
+                                        <span className="sk-line" style={{ width: c === 0 ? '50%' : `${60 + ((r + c) % 3) * 12}%`, height: 12, display: 'block' }} />
+                                    </td>
+                                ))}
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+            <style>{`
+                .sk-line {
+                    border-radius: 6px;
+                    background: linear-gradient(90deg, var(--bg2) 25%, color-mix(in srgb, var(--bg2) 55%, var(--border)) 37%, var(--bg2) 63%);
+                    background-size: 400% 100%;
+                    animation: skShimmer 1.4s ease-in-out infinite;
+                }
+                @keyframes skShimmer {
+                    0% { background-position: 100% 50%; }
+                    100% { background-position: 0% 50%; }
+                }
+                @media (prefers-reduced-motion: reduce) {
+                    .sk-line { animation: skPulse 1.4s ease-in-out infinite; background: var(--bg2); }
+                    @keyframes skPulse { 0%,100% { opacity: 1; } 50% { opacity: .5; } }
+                }
+            `}</style>
+        </div>
+    );
+}
+
 export default function AdminPanel() {
     const router = useRouter();
     const { dark, toggle } = useTheme();
@@ -152,6 +201,11 @@ export default function AdminPanel() {
 
     // ── Badge pending di sidebar (best-effort; perlu endpoint backend) ──
     const [pendingCounts, setPendingCounts] = useState({ deposits: 0, tickets: 0 });
+
+    // ── Audit Log ──
+    const [auditLogs, setAuditLogs] = useState([]);
+    const [loadingAudit, setLoadingAudit] = useState(false);
+    const [auditSearch, setAuditSearch] = useState('');
 
     // ── Settings: edit kurs & ganti password (perlu endpoint backend) ──
     const [rateInput, setRateInput] = useState('');
@@ -232,6 +286,20 @@ export default function AdminPanel() {
         if (res.status === 401) { logout(); return; }
         const data = await res.json();
         if (data.users) setUsers(data.users);
+    };
+
+    const loadAuditLogs = async () => {
+        setLoadingAudit(true);
+        try {
+            const res = await adminFetch('/api/admin-api?action=get_audit_logs');
+            if (res.status === 401) { logout(); return; }
+            const data = await res.json();
+            setAuditLogs(Array.isArray(data.logs) ? data.logs : []);
+        } catch {
+            setAuditLogs([]);
+        } finally {
+            setLoadingAudit(false);
+        }
     };
 
     useEffect(() => {
@@ -499,6 +567,52 @@ export default function AdminPanel() {
         setActioningOrder(null);
     };
 
+    // Refund saldo user untuk order yang dibatalkan / sebagian gagal (MANUAL oleh admin)
+    const refundOrder = async (order) => {
+        const orderId = order?.id;
+        if (!orderId || !/^\d+$/.test(String(orderId))) return;
+
+        const st = (order.status || '').toLowerCase();
+        const paid = Math.round(order.amount_idr || 0);
+        const qty = parseInt(order.qty) || 0;
+        const remains = parseInt(order.remains) || 0;
+
+        // Tentukan mode + estimasi nominal untuk ditampilkan di konfirmasi
+        let mode = 'full';
+        let estimasi = paid;
+        if (st === 'partial' && qty > 0 && remains > 0) {
+            mode = 'partial';
+            estimasi = Math.round(paid * (remains / qty));
+        }
+
+        if (estimasi <= 0) { showToast('Nominal refund tidak valid (data order kurang lengkap).', 'error'); return; }
+
+        const rincian = mode === 'partial'
+            ? `Order #${orderId} sebagian gagal (${remains}/${qty}).\nRefund proporsional: Rp ${estimasi.toLocaleString('id-ID')} ke ${order.email}.`
+            : `Order #${orderId} dibatalkan.\nRefund penuh: Rp ${estimasi.toLocaleString('id-ID')} ke ${order.email}.`;
+        const ok = await askConfirm(`${rincian}\n\nLanjutkan refund? Saldo akan langsung bertambah ke user.`);
+        if (!ok) return;
+
+        setActioningOrder(orderId);
+        try {
+            const res = await adminFetch('/api/admin-api?action=refund_order', {
+                method: 'POST',
+                body: JSON.stringify({ order_id: String(orderId), mode, qty, remains }),
+            });
+            if (res.status === 401) { logout(); return; }
+            const data = await res.json();
+            if (data?.error) showToast(`Gagal refund: ${data.error}`, 'error');
+            else {
+                showToast(`Refund Rp ${Number(data.refunded || estimasi).toLocaleString('id-ID')} berhasil ke ${data.email || order.email}.`, 'success');
+                fetchOrders();
+                loadUsers();
+            }
+        } catch (e) {
+            if (e.message !== 'SESSION_EXPIRED') showToast(`Error: ${e.message}`, 'error');
+        }
+        setActioningOrder(null);
+    };
+
 
     useEffect(() => {
         if (!authed) return;
@@ -516,6 +630,11 @@ export default function AdminPanel() {
 
     // saldo update dipanggil dari AdminUsers child component — reload users setelah update
     const onSaldoUpdated = () => { loadUsers(); };
+
+    // Load audit logs saat menu Audit Log dibuka
+    useEffect(() => {
+        if (authed && menu === 'Audit Log') loadAuditLogs();
+    }, [authed, menu]);
 
     const toggleBlock = async (email) => {
         const user = users.find(u => u.email === email);
@@ -644,7 +763,8 @@ export default function AdminPanel() {
             keys.join(','),
             ...data.map(row => keys.map(k => `"${String(row[k] ?? '').replace(/"/g, '""')}"`).join(','))
         ].join('\n');
-        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        // BOM agar Excel membaca UTF-8 dengan benar (Rp, karakter Indonesia)
+        const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url; a.download = filename; a.click();
@@ -759,6 +879,8 @@ export default function AdminPanel() {
     const pagedOrders = filteredOrders.slice(safeOrderPage * ORDERS_PER_PAGE, (safeOrderPage + 1) * ORDERS_PER_PAGE);
     const canCancel = (st) => ['pending', 'in progress', 'processing'].includes((st || '').toLowerCase());
     const canRefill = (st) => ['completed', 'partial'].includes((st || '').toLowerCase());
+    // Refund saldo hanya relevan untuk order yang dibatalkan / sebagian gagal
+    const canRefund = (st) => ['canceled', 'cancelled', 'partial'].includes((st || '').toLowerCase());
 
     const statusColor = (st) => ({ completed: 'var(--green)', processing: 'var(--blue)', partial: 'var(--yellow)', canceled: 'var(--red)', pending: 'var(--text3)' }[st?.toLowerCase()] || 'var(--text3)');
 
@@ -772,6 +894,7 @@ export default function AdminPanel() {
         { id: 'Tickets', icon: <MessageSquare size={16} />, color: '#F59E0B', badgeKey: 'tickets' },
         { id: 'Revenue', icon: <TrendingUp size={16} />, color: '#10B981' },
         { id: 'Markup', icon: <Percent size={16} />, color: '#E91E63' },
+        { id: 'Audit Log', icon: <FileText size={16} />, color: '#64748B' },
         { id: 'Settings', icon: <Settings size={16} />, color: 'var(--text3)' },
     ];
 
@@ -804,11 +927,67 @@ export default function AdminPanel() {
     // ── LOADING (tahan render sampai markup asli dari DB siap, supaya tidak ada flash nilai default 2.5) ──
     if (!markupLoaded) {
         return (
-            <div className={`root${dark ? ' dark' : ''}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: 'var(--bg)' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
-                    <RefreshCw size={26} style={{ color: 'var(--blue)', animation: 'spin 1s linear infinite' }} />
-                    <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text3)' }}>Memuat konfigurasi...</span>
+            <div className={`root${dark ? ' dark' : ''}`} style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg)' }}>
+                {/* Skeleton sidebar */}
+                <div style={{ width: 248, borderRight: '1px solid var(--border)', background: 'var(--card-bg, var(--bg))', padding: 18, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18 }}>
+                        <span className="sk-line" style={{ width: 34, height: 34, borderRadius: 9 }} />
+                        <span className="sk-line" style={{ width: 120, height: 16 }} />
+                    </div>
+                    <span className="sk-line" style={{ width: '100%', height: 64, borderRadius: 12, marginBottom: 10 }} />
+                    {Array.from({ length: 9 }).map((_, i) => (
+                        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 4px' }}>
+                            <span className="sk-line" style={{ width: 18, height: 18, borderRadius: 5 }} />
+                            <span className="sk-line" style={{ width: `${50 + (i % 4) * 14}%`, height: 13 }} />
+                        </div>
+                    ))}
                 </div>
+
+                {/* Skeleton konten */}
+                <div style={{ flex: 1, padding: '26px 30px' }}>
+                    <span className="sk-line" style={{ width: 160, height: 24, marginBottom: 8, display: 'block' }} />
+                    <span className="sk-line" style={{ width: 240, height: 13, marginBottom: 26, display: 'block' }} />
+
+                    {/* Stat cards */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginBottom: 22 }}>
+                        {Array.from({ length: 4 }).map((_, i) => (
+                            <div key={i} style={{ border: '1px solid var(--border)', borderRadius: 14, padding: 18 }}>
+                                <span className="sk-line" style={{ width: 40, height: 40, borderRadius: 11, marginBottom: 14, display: 'block' }} />
+                                <span className="sk-line" style={{ width: '70%', height: 22, marginBottom: 8, display: 'block' }} />
+                                <span className="sk-line" style={{ width: '45%', height: 12, display: 'block' }} />
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Panel besar */}
+                    <div style={{ border: '1px solid var(--border)', borderRadius: 14, padding: 22 }}>
+                        <span className="sk-line" style={{ width: 180, height: 16, marginBottom: 18, display: 'block' }} />
+                        {Array.from({ length: 5 }).map((_, i) => (
+                            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderTop: i ? '1px solid var(--border)' : 'none' }}>
+                                <span className="sk-line" style={{ width: `${30 + (i % 3) * 12}%`, height: 13 }} />
+                                <span className="sk-line" style={{ width: 80, height: 13 }} />
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                <style>{`
+                    .sk-line {
+                        border-radius: 6px;
+                        background: linear-gradient(90deg, var(--bg2) 25%, color-mix(in srgb, var(--bg2) 55%, var(--border)) 37%, var(--bg2) 63%);
+                        background-size: 400% 100%;
+                        animation: skShimmer 1.4s ease-in-out infinite;
+                        display: inline-block;
+                    }
+                    @keyframes skShimmer {
+                        0% { background-position: 100% 50%; }
+                        100% { background-position: 0% 50%; }
+                    }
+                    @media (prefers-reduced-motion: reduce) {
+                        .sk-line { animation: skPulse 1.4s ease-in-out infinite; background: var(--bg2); }
+                        @keyframes skPulse { 0%,100% { opacity: 1; } 50% { opacity: .5; } }
+                    }
+                `}</style>
             </div>
         );
     }
@@ -1065,7 +1244,9 @@ export default function AdminPanel() {
                                 <Dropdown width={180} value={orderPeriod} options={PERIOD_OPTIONS}
                                     onChange={v => { setOrderPeriod(v); setOrderPage(0); }} />
                             </div>
-                            {orders.length === 0 ? (
+                            {loadingOrders ? (
+                                <TableSkeleton cols={7} rows={6} headers={['Order ID', 'Email', 'Layanan', 'Status', 'Harga User (IDR)', 'Tanggal', 'Aksi']} />
+                            ) : orders.length === 0 ? (
                                 <div className="card" style={{ padding: 56, textAlign: 'center' }}>
                                     <ShoppingCart size={40} style={{ color: 'var(--text3)', marginBottom: 14 }} />
                                     <p style={{ fontWeight: 700, fontSize: 15, color: 'var(--text)', marginBottom: 6 }}>Belum ada order</p>
@@ -1140,6 +1321,11 @@ export default function AdminPanel() {
                                                                     {isNumeric && canRefill(o.status) && (
                                                                         <button title="Minta refill" disabled={busy} onClick={() => refillOrder(o.id)} style={iconBtn('var(--green-l)', 'var(--green)')}>
                                                                             <RotateCw size={14} />
+                                                                        </button>
+                                                                    )}
+                                                                    {isNumeric && canRefund(o.status) && (
+                                                                        <button title="Refund saldo ke user" disabled={busy} onClick={() => refundOrder(o)} style={iconBtn('var(--blue-l)', 'var(--blue)')}>
+                                                                            <DollarSign size={14} />
                                                                         </button>
                                                                     )}
                                                                 </div>
@@ -1231,6 +1417,11 @@ export default function AdminPanel() {
                                                         <RotateCw size={14} /> Minta Refill
                                                     </button>
                                                 )}
+                                                {/^\d+$/.test(String(orderDetail.id)) && canRefund(orderDetail.status) && (
+                                                    <button className="btn" onClick={() => { refundOrder(orderDetail); setOrderDetail(null); }} style={{ flex: 1, minWidth: 120, padding: 10, borderRadius: 9, fontSize: 13, background: 'var(--blue)', color: '#fff', border: 'none' }}>
+                                                        <DollarSign size={14} /> Refund Saldo
+                                                    </button>
+                                                )}
                                             </div>
                                         </div>
                                     </div>
@@ -1273,82 +1464,86 @@ export default function AdminPanel() {
                                     options={cats.map(c => ({ value: c, label: c === 'All' ? 'Semua Kategori' : c }))}
                                     onChange={v => { setServiceFilter(v); setServicePage(0); }} />
                             </div>
-                            <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-                                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
-                                    <thead>
-                                        <tr style={{ background: 'var(--bg2)', borderBottom: '1px solid var(--border)' }}>
-                                            {['ID', 'Nama', 'Harga Modal /1K', 'Harga User /1K', 'Min', 'Max', 'Status'].map(h => (
-                                                <th key={h} style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 700, color: 'var(--text2)', fontSize: 11.5 }}>{h}</th>
-                                            ))}
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {/* ✅ Real pagination */}
-                                        {filteredSvc.slice(servicePage * SERVICES_PER_PAGE, (servicePage + 1) * SERVICES_PER_PAGE).map((s, i) => {
-                                            const eff = resolveMarkup(s);
-                                            const modalIDR = Math.round(parseFloat(s.rate || 0) * rate);
-                                            const userIDR = Math.round(parseFloat(s.rate || 0) * rate * eff);
-                                            const overridden = eff !== markup;
-                                            return (
-                                                <tr key={s.service} style={{ borderBottom: '1px solid var(--border)' }}>
-                                                    <td style={{ padding: '9px 12px', fontFamily: "'JetBrains Mono',monospace", color: 'var(--text3)', fontWeight: 600, fontSize: 11.5 }}>{s.service}</td>
-                                                    <td style={{ padding: '9px 12px', color: 'var(--text)', maxWidth: 280 }}>
-                                                        <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12.5 }}>{s.name}</div>
-                                                        <div style={{ fontSize: 10.5, color: 'var(--text3)', marginTop: 2 }}>{s.category}</div>
-                                                    </td>
-                                                    <td style={{ padding: '9px 12px', color: 'var(--red)', fontWeight: 700 }}>Rp {modalIDR.toLocaleString('id-ID')}</td>
-                                                    <td style={{ padding: '9px 12px', color: 'var(--green)', fontWeight: 700 }}>
-                                                        Rp {userIDR.toLocaleString('id-ID')}
-                                                        <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, color: overridden ? 'var(--blue)' : 'var(--text3)', background: overridden ? 'var(--blue-l)' : 'var(--bg2)', padding: '1px 6px', borderRadius: 10 }}>{eff}x</span>
-                                                    </td>
-                                                    <td style={{ padding: '9px 12px', color: 'var(--text3)' }}>{s.min}</td>
-                                                    <td style={{ padding: '9px 12px', color: 'var(--text3)' }}>{Number(s.max).toLocaleString()}</td>
-                                                    <td style={{ padding: '9px 12px' }}>
-                                                        {(() => {
-                                                            const isOff = disabledServices.includes(String(s.service));
-                                                            return (
-                                                                <button onClick={() => toggleService(s.service, isOff)}
-                                                                    title={isOff ? 'Layanan dimatikan — klik untuk aktifkan' : 'Layanan aktif — klik untuk matikan'}
-                                                                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 20, border: `1.5px solid ${isOff ? 'var(--red)' : 'var(--green)'}`, background: isOff ? 'var(--red-l)' : 'var(--green-l)', color: isOff ? 'var(--red)' : 'var(--green)', fontWeight: 700, fontSize: 11.5, cursor: 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif", whiteSpace: 'nowrap' }}>
-                                                                    <span style={{ width: 7, height: 7, borderRadius: '50%', background: isOff ? 'var(--red)' : 'var(--green)' }} />
-                                                                    {isOff ? 'Off' : 'On'}
-                                                                </button>
-                                                            );
-                                                        })()}
-                                                    </td>
-                                                </tr>
-                                            );
-                                        })}
-                                    </tbody>
-                                </table>
-                                {/* ✅ Pagination controls */}
-                                {filteredSvc.length > SERVICES_PER_PAGE && (
-                                    <div style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid var(--border)' }}>
-                                        <span style={{ fontSize: 12, color: 'var(--text3)' }}>
-                                            Menampilkan {servicePage * SERVICES_PER_PAGE + 1}–{Math.min((servicePage + 1) * SERVICES_PER_PAGE, filteredSvc.length)} dari {filteredSvc.length} service
-                                        </span>
-                                        <div style={{ display: 'flex', gap: 6 }}>
-                                            <button onClick={() => setServicePage(p => Math.max(0, p - 1))} disabled={servicePage === 0}
-                                                style={{ padding: '5px 12px', borderRadius: 7, border: '1px solid var(--border)', background: servicePage === 0 ? 'var(--bg2)' : 'var(--white)', color: servicePage === 0 ? 'var(--text3)' : 'var(--text)', cursor: servicePage === 0 ? 'not-allowed' : 'pointer', fontSize: 12, fontWeight: 600, fontFamily: "'Plus Jakarta Sans',sans-serif" }}>
-                                                ← Prev
-                                            </button>
-                                            {Array.from({ length: Math.ceil(filteredSvc.length / SERVICES_PER_PAGE) }, (_, idx) => idx)
-                                                .filter(idx => Math.abs(idx - servicePage) <= 2)
-                                                .map(idx => (
-                                                    <button key={idx} onClick={() => setServicePage(idx)}
-                                                        style={{ padding: '5px 10px', borderRadius: 7, border: `1px solid ${idx === servicePage ? 'var(--blue)' : 'var(--border)'}`, background: idx === servicePage ? 'var(--blue)' : 'var(--white)', color: idx === servicePage ? '#fff' : 'var(--text)', cursor: 'pointer', fontSize: 12, fontWeight: 700, fontFamily: "'Plus Jakarta Sans',sans-serif" }}>
-                                                        {idx + 1}
-                                                    </button>
-                                                ))
-                                            }
-                                            <button onClick={() => setServicePage(p => Math.min(Math.ceil(filteredSvc.length / SERVICES_PER_PAGE) - 1, p + 1))} disabled={servicePage >= Math.ceil(filteredSvc.length / SERVICES_PER_PAGE) - 1}
-                                                style={{ padding: '5px 12px', borderRadius: 7, border: '1px solid var(--border)', background: servicePage >= Math.ceil(filteredSvc.length / SERVICES_PER_PAGE) - 1 ? 'var(--bg2)' : 'var(--white)', color: servicePage >= Math.ceil(filteredSvc.length / SERVICES_PER_PAGE) - 1 ? 'var(--text3)' : 'var(--text)', cursor: servicePage >= Math.ceil(filteredSvc.length / SERVICES_PER_PAGE) - 1 ? 'not-allowed' : 'pointer', fontSize: 12, fontWeight: 600, fontFamily: "'Plus Jakarta Sans',sans-serif" }}>
-                                                Next →
-                                            </button>
+                            {loadingServices && services.length === 0 ? (
+                                <TableSkeleton cols={7} rows={8} headers={['ID', 'Nama', 'Harga Modal /1K', 'Harga User /1K', 'Min', 'Max', 'Status']} />
+                            ) : (
+                                <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+                                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+                                        <thead>
+                                            <tr style={{ background: 'var(--bg2)', borderBottom: '1px solid var(--border)' }}>
+                                                {['ID', 'Nama', 'Harga Modal /1K', 'Harga User /1K', 'Min', 'Max', 'Status'].map(h => (
+                                                    <th key={h} style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 700, color: 'var(--text2)', fontSize: 11.5 }}>{h}</th>
+                                                ))}
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {/* ✅ Real pagination */}
+                                            {filteredSvc.slice(servicePage * SERVICES_PER_PAGE, (servicePage + 1) * SERVICES_PER_PAGE).map((s, i) => {
+                                                const eff = resolveMarkup(s);
+                                                const modalIDR = Math.round(parseFloat(s.rate || 0) * rate);
+                                                const userIDR = Math.round(parseFloat(s.rate || 0) * rate * eff);
+                                                const overridden = eff !== markup;
+                                                return (
+                                                    <tr key={s.service} style={{ borderBottom: '1px solid var(--border)' }}>
+                                                        <td style={{ padding: '9px 12px', fontFamily: "'JetBrains Mono',monospace", color: 'var(--text3)', fontWeight: 600, fontSize: 11.5 }}>{s.service}</td>
+                                                        <td style={{ padding: '9px 12px', color: 'var(--text)', maxWidth: 280 }}>
+                                                            <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12.5 }}>{s.name}</div>
+                                                            <div style={{ fontSize: 10.5, color: 'var(--text3)', marginTop: 2 }}>{s.category}</div>
+                                                        </td>
+                                                        <td style={{ padding: '9px 12px', color: 'var(--red)', fontWeight: 700 }}>Rp {modalIDR.toLocaleString('id-ID')}</td>
+                                                        <td style={{ padding: '9px 12px', color: 'var(--green)', fontWeight: 700 }}>
+                                                            Rp {userIDR.toLocaleString('id-ID')}
+                                                            <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, color: overridden ? 'var(--blue)' : 'var(--text3)', background: overridden ? 'var(--blue-l)' : 'var(--bg2)', padding: '1px 6px', borderRadius: 10 }}>{eff}x</span>
+                                                        </td>
+                                                        <td style={{ padding: '9px 12px', color: 'var(--text3)' }}>{s.min}</td>
+                                                        <td style={{ padding: '9px 12px', color: 'var(--text3)' }}>{Number(s.max).toLocaleString()}</td>
+                                                        <td style={{ padding: '9px 12px' }}>
+                                                            {(() => {
+                                                                const isOff = disabledServices.includes(String(s.service));
+                                                                return (
+                                                                    <button onClick={() => toggleService(s.service, isOff)}
+                                                                        title={isOff ? 'Layanan dimatikan — klik untuk aktifkan' : 'Layanan aktif — klik untuk matikan'}
+                                                                        style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 20, border: `1.5px solid ${isOff ? 'var(--red)' : 'var(--green)'}`, background: isOff ? 'var(--red-l)' : 'var(--green-l)', color: isOff ? 'var(--red)' : 'var(--green)', fontWeight: 700, fontSize: 11.5, cursor: 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif", whiteSpace: 'nowrap' }}>
+                                                                        <span style={{ width: 7, height: 7, borderRadius: '50%', background: isOff ? 'var(--red)' : 'var(--green)' }} />
+                                                                        {isOff ? 'Off' : 'On'}
+                                                                    </button>
+                                                                );
+                                                            })()}
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                    {/* ✅ Pagination controls */}
+                                    {filteredSvc.length > SERVICES_PER_PAGE && (
+                                        <div style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid var(--border)' }}>
+                                            <span style={{ fontSize: 12, color: 'var(--text3)' }}>
+                                                Menampilkan {servicePage * SERVICES_PER_PAGE + 1}–{Math.min((servicePage + 1) * SERVICES_PER_PAGE, filteredSvc.length)} dari {filteredSvc.length} service
+                                            </span>
+                                            <div style={{ display: 'flex', gap: 6 }}>
+                                                <button onClick={() => setServicePage(p => Math.max(0, p - 1))} disabled={servicePage === 0}
+                                                    style={{ padding: '5px 12px', borderRadius: 7, border: '1px solid var(--border)', background: servicePage === 0 ? 'var(--bg2)' : 'var(--white)', color: servicePage === 0 ? 'var(--text3)' : 'var(--text)', cursor: servicePage === 0 ? 'not-allowed' : 'pointer', fontSize: 12, fontWeight: 600, fontFamily: "'Plus Jakarta Sans',sans-serif" }}>
+                                                    ← Prev
+                                                </button>
+                                                {Array.from({ length: Math.ceil(filteredSvc.length / SERVICES_PER_PAGE) }, (_, idx) => idx)
+                                                    .filter(idx => Math.abs(idx - servicePage) <= 2)
+                                                    .map(idx => (
+                                                        <button key={idx} onClick={() => setServicePage(idx)}
+                                                            style={{ padding: '5px 10px', borderRadius: 7, border: `1px solid ${idx === servicePage ? 'var(--blue)' : 'var(--border)'}`, background: idx === servicePage ? 'var(--blue)' : 'var(--white)', color: idx === servicePage ? '#fff' : 'var(--text)', cursor: 'pointer', fontSize: 12, fontWeight: 700, fontFamily: "'Plus Jakarta Sans',sans-serif" }}>
+                                                            {idx + 1}
+                                                        </button>
+                                                    ))
+                                                }
+                                                <button onClick={() => setServicePage(p => Math.min(Math.ceil(filteredSvc.length / SERVICES_PER_PAGE) - 1, p + 1))} disabled={servicePage >= Math.ceil(filteredSvc.length / SERVICES_PER_PAGE) - 1}
+                                                    style={{ padding: '5px 12px', borderRadius: 7, border: '1px solid var(--border)', background: servicePage >= Math.ceil(filteredSvc.length / SERVICES_PER_PAGE) - 1 ? 'var(--bg2)' : 'var(--white)', color: servicePage >= Math.ceil(filteredSvc.length / SERVICES_PER_PAGE) - 1 ? 'var(--text3)' : 'var(--text)', cursor: servicePage >= Math.ceil(filteredSvc.length / SERVICES_PER_PAGE) - 1 ? 'not-allowed' : 'pointer', fontSize: 12, fontWeight: 600, fontFamily: "'Plus Jakarta Sans',sans-serif" }}>
+                                                    Next →
+                                                </button>
+                                            </div>
                                         </div>
-                                    </div>
-                                )}
-                            </div>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     )}
 
@@ -1636,6 +1831,114 @@ export default function AdminPanel() {
                             </div>
                         </div>
                     )}
+
+                    {/* ── AUDIT LOG ── */}
+                    {menu === 'Audit Log' && (() => {
+                        const ACTION_LABELS = {
+                            manual_deposit: { l: 'Tambah Saldo Manual', c: '#10B981' },
+                            approve_deposit: { l: 'Approve Deposit', c: 'var(--green)' },
+                            reject_deposit: { l: 'Tolak Deposit', c: 'var(--red)' },
+                            toggle_block: { l: 'Blokir/Unblokir User', c: '#F59E0B' },
+                            delete_user: { l: 'Hapus User', c: 'var(--red)' },
+                            toggle_service: { l: 'On/Off Layanan', c: 'var(--blue)' },
+                            save_markup: { l: 'Ubah Markup', c: '#E91E63' },
+                            save_markup_rules: { l: 'Ubah Markup Rules', c: '#E91E63' },
+                            save_rate: { l: 'Ubah Kurs', c: '#7C3AED' },
+                            change_password: { l: 'Ganti Password Admin', c: 'var(--text2)' },
+                        };
+                        const fmtDetail = (d) => {
+                            if (!d) return '';
+                            let obj = d;
+                            if (typeof d === 'string') { try { obj = JSON.parse(d); } catch { return d; } }
+                            if (obj && typeof obj === 'object') {
+                                return Object.entries(obj).map(([k, v]) => `${k}: ${v}`).join(', ');
+                            }
+                            return String(obj);
+                        };
+                        const q = auditSearch.trim().toLowerCase();
+                        const filtered = auditLogs.filter(log =>
+                            !q ||
+                            (log.action || '').toLowerCase().includes(q) ||
+                            (log.target || '').toLowerCase().includes(q) ||
+                            (ACTION_LABELS[log.action]?.l || '').toLowerCase().includes(q)
+                        );
+                        return (
+                            <div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, gap: 10, flexWrap: 'wrap' }}>
+                                    <div>
+                                        <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text)', marginBottom: 3 }}>Audit Log</h1>
+                                        <p style={{ fontSize: 13.5, color: 'var(--text2)' }}>Riwayat aktivitas admin · 200 terbaru.</p>
+                                    </div>
+                                    <div style={{ display: 'flex', gap: 8 }}>
+                                        <button className="btn btn-outline" onClick={loadAuditLogs} disabled={loadingAudit}
+                                            style={{ height: 30, padding: '0 10px', borderRadius: 7, fontSize: 12, opacity: loadingAudit ? 0.6 : 1 }}>
+                                            <RefreshCw size={12} style={{ animation: loadingAudit ? 'spin 1s linear infinite' : 'none' }} /> {loadingAudit ? 'Memuat...' : 'Refresh'}
+                                        </button>
+                                        {auditLogs.length > 0 && (
+                                            <button className="btn btn-outline" onClick={() => exportCSV(auditLogs.map(log => ({
+                                                waktu: log.created_at ? new Date(log.created_at).toLocaleString('id-ID') : '',
+                                                aksi: ACTION_LABELS[log.action]?.l || log.action || '',
+                                                action_code: log.action || '',
+                                                target: log.target || '',
+                                                detail: fmtDetail(log.detail),
+                                                ip: log.ip || '',
+                                            })), `audit_log_${new Date().toISOString().slice(0, 10)}.csv`)}
+                                                style={{ height: 30, padding: '0 10px', borderRadius: 7, fontSize: 12 }}>
+                                                <Download size={12} /> CSV
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div style={{ position: 'relative', maxWidth: 360, marginBottom: 16 }}>
+                                    <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text3)' }} />
+                                    <input className="inp" style={{ paddingLeft: 36 }} placeholder="Cari aksi atau target..." value={auditSearch} onChange={e => setAuditSearch(e.target.value)} />
+                                </div>
+
+                                {loadingAudit ? (
+                                    <TableSkeleton cols={5} rows={6} headers={['Waktu', 'Aksi', 'Target', 'Detail', 'IP']} />
+                                ) : filtered.length === 0 ? (
+                                    <div className="card" style={{ padding: 56, textAlign: 'center' }}>
+                                        <FileText size={40} style={{ color: 'var(--text3)', marginBottom: 14 }} />
+                                        <p style={{ fontWeight: 700, fontSize: 15, color: 'var(--text)', marginBottom: 6 }}>{auditLogs.length === 0 ? 'Belum ada aktivitas tercatat' : 'Tidak ada hasil'}</p>
+                                        <p style={{ fontSize: 13, color: 'var(--text3)' }}>{auditLogs.length === 0 ? 'Aksi admin (deposit, blokir, markup, dll) akan tercatat di sini.' : 'Coba kata kunci lain.'}</p>
+                                    </div>
+                                ) : (
+                                    <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+                                        <div style={{ overflowX: 'auto' }}>
+                                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                                                <thead>
+                                                    <tr style={{ background: 'var(--bg2)', textAlign: 'left' }}>
+                                                        <th style={{ padding: '11px 14px', fontWeight: 700, color: 'var(--text2)', whiteSpace: 'nowrap' }}>Waktu</th>
+                                                        <th style={{ padding: '11px 14px', fontWeight: 700, color: 'var(--text2)' }}>Aksi</th>
+                                                        <th style={{ padding: '11px 14px', fontWeight: 700, color: 'var(--text2)' }}>Target</th>
+                                                        <th style={{ padding: '11px 14px', fontWeight: 700, color: 'var(--text2)' }}>Detail</th>
+                                                        <th style={{ padding: '11px 14px', fontWeight: 700, color: 'var(--text2)', whiteSpace: 'nowrap' }}>IP</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {filtered.map(log => {
+                                                        const meta = ACTION_LABELS[log.action] || { l: log.action, c: 'var(--text3)' };
+                                                        return (
+                                                            <tr key={log.id} style={{ borderTop: '1px solid var(--border)' }}>
+                                                                <td style={{ padding: '10px 14px', color: 'var(--text3)', whiteSpace: 'nowrap' }}>{log.created_at ? new Date(log.created_at).toLocaleString('id-ID') : '—'}</td>
+                                                                <td style={{ padding: '10px 14px' }}>
+                                                                    <span style={{ display: 'inline-block', padding: '3px 9px', borderRadius: 6, fontSize: 11.5, fontWeight: 700, color: meta.c, background: `color-mix(in srgb, ${meta.c} 12%, transparent)`, whiteSpace: 'nowrap' }}>{meta.l}</span>
+                                                                </td>
+                                                                <td style={{ padding: '10px 14px', color: 'var(--text)', wordBreak: 'break-word' }}>{log.target || '—'}</td>
+                                                                <td style={{ padding: '10px 14px', color: 'var(--text2)', wordBreak: 'break-word', maxWidth: 280 }}>{fmtDetail(log.detail) || '—'}</td>
+                                                                <td style={{ padding: '10px 14px', color: 'var(--text3)', fontFamily: 'monospace', fontSize: 12, whiteSpace: 'nowrap' }}>{log.ip || '—'}</td>
+                                                            </tr>
+                                                        );
+                                                    })}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })()}
 
                     {/* ── SETTINGS ── */}
                     {menu === 'Settings' && (
