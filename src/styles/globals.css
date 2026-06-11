@@ -842,3 +842,295 @@ a {
     font-size: 16px !important;
   }
 }
+
+/* ============================================================
+   Landing pages /layanan/[slug]
+   Pakai CSS variables yang sama dengan globals.css (--text, --blue, dst)
+   sehingga otomatis ikut light/dark mode via .root / .root.dark.
+   Tempel blok ini di AKHIR src/styles/globals.css.
+   ============================================================ */
+
+.landing-wrap {
+  position: relative;
+  min-height: 100vh;
+  background: var(--bg);
+  font-family: 'Poppins', 'Plus Jakarta Sans', sans-serif;
+  overflow-x: hidden;
+}
+
+/* Glow radial halus di belakang hero (mirip landing utama) */
+.landing-wrap::before {
+  content: '';
+  position: absolute;
+  top: -120px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 720px;
+  height: 520px;
+  background: radial-gradient(circle at center, var(--blue-l2) 0%, transparent 70%);
+  opacity: .6;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.landing {
+  position: relative;
+  z-index: 1;
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 28px 20px 64px;
+}
+
+/* ---------- Breadcrumb ---------- */
+.landing-breadcrumb {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text3);
+  margin-bottom: 28px;
+}
+
+.landing-breadcrumb a {
+  color: var(--text2);
+  text-decoration: none;
+  transition: color var(--ease);
+}
+
+.landing-breadcrumb a:hover {
+  color: var(--blue);
+}
+
+.landing-breadcrumb span[aria-hidden] {
+  color: var(--text3);
+}
+
+/* ---------- Hero ---------- */
+.landing-hero {
+  text-align: center;
+  max-width: 720px;
+  margin: 0 auto 44px;
+}
+
+.landing-hero h1 {
+  font-size: clamp(28px, 5vw, 42px);
+  font-weight: 800;
+  line-height: 1.15;
+  color: var(--text);
+  letter-spacing: -.02em;
+  margin: 0 0 14px;
+}
+
+.landing-intro {
+  font-size: clamp(15px, 2.4vw, 17px);
+  line-height: 1.6;
+  color: var(--text2);
+  margin: 0 0 18px;
+}
+
+.landing-price-hint {
+  font-size: 15px;
+  color: var(--text2);
+  margin: 0 0 24px;
+}
+
+.landing-price-hint strong {
+  color: var(--blue);
+  font-weight: 800;
+  font-size: 20px;
+}
+
+.landing-cta {
+  display: inline-block;
+  background: var(--blue);
+  color: #fff;
+  font-weight: 700;
+  font-size: 15px;
+  text-decoration: none;
+  padding: 13px 34px;
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+  transition: transform var(--ease), background var(--ease);
+}
+
+.landing-cta:hover {
+  background: var(--blue-d);
+  transform: translateY(-2px);
+}
+
+/* ---------- Section heading ---------- */
+.landing-services h2,
+.landing-related h2,
+.landing-about h2 {
+  font-size: clamp(20px, 3.4vw, 26px);
+  font-weight: 800;
+  color: var(--text);
+  letter-spacing: -.01em;
+  margin: 0 0 20px;
+}
+
+.landing-services {
+  margin-bottom: 56px;
+}
+
+/* ---------- Grid kartu layanan ---------- */
+.landing-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+.landing-card {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  transition: transform var(--ease), box-shadow var(--ease), border-color var(--ease);
+}
+
+.landing-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow2);
+  border-color: var(--blue);
+}
+
+.landing-card h3 {
+  font-size: 14.5px;
+  font-weight: 700;
+  line-height: 1.4;
+  color: var(--text);
+  margin: 0 0 14px;
+  min-height: 40px;
+}
+
+.landing-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px 20px;
+  margin: 0 0 16px;
+  padding: 0 0 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.landing-card-meta div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.landing-card-meta dt {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--text3);
+  margin: 0;
+}
+
+.landing-card-meta dd {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0;
+}
+
+/* Harga lebih menonjol: dd pertama (Harga / 1000) */
+.landing-card-meta div:first-child dd {
+  color: var(--blue);
+  font-size: 17px;
+  font-weight: 800;
+}
+
+.landing-card-btn {
+  margin-top: auto;
+  text-align: center;
+  background: var(--blue-l);
+  color: var(--blue);
+  font-weight: 700;
+  font-size: 13.5px;
+  text-decoration: none;
+  padding: 10px;
+  border-radius: 12px;
+  transition: background var(--ease), color var(--ease);
+}
+
+.landing-card-btn:hover {
+  background: var(--blue);
+  color: #fff;
+}
+
+.landing-empty {
+  color: var(--text2);
+  font-size: 14.5px;
+  padding: 28px;
+  text-align: center;
+  background: var(--bg2);
+  border: 1px dashed var(--border2);
+  border-radius: 16px;
+}
+
+/* ---------- Layanan lainnya (internal links) ---------- */
+.landing-related {
+  margin-bottom: 48px;
+}
+
+.landing-related-list {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 0;
+  margin: 0;
+}
+
+.landing-related-list a {
+  display: inline-block;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text2);
+  text-decoration: none;
+  padding: 9px 16px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 30px;
+  transition: all var(--ease);
+}
+
+.landing-related-list a:hover {
+  color: var(--blue);
+  border-color: var(--blue);
+  background: var(--blue-l);
+}
+
+/* ---------- Blok about ---------- */
+.landing-about {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 28px;
+}
+
+.landing-about p {
+  font-size: 14.5px;
+  line-height: 1.7;
+  color: var(--text2);
+  margin: 0;
+}
+
+/* ---------- Mobile ---------- */
+@media (max-width: 600px) {
+  .landing {
+    padding: 20px 16px 48px;
+  }
+
+  .landing-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .landing-card h3 {
+    min-height: auto;
+  }
+}
