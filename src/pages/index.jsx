@@ -1,4 +1,5 @@
 import { useRouter } from 'next/router';
+import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import {
   Target, Moon, Sun, ArrowRight, UserPlus, Wallet, ShoppingCart,
@@ -243,7 +244,7 @@ export default function Landing() {
 
   const NAV_LINKS = [
     { label: 'Beranda', id: 'hero', icon: <Home size={17} /> },
-    { label: 'Layanan', id: 'layanan', icon: <LayoutGrid size={17} /> },
+    { label: 'Layanan', id: 'layanan', href: '/layanan', icon: <LayoutGrid size={17} /> },
     { label: 'Panduan', id: 'panduan', icon: <Zap size={17} /> },
     { label: 'Testimoni', id: 'testimoni', icon: <Star size={17} /> },
     { label: 'FAQ', id: 'faq', icon: <HelpCircle size={17} /> },
@@ -307,10 +308,15 @@ export default function Landing() {
             <span>Suntik<span style={{ background: 'var(--blue)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Sosmed</span></span>
           </div>
           <div className="nav-desktop-only" style={{ alignItems: 'center', gap: 4, fontSize: 14, fontWeight: 600 }}>
-            {NAV_LINKS.map(({ label, id }) => (
-              <a key={label} href={`#${id}`}
-                onClick={e => { e.preventDefault(); goTo(id); }}
-                style={{ color: 'var(--text2)', textDecoration: 'none', padding: '7px 14px', borderRadius: 9, background: 'transparent', transition: 'background .15s', cursor: 'pointer' }}>{label}</a>
+            {NAV_LINKS.map(({ label, id, href }) => (
+              href ? (
+                <Link key={label} href={href}
+                  style={{ color: 'var(--text2)', textDecoration: 'none', padding: '7px 14px', borderRadius: 9, background: 'transparent', transition: 'background .15s', cursor: 'pointer' }}>{label}</Link>
+              ) : (
+                <a key={label} href={`#${id}`}
+                  onClick={e => { e.preventDefault(); goTo(id); }}
+                  style={{ color: 'var(--text2)', textDecoration: 'none', padding: '7px 14px', borderRadius: 9, background: 'transparent', transition: 'background .15s', cursor: 'pointer' }}>{label}</a>
+              )
             ))}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
@@ -362,14 +368,24 @@ export default function Landing() {
 
           {/* Links */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 14 }}>
-            {NAV_LINKS.map(({ label, id, icon }) => {
+            {NAV_LINKS.map(({ label, id, icon, href }) => {
               const active = activeSection === id;
-              return (
-                <a key={label} href={`#${id}`} onClick={e => { e.preventDefault(); goTo(id); }}
-                  style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 12, textDecoration: 'none', fontSize: 14.5, fontWeight: 700, cursor: 'pointer', transition: 'all .18s', background: active ? 'var(--blue-l)' : 'transparent', color: active ? 'var(--blue)' : 'var(--text2)' }}>
+              const inner = (
+                <>
                   <span style={{ width: 34, height: 34, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, background: active ? 'var(--blue)' : 'var(--bg2)', color: active ? '#fff' : 'var(--text3)', transition: 'all .18s' }}>{icon}</span>
                   {label}
                   {active && <ArrowRight size={15} style={{ marginLeft: 'auto', color: 'var(--blue)' }} />}
+                </>
+              );
+              const linkStyle = { display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 12, textDecoration: 'none', fontSize: 14.5, fontWeight: 700, cursor: 'pointer', transition: 'all .18s', background: active ? 'var(--blue-l)' : 'transparent', color: active ? 'var(--blue)' : 'var(--text2)' };
+              return href ? (
+                <Link key={label} href={href} onClick={() => setMenuOpen(false)} style={linkStyle}>
+                  {inner}
+                </Link>
+              ) : (
+                <a key={label} href={`#${id}`} onClick={e => { e.preventDefault(); goTo(id); }}
+                  style={linkStyle}>
+                  {inner}
                 </a>
               );
             })}
@@ -876,13 +892,18 @@ export default function Landing() {
             </div>
             <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
               {[
-                { label: 'Layanan', id: 'layanan' },
+                { label: 'Layanan', id: 'layanan', href: '/layanan' },
                 { label: 'Cara Kerja', id: 'panduan' },
                 { label: 'FAQ', id: 'faq' },
-              ].map(({ label, id }) => (
-                <a key={label} href={`#${id}`}
-                  onClick={e => { e.preventDefault(); document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' }); }}
-                  style={{ color: 'var(--text3)', textDecoration: 'none', fontSize: 12, fontWeight: 500, transition: 'color .15s', cursor: 'pointer' }}>{label}</a>
+              ].map(({ label, id, href }) => (
+                href ? (
+                  <Link key={label} href={href}
+                    style={{ color: 'var(--text3)', textDecoration: 'none', fontSize: 12, fontWeight: 500, transition: 'color .15s', cursor: 'pointer' }}>{label}</Link>
+                ) : (
+                  <a key={label} href={`#${id}`}
+                    onClick={e => { e.preventDefault(); document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' }); }}
+                    style={{ color: 'var(--text3)', textDecoration: 'none', fontSize: 12, fontWeight: 500, transition: 'color .15s', cursor: 'pointer' }}>{label}</a>
+                )
               ))}
             </div>
           </div>

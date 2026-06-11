@@ -9,6 +9,9 @@
 
 import Head from 'next/head';
 import Link from 'next/link';
+import {
+    Instagram, Youtube, Facebook, Send, Play, Twitter, Zap,
+} from 'lucide-react';
 import { LANDING_PAGES, LANDING_SLUGS } from '@/data/seo-landing-pages';
 import { getServicesForLanding } from '@/lib/landing';
 
@@ -17,6 +20,48 @@ const SITE_URL = 'https://suntiksosmed.store';
 function formatRupiah(n) {
     if (!n && n !== 0) return '-';
     return 'Rp' + Number(n).toLocaleString('id-ID');
+}
+
+// Angka "Max" raksasa (mis. 2.147.483.647 = int max) tampil sebagai "Unlimited".
+function formatMax(n) {
+    if (n == null) return '-';
+    const num = Number(n);
+    if (num >= 2_000_000_000) return 'Unlimited';
+    return num.toLocaleString('id-ID');
+}
+
+// Tentukan ikon + warna platform berdasarkan nama layanan.
+function serviceVisual(name = '') {
+    const n = name.toLowerCase();
+    if (n.includes('instagram')) return { icon: Instagram, color: '#E1306C', label: 'Instagram' };
+    if (n.includes('tiktok')) return { icon: Play, color: '#69C9D0', label: 'TikTok' };
+    if (n.includes('youtube')) return { icon: Youtube, color: '#FF0000', label: 'YouTube' };
+    if (n.includes('facebook')) return { icon: Facebook, color: '#1877F2', label: 'Facebook' };
+    if (n.includes('telegram')) return { icon: Send, color: '#229ED9', label: 'Telegram' };
+    if (n.includes('twitter') || n.includes('tweet')) return { icon: Twitter, color: '#1DA1F2', label: 'Twitter/X' };
+    return { icon: Zap, color: '#3B82F6', label: 'Sosmed' };
+}
+
+// Ambil maksimal 3 tag penting dari nama layanan → ditampilkan sebagai pill.
+// tone: green (bagus) | red (peringatan) | yellow | blue | gray
+function serviceTags(name = '') {
+    const n = name.toLowerCase();
+    const out = [];
+    const push = (label, tone) => {
+        if (out.length < 3 && !out.some((t) => t.label === label)) out.push({ label, tone });
+    };
+
+    if (n.includes('instant')) push('Instant Start', 'green');
+    if (n.includes('non drop') || n.includes('no drop')) push('Non Drop', 'green');
+    if (n.includes('no refill')) push('No Refill', 'red');
+    else if (n.includes('refill')) push('Refill', 'green');
+    if (n.includes('high drop')) push('High Drop', 'red');
+    if (n.includes('no warranty')) push('No Warranty', 'yellow');
+    if (/\breal\b/.test(n)) push('Real', 'green');
+    if (/\bhq\b/.test(n) || n.includes('high quality')) push('HQ', 'blue');
+    if (n.includes('cancel')) push('Cancel Enable', 'gray');
+
+    return out;
 }
 
 export default function LandingPage({ slug, page, services }) {
@@ -114,7 +159,7 @@ export default function LandingPage({ slug, page, services }) {
                                 Harga mulai <strong>{formatRupiah(cheapest)}</strong> / 1000
                             </p>
                         )}
-                        <Link href="/login" className="landing-cta">
+                        <Link href="/register" className="landing-cta">
                             Order Sekarang
                         </Link>
                     </header>
@@ -124,32 +169,65 @@ export default function LandingPage({ slug, page, services }) {
 
                         {services && services.length > 0 ? (
                             <div className="landing-grid">
-                                {services.map((s) => (
-                                    <article key={s.id} className="landing-card">
-                                        <h3>{s.name}</h3>
-                                        <dl className="landing-card-meta">
-                                            <div>
-                                                <dt>Harga / 1000</dt>
-                                                <dd>{formatRupiah(s.price)}</dd>
+                                {services.map((s) => {
+                                    const v = serviceVisual(s.name);
+                                    const Icon = v.icon;
+                                    const tags = serviceTags(s.name);
+                                    return (
+                                        <article key={s.id} className="landing-card landing-svc-card">
+                                            <div className="landing-svc-head">
+                                                <span
+                                                    className="landing-svc-icon"
+                                                    style={{ color: v.color, background: `${v.color}1A` }}
+                                                >
+                                                    <Icon size={19} />
+                                                </span>
+                                                <span className="landing-svc-platform">{v.label}</span>
                                             </div>
-                                            {s.min != null && (
+
+                                            <h3>{s.name}</h3>
+
+                                            {tags.length > 0 && (
+                                                <div className="landing-svc-tags">
+                                                    {tags.map((t) => (
+                                                        <span
+                                                            key={t.label}
+                                                            className={`landing-svc-tag tone-${t.tone}`}
+                                                        >
+                                                            {t.label}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            )}
+
+                                            <div className="landing-svc-price">
+                                                <span className="landing-svc-price-val">
+                                                    {formatRupiah(s.price)}
+                                                </span>
+                                                <span className="landing-svc-price-unit">/ 1000</span>
+                                            </div>
+
+                                            <dl className="landing-card-meta">
                                                 <div>
                                                     <dt>Min</dt>
-                                                    <dd>{Number(s.min).toLocaleString('id-ID')}</dd>
+                                                    <dd>
+                                                        {s.min != null
+                                                            ? Number(s.min).toLocaleString('id-ID')
+                                                            : '-'}
+                                                    </dd>
                                                 </div>
-                                            )}
-                                            {s.max != null && (
                                                 <div>
                                                     <dt>Max</dt>
-                                                    <dd>{Number(s.max).toLocaleString('id-ID')}</dd>
+                                                    <dd>{formatMax(s.max)}</dd>
                                                 </div>
-                                            )}
-                                        </dl>
-                                        <Link href="/login" className="landing-card-btn">
-                                            Pesan
-                                        </Link>
-                                    </article>
-                                ))}
+                                            </dl>
+
+                                            <Link href="/register" className="landing-card-btn">
+                                                Pesan Sekarang
+                                            </Link>
+                                        </article>
+                                    );
+                                })}
                             </div>
                         ) : (
                             <p className="landing-empty">
