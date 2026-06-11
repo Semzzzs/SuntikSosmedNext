@@ -1,0 +1,15 @@
+# *
+User-agent: *
+Allow: /
+Disallow: /Voltaraz
+Disallow: /api
+Disallow: /dashboard
+Disallow: /login
+Disallow: /register
+Disallow: /reset-password
+
+# Host
+Host: https://suntiksosmed.store
+
+# Sitemaps
+Sitemap: https://suntiksosmed.store/sitemap.xml
