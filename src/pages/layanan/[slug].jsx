@@ -114,7 +114,7 @@ export default function LandingPage({ slug, page, services }) {
                                 Harga mulai <strong>{formatRupiah(cheapest)}</strong> / 1000
                             </p>
                         )}
-                        <Link href="/Voltaraz" className="landing-cta">
+                        <Link href="/login" className="landing-cta">
                             Order Sekarang
                         </Link>
                     </header>
@@ -145,7 +145,7 @@ export default function LandingPage({ slug, page, services }) {
                                                 </div>
                                             )}
                                         </dl>
-                                        <Link href="/Voltaraz" className="landing-card-btn">
+                                        <Link href="/login" className="landing-card-btn">
                                             Pesan
                                         </Link>
                                     </article>
