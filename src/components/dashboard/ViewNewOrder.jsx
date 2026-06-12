@@ -76,7 +76,7 @@ function SearchSelect({ options, value, onChange, placeholder, disabled }) {
   return (
     <div ref={ref} style={{ position: 'relative' }}>
       <button type="button" disabled={disabled} onClick={() => { setOpen(v => !v); setQ(''); }}
-        style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '11px 14px', background: 'var(--bg2)', border: '1.5px solid var(--border)', borderRadius: 10, cursor: disabled ? 'not-allowed' : 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif", fontSize: 13.5, color: selected ? 'var(--text)' : 'var(--text3)', fontWeight: selected ? 600 : 400, opacity: disabled ? 0.5 : 1, textAlign: 'left' }}>
+        style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '11px 14px', background: 'var(--bg2)', border: '1.5px solid var(--border)', borderRadius: 10, cursor: disabled ? 'not-allowed' : 'pointer', fontFamily: "'Outfit',sans-serif", fontSize: 13.5, color: selected ? 'var(--text)' : 'var(--text3)', fontWeight: selected ? 600 : 400, opacity: disabled ? 0.5 : 1, textAlign: 'left' }}>
         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
           {selected ? selected.label : placeholder}
         </span>
@@ -88,7 +88,7 @@ function SearchSelect({ options, value, onChange, placeholder, disabled }) {
           <div style={{ padding: '10px 10px 6px', borderBottom: '1px solid var(--border)' }}>
             <div style={{ position: 'relative' }}>
               <Search size={13} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text3)' }} />
-              <input autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder="Ketik nama atau ID service..." className="svc-search-input" style={{ width: '100%', padding: '7px 10px 7px 30px', border: '1.5px solid var(--border)', borderRadius: 8, fontFamily: "'Plus Jakarta Sans',sans-serif", background: 'var(--bg2)', color: 'var(--text)', outline: 'none' }} />
+              <input autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder="Ketik nama atau ID service..." className="svc-search-input" style={{ width: '100%', padding: '7px 10px 7px 30px', border: '1.5px solid var(--border)', borderRadius: 8, fontFamily: "'Outfit',sans-serif", background: 'var(--bg2)', color: 'var(--text)', outline: 'none' }} />
             </div>
             {!q && <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 6, paddingLeft: 2 }}>{options.length} layanan — ketik untuk cari</div>}
           </div>
@@ -466,7 +466,7 @@ export default function ViewNewOrder({ user, setMenu }) {
               <div style={{ width: 42, height: 42, borderRadius: 12, background: s.iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center', color: s.iconColor, flexShrink: 0 }}>{s.icon}</div>
               <div><div style={{ fontSize: 12, color: 'var(--text3)', fontWeight: 600, marginBottom: 2 }}>{s.label}</div><div style={{ fontSize: 20, fontWeight: 800, color: 'var(--text)' }}>{s.value}</div></div>
             </div>
-            <button onClick={() => setMenu(s.target)} style={{ width: '100%', padding: '9px 14px', background: s.actionBg, border: 'none', borderRadius: 9, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontFamily: "'Plus Jakarta Sans',sans-serif", fontWeight: 700, fontSize: 13, color: s.actionColor }}>
+            <button onClick={() => setMenu(s.target)} style={{ width: '100%', padding: '9px 14px', background: s.actionBg, border: 'none', borderRadius: 9, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontFamily: "'Outfit',sans-serif", fontWeight: 700, fontSize: 13, color: s.actionColor }}>
               {s.action} <ArrowRight size={14} />
             </button>
           </div>
@@ -501,7 +501,7 @@ export default function ViewNewOrder({ user, setMenu }) {
 
         <div style={{ display: 'flex', background: 'var(--bg2)', borderRadius: 10, padding: 4, gap: 2, marginBottom: 20 }}>
           {['New Order', 'Search', 'Bulk Order'].map(t => (
-            <button key={t} onClick={() => setTab(t)} style={{ flex: 1, padding: '8px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif", fontWeight: 600, fontSize: 13, background: tab === t ? 'var(--white)' : 'transparent', color: tab === t ? 'var(--text)' : 'var(--text3)', boxShadow: tab === t ? '0 1px 4px rgba(0,0,0,.08)' : 'none', transition: 'all .18s' }}>{t}</button>
+            <button key={t} onClick={() => setTab(t)} style={{ flex: 1, padding: '8px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', fontFamily: "'Outfit',sans-serif", fontWeight: 600, fontSize: 13, background: tab === t ? 'var(--white)' : 'transparent', color: tab === t ? 'var(--text)' : 'var(--text3)', boxShadow: tab === t ? '0 1px 4px rgba(0,0,0,.08)' : 'none', transition: 'all .18s' }}>{t}</button>
           ))}
         </div>
 
@@ -540,7 +540,7 @@ export default function ViewNewOrder({ user, setMenu }) {
                         display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '8px 10px',
                         borderRadius: 10, border: `1.5px solid ${isActive ? p.color : 'var(--border)'}`,
                         background: isActive ? (dark ? p.darkBg : p.bg) : 'var(--bg2)',
-                        cursor: 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif",
+                        cursor: 'pointer', fontFamily: "'Outfit',sans-serif",
                         fontWeight: isActive ? 700 : 600, fontSize: 12,
                         color: isActive ? (p.id === 'twitter' && dark ? '#fff' : p.color) : 'var(--text2)',
                         transition: 'all .15s', width: '100%',
@@ -744,7 +744,7 @@ export default function ViewNewOrder({ user, setMenu }) {
                         <div style={{ display: 'flex', background: 'var(--bg2)', borderRadius: 8, padding: 2, border: '1px solid var(--border)' }}>
                           {['link', 'username'].map(t => (
                             <div key={t}
-                              style={{ fontSize: 11, padding: '3px 10px', borderRadius: 6, background: inputInfo.type === t ? 'var(--blue)' : 'transparent', color: inputInfo.type === t ? '#fff' : 'var(--text3)', fontWeight: 700, fontFamily: "'Plus Jakarta Sans',sans-serif" }}>
+                              style={{ fontSize: 11, padding: '3px 10px', borderRadius: 6, background: inputInfo.type === t ? 'var(--blue)' : 'transparent', color: inputInfo.type === t ? '#fff' : 'var(--text3)', fontWeight: 700, fontFamily: "'Outfit',sans-serif" }}>
                               {t === 'link' ? 'Link' : 'Username'}
                             </div>
                           ))}
@@ -782,7 +782,7 @@ export default function ViewNewOrder({ user, setMenu }) {
                       placeholder={'Tulis satu komentar per baris:\nKeren banget kak! 🔥\nProduknya bagus, recommended\nMantap, langganan terus'}
                       value={comments}
                       onChange={e => setComments(e.target.value)}
-                      style={{ resize: 'vertical', lineHeight: 1.6, fontFamily: "'Plus Jakarta Sans',sans-serif" }}
+                      style={{ resize: 'vertical', lineHeight: 1.6, fontFamily: "'Outfit',sans-serif" }}
                     />
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6, fontSize: 11.5, color: 'var(--text3)' }}>
                       <span>Jumlah komentar: <strong style={{ color: overMax ? 'var(--red)' : 'var(--blue)' }}>{ccLines.length}</strong></span>

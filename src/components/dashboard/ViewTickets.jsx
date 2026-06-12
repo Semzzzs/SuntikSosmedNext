@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Ticket, Plus, Send, Clock, CheckCircle, X, ChevronDown, ChevronUp } from 'lucide-react';
+import { Ticket, Plus, Send, Clock, CheckCircle, X, ChevronDown, ChevronUp, UserCog, User } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
 const STATUS_CONFIG = {
@@ -178,8 +178,10 @@ export default function ViewTickets() {
                       <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
                         {(t.replies || []).map((r, i) => (
                           <div key={i} style={{ background: r.from === 'admin' ? 'var(--blue-l)' : 'var(--bg2)', border: `1px solid ${r.from === 'admin' ? 'var(--border2)' : 'var(--border)'}`, borderRadius: 11, padding: '12px 16px' }}>
-                            <div style={{ fontSize: 11.5, fontWeight: 700, color: r.from === 'admin' ? 'var(--blue)' : 'var(--text3)', marginBottom: 6 }}>
-                              {r.from === 'admin' ? '👤 Admin' : '🙋 Kamu'} · {new Date(r.at).toLocaleString('id-ID')}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, fontWeight: 700, color: r.from === 'admin' ? 'var(--blue)' : 'var(--text3)', marginBottom: 6 }}>
+                              {r.from === 'admin' ? <UserCog size={13} /> : <User size={13} />}
+                              <span>{r.from === 'admin' ? 'Admin' : 'Kamu'}</span>
+                              <span style={{ opacity: 0.6, fontWeight: 500 }}>· {new Date(r.at).toLocaleString('id-ID')}</span>
                             </div>
                             <div style={{ fontSize: 13.5, color: 'var(--text)', lineHeight: 1.6 }}>{r.message}</div>
                           </div>

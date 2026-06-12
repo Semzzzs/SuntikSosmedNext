@@ -264,7 +264,7 @@ export default function ViewMyOrders() {
               padding: '6px 14px', borderRadius: 99, cursor: 'pointer',
               border: `1.5px solid ${isActive ? (cfg?.color || 'var(--blue)') : 'var(--border)'}`,
               background: bg, color, fontWeight: 700, fontSize: 12.5,
-              fontFamily: "'Plus Jakarta Sans',sans-serif", transition: 'all .15s',
+              fontFamily: "'Outfit',sans-serif", transition: 'all .15s',
             }}>
               {cfg?.icon && <span style={{ display: 'flex' }}>{cfg.icon}</span>}
               {s === 'Semua' ? 'Semua' : cfg?.label || s}

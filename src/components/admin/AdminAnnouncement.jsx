@@ -3,9 +3,9 @@ import { Plus, Trash2, Edit2, CheckCircle, X, Megaphone, Pin, AlertCircle, Info,
 
 const TYPES = [
     { value: 'info', label: 'Info', color: 'var(--blue)', bg: 'var(--blue-l)', icon: <Info size={14} /> },
-    { value: 'success', label: 'Sukses', color: '#059669', bg: '#d1fae5', icon: <CheckCircle size={14} /> },
-    { value: 'warning', label: 'Peringatan', color: '#d97706', bg: '#fef3c7', icon: <AlertCircle size={14} /> },
-    { value: 'promo', label: 'Promo', color: '#7C3AED', bg: '#EDE9FE', icon: <Zap size={14} /> },
+    { value: 'success', label: 'Sukses', color: 'var(--green)', bg: 'var(--green-l)', icon: <CheckCircle size={14} /> },
+    { value: 'warning', label: 'Peringatan', color: 'var(--yellow)', bg: 'var(--yellow-l)', icon: <AlertCircle size={14} /> },
+    { value: 'promo', label: 'Promo', color: 'var(--purple)', bg: 'rgba(139,92,246,.14)', icon: <Zap size={14} /> },
 ];
 
 const emptyForm = { title: '', content: '', type: 'info', pinned: false };
@@ -95,7 +95,10 @@ export default function AdminAnnouncement() {
                     </div>
                     <div>
                         <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--text2)', marginBottom: 7 }}>Isi Pengumuman</label>
-                        <textarea className="inp" rows={4} placeholder="Tulis isi pengumuman di sini..." value={form.content} onChange={e => setForm(f => ({ ...f, content: e.target.value }))} style={{ resize: 'vertical', lineHeight: 1.6 }} />
+                        <textarea className="inp" rows={14} placeholder="Tulis isi pengumuman di sini..." value={form.content} onChange={e => setForm(f => ({ ...f, content: e.target.value }))} style={{ resize: 'vertical', lineHeight: 1.7, minHeight: 300 }} />
+                        <p style={{ fontSize: 11.5, color: 'var(--text3)', margin: '6px 0 0' }}>
+                            Tekan Enter untuk baris baru, dan baris kosong untuk jarak antar paragraf. Teks tampil persis seperti yang kamu ketik.
+                        </p>
                     </div>
                     <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
                         <div style={{ flex: 1, minWidth: 200 }}>
@@ -111,7 +114,7 @@ export default function AdminAnnouncement() {
                         </div>
                         <div style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: 2 }}>
                             <button onClick={() => setForm(f => ({ ...f, pinned: !f.pinned }))}
-                                style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 16px', borderRadius: 9, border: `1.5px solid ${form.pinned ? '#d97706' : 'var(--border)'}`, background: form.pinned ? '#fef3c7' : 'transparent', color: form.pinned ? '#d97706' : 'var(--text3)', fontWeight: 700, fontSize: 12.5, cursor: 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif" }}>
+                                style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 16px', borderRadius: 9, border: `1.5px solid ${form.pinned ? 'var(--yellow)' : 'var(--border)'}`, background: form.pinned ? 'var(--yellow-l)' : 'transparent', color: form.pinned ? 'var(--yellow)' : 'var(--text3)', fontWeight: 700, fontSize: 12.5, cursor: 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif" }}>
                                 <Pin size={13} /> {form.pinned ? 'Di-pin' : 'Pin'}
                             </button>
                         </div>
@@ -123,7 +126,7 @@ export default function AdminAnnouncement() {
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: form.content ? 6 : 0 }}>
                                     <span style={{ color: selectedType.color }}>{selectedType.icon}</span>
                                     <span style={{ fontWeight: 700, fontSize: 13.5, color: selectedType.color }}>{form.title || 'Judul pengumuman'}</span>
-                                    {form.pinned && <Pin size={11} style={{ color: '#d97706', marginLeft: 'auto' }} />}
+                                    {form.pinned && <Pin size={11} style={{ color: 'var(--yellow)', marginLeft: 'auto' }} />}
                                 </div>
                                 {form.content && <p style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.6, margin: 0, whiteSpace: 'pre-wrap' }}>{form.content}</p>}
                             </div>
@@ -131,7 +134,7 @@ export default function AdminAnnouncement() {
                     )}
                     <div style={{ display: 'flex', gap: 10 }}>
                         {saved ? (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', background: 'var(--green-l)', borderRadius: 10, color: '#059669', fontWeight: 700, fontSize: 13 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', background: 'var(--green-l)', borderRadius: 10, color: 'var(--green)', fontWeight: 700, fontSize: 13 }}>
                                 <CheckCircle size={15} /> Tersimpan!
                             </div>
                         ) : (
@@ -167,14 +170,14 @@ export default function AdminAnnouncement() {
                     {announcements.map(a => {
                         const t = TYPES.find(t => t.value === a.type) || TYPES[0];
                         return (
-                            <div key={a.id} className="card" style={{ padding: 18, border: `1.5px solid ${a.pinned ? '#d97706' : 'var(--border)'}` }}>
+                            <div key={a.id} className="card" style={{ padding: 18, border: `1.5px solid ${a.pinned ? 'var(--yellow)' : 'var(--border)'}` }}>
                                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
                                     <div style={{ width: 38, height: 38, borderRadius: 10, background: t.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: t.color }}>{t.icon}</div>
                                     <div style={{ flex: 1, minWidth: 0 }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
                                             <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--text)' }}>{a.title}</span>
                                             <span style={{ fontSize: 11, fontWeight: 700, color: t.color, background: t.bg, padding: '2px 8px', borderRadius: 20 }}>{t.label}</span>
-                                            {a.pinned && <span style={{ fontSize: 11, fontWeight: 700, color: '#d97706', background: '#fef3c7', padding: '2px 8px', borderRadius: 20, display: 'flex', alignItems: 'center', gap: 3 }}><Pin size={10} /> Pinned</span>}
+                                            {a.pinned && <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--yellow)', background: 'var(--yellow-l)', padding: '2px 8px', borderRadius: 20, display: 'flex', alignItems: 'center', gap: 3 }}><Pin size={10} /> Pinned</span>}
                                         </div>
                                         <p style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.6, margin: '0 0 8px', whiteSpace: 'pre-wrap' }}>{a.content}</p>
                                         <span style={{ fontSize: 11.5, color: 'var(--text3)' }}>{formatDate(a.updated_at)}</span>

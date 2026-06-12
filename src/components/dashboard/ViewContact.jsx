@@ -204,7 +204,7 @@ export default function ViewContact({ onOpenTicket, ticketHref }) {
                     display: inline-flex; align-items: center; gap: 7px;
                     padding: 9px 16px; border-radius: 11px;
                     background: var(--c); color: #fff; font-weight: 700; font-size: 13px;
-                    font-family: 'Plus Jakarta Sans', sans-serif;
+                    font-family: 'Outfit', sans-serif;
                     box-shadow: 0 4px 14px color-mix(in srgb, var(--c) 40%, transparent);
                 }
                 .cc-btn svg { transition: transform .25s ease; }
@@ -214,7 +214,7 @@ export default function ViewContact({ onOpenTicket, ticketHref }) {
                 .ticket-cta {
                     width: 100%; margin-top: 22px; padding: 18px;
                     display: flex; align-items: center; gap: 14px; text-align: left;
-                    cursor: pointer; font-family: 'Plus Jakarta Sans', sans-serif;
+                    cursor: pointer; font-family: 'Outfit', sans-serif;
                     border: 1px solid var(--border);
                     transition: transform .2s ease, box-shadow .25s ease, border-color .25s ease;
                 }

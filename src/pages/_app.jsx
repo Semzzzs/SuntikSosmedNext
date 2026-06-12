@@ -40,7 +40,7 @@ class ErrorBoundary extends Component {
   render() {
     if (this.state.hasError) {
       return (
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', fontFamily: "'Plus Jakarta Sans',sans-serif", padding: 24, textAlign: 'center' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', fontFamily: "'Outfit',sans-serif", padding: 24, textAlign: 'center' }}>
           <div style={{ width: 56, height: 56, borderRadius: 16, background: '#FEE2E2', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16, fontSize: 28 }}>⚠️</div>
           <div style={{ fontSize: 18, fontWeight: 800, color: '#111', marginBottom: 8 }}>Terjadi kesalahan</div>
           <div style={{ fontSize: 13.5, color: '#6B7280', marginBottom: 24, maxWidth: 360 }}>
@@ -48,11 +48,11 @@ class ErrorBoundary extends Component {
           </div>
           <div style={{ display: 'flex', gap: 10 }}>
             <button onClick={() => window.location.reload()}
-              style={{ padding: '9px 20px', borderRadius: 10, background: '#2563EB', color: '#fff', border: 'none', fontWeight: 700, fontSize: 13.5, cursor: 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif" }}>
+              style={{ padding: '9px 20px', borderRadius: 10, background: '#2563EB', color: '#fff', border: 'none', fontWeight: 700, fontSize: 13.5, cursor: 'pointer', fontFamily: "'Outfit',sans-serif" }}>
               Refresh
             </button>
             <button onClick={() => { this.setState({ hasError: false }); window.location.href = '/'; }}
-              style={{ padding: '9px 20px', borderRadius: 10, background: '#F3F4F6', color: '#374151', border: 'none', fontWeight: 700, fontSize: 13.5, cursor: 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif" }}>
+              style={{ padding: '9px 20px', borderRadius: 10, background: '#F3F4F6', color: '#374151', border: 'none', fontWeight: 700, fontSize: 13.5, cursor: 'pointer', fontFamily: "'Outfit',sans-serif" }}>
               Ke Beranda
             </button>
           </div>

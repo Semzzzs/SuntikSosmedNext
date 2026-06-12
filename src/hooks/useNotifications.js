@@ -1,6 +1,21 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 
+// Baca map "read" dari localStorage dengan aman — kalau data korup, jangan
+// sampai melempar error & mematikan polling. Kembalikan objek kosong.
+const getReadMap = (email) => {
+    try {
+        return JSON.parse(localStorage.getItem(`notif_read_${email}`) || '{}') || {};
+    } catch {
+        return {};
+    }
+};
+const setReadMap = (email, map) => {
+    try {
+        localStorage.setItem(`notif_read_${email}`, JSON.stringify(map));
+    } catch { }
+};
+
 export function useNotifications(user) {
     const [notifications, setNotifications] = useState([]);
     const [unreadCount, setUnreadCount] = useState(0);
@@ -20,7 +35,7 @@ export function useNotifications(user) {
         if (!tickets) return;
 
         // Status read disimpan di localStorage — hanya UI state, bukan data penting
-        const readAt = JSON.parse(localStorage.getItem(`notif_read_${authEmail}`) || '{}');
+        const readAt = getReadMap(authEmail);
 
         const newNotifs = [];
         for (const ticket of tickets) {
@@ -43,21 +58,29 @@ export function useNotifications(user) {
         newNotifs.sort((a, b) => new Date(b.at) - new Date(a.at));
         setNotifications(newNotifs);
         setUnreadCount(newNotifs.length);
-    }, [user?.email]);
+    }, []);
 
     useEffect(() => {
         checkNotifs();
-        const interval = setInterval(checkNotifs, 15000); // 15 detik (tidak perlu terlalu sering)
-        return () => clearInterval(interval);
+        let interval = null;
+        const start = () => { if (!interval) interval = setInterval(checkNotifs, 15000); }; // 15 detik
+        const stop = () => { if (interval) { clearInterval(interval); interval = null; } };
+        const onVisibility = () => {
+            if (document.hidden) { stop(); }
+            else { checkNotifs(); start(); }
+        };
+        if (!document.hidden) start();
+        document.addEventListener('visibilitychange', onVisibility);
+        return () => { stop(); document.removeEventListener('visibilitychange', onVisibility); };
     }, [checkNotifs]);
 
     const markAllRead = useCallback(async () => {
         const { data: { session } } = await supabase.auth.getSession();
         const authEmail = session?.user?.email;
         if (!authEmail) return;
-        const readAt = JSON.parse(localStorage.getItem(`notif_read_${authEmail}`) || '{}');
+        const readAt = getReadMap(authEmail);
         for (const n of notifications) readAt[n.id] = true;
-        localStorage.setItem(`notif_read_${authEmail}`, JSON.stringify(readAt));
+        setReadMap(authEmail, readAt);
         setNotifications([]);
         setUnreadCount(0);
     }, [notifications]);
@@ -66,9 +89,9 @@ export function useNotifications(user) {
         const { data: { session } } = await supabase.auth.getSession();
         const authEmail = session?.user?.email;
         if (!authEmail) return;
-        const readAt = JSON.parse(localStorage.getItem(`notif_read_${authEmail}`) || '{}');
+        const readAt = getReadMap(authEmail);
         readAt[notifId] = true;
-        localStorage.setItem(`notif_read_${authEmail}`, JSON.stringify(readAt));
+        setReadMap(authEmail, readAt);
         setNotifications(prev => prev.filter(n => n.id !== notifId));
         setUnreadCount(prev => Math.max(0, prev - 1));
     }, []);

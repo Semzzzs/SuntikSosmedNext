@@ -105,7 +105,7 @@ export default function ViewAnnouncements() {
                     }}>{content}</p>
                     {isLong && (
                         <button onClick={() => setExpanded(e => ({ ...e, [a.id]: !e[a.id] }))}
-                            style={{ marginTop: 10, fontSize: 12.5, fontWeight: 700, color, background: tint, border: `1px solid ${color}33`, borderRadius: 8, padding: '6px 12px', cursor: 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif" }}>
+                            style={{ marginTop: 10, fontSize: 12.5, fontWeight: 700, color, background: tint, border: `1px solid ${color}33`, borderRadius: 8, padding: '6px 12px', cursor: 'pointer', fontFamily: "'Outfit',sans-serif" }}>
                             {isOpen ? 'Lebih sedikit' : 'Baca selengkapnya'}
                         </button>
                     )}
@@ -165,7 +165,7 @@ export default function ViewAnnouncements() {
                             background: isActive ? `${color}18` : 'transparent',
                             color: isActive ? color : 'var(--text3)',
                             fontWeight: 700, fontSize: 12.5, cursor: 'pointer',
-                            fontFamily: "'Plus Jakarta Sans',sans-serif", transition: 'all .15s',
+                            fontFamily: "'Outfit',sans-serif", transition: 'all .15s',
                         }}>
                             {t?.icon} {t?.label || 'Semua'}
                             <span style={{ fontSize: 11, opacity: 0.7 }}>({count})</span>

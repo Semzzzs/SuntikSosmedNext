@@ -246,7 +246,7 @@ export default function Faq({ setMenu }) {
           padding: 7px 12px 7px 13px; border-radius: 22px;
           border: 1.5px solid var(--border); background: transparent;
           color: var(--text2); font-weight: 700; font-size: 13px; cursor: pointer;
-          font-family: 'Plus Jakarta Sans', sans-serif; transition: all .16s;
+          font-family: 'Outfit', sans-serif; transition: all .16s;
         }
         .faq-cat:hover {
           border-color: color-mix(in srgb, var(--c) 50%, transparent);
@@ -273,7 +273,7 @@ export default function Faq({ setMenu }) {
         .faq-q {
           width: 100%; display: flex; align-items: center; gap: 12px; padding: 14px 2px;
           background: none; border: none; cursor: pointer; text-align: left;
-          font-family: 'Plus Jakarta Sans', sans-serif;
+          font-family: 'Outfit', sans-serif;
         }
         .faq-q-text { flex: 1; font-size: 14px; font-weight: 600; color: var(--text); line-height: 1.5; transition: color .2s; }
         .faq-q:hover .faq-q-text, .faq-item.open .faq-q-text { color: var(--c); }
@@ -317,7 +317,7 @@ export default function Faq({ setMenu }) {
         .faq-help-btn {
           display: inline-flex; align-items: center; gap: 6px;
           padding: 9px 15px; border-radius: 10px; font-weight: 700; font-size: 13px;
-          cursor: pointer; font-family: 'Plus Jakarta Sans', sans-serif; transition: transform .18s ease, box-shadow .2s ease;
+          cursor: pointer; font-family: 'Outfit', sans-serif; transition: transform .18s ease, box-shadow .2s ease;
         }
         .faq-help-btn:hover { transform: translateY(-1px); }
         .faq-help-btn.primary { background: var(--blue); color: #fff; border: none; box-shadow: 0 4px 14px color-mix(in srgb, var(--blue) 38%, transparent); }

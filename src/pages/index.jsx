@@ -5,7 +5,7 @@ import {
   Target, Moon, Sun, ArrowRight, UserPlus, Wallet, ShoppingCart,
   Instagram, Youtube, Twitter, Facebook, Play, Star, Sparkles,
   ShieldCheck, TrendingUp, CheckCircle, Zap, Globe, Lock, Search, ChevronDown,
-  Menu, X, Home, LayoutGrid, HelpCircle
+  Menu, X, Home, LayoutGrid, HelpCircle, ArrowUp
 } from 'lucide-react';
 import { useTheme } from '@/context/ThemeContext';
 
@@ -16,10 +16,33 @@ const EASE = {
   smooth: 'cubic-bezier(0.4, 0, 0.2, 1)',      // material — halus
 };
 
+// ── CountUp: angka berhitung naik saat mount ───────────────────
+function CountUp({ end, duration = 2000, decimals = 0, prefix = '', suffix = '' }) {
+  const [val, setVal] = useState(0);
+  useEffect(() => {
+    let raf, start;
+    const step = (ts) => {
+      if (!start) start = ts;
+      const p = Math.min((ts - start) / duration, 1);
+      // ease-out cubic
+      const eased = 1 - Math.pow(1 - p, 3);
+      setVal(end * eased);
+      if (p < 1) raf = requestAnimationFrame(step);
+      else setVal(end);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [end, duration]);
+  const display = decimals > 0
+    ? val.toFixed(decimals)
+    : Math.round(val).toLocaleString('id-ID');
+  return <>{prefix}{display}{suffix}</>;
+}
+
 // ── RevealSection: animasi saat masuk viewport ─────────────────
 // variant: 'up' | 'down' | 'left' | 'right' | 'scale' | 'fade'
 // stagger: jarak delay antar direct children (ms)
-function RevealSection({ children, delay = 0, duration = 700, variant = 'up', stagger = 0, className = '', style = {} }) {
+function RevealSection({ children, delay = 0, duration = 850, variant = 'up', stagger = 0, className = '', style = {} }) {
   const ref = useRef(null);
 
   const getInit = () => {
@@ -218,7 +241,7 @@ function FaqItem({ q, a, dark }) {
   return (
     <div style={{ background: 'var(--white)', border: `1px solid ${open ? 'var(--blue)' : 'var(--border)'}`, borderRadius: 14, overflow: 'hidden', transition: 'border-color .2s' }}>
       <button onClick={() => setOpen(o => !o)}
-        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, width: '100%', padding: '18px 20px', background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left', fontFamily: "'Plus Jakarta Sans',sans-serif" }}>
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, width: '100%', padding: '18px 20px', background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left', fontFamily: "'Outfit','Plus Jakarta Sans',sans-serif" }}>
         <span style={{ fontSize: 14.5, fontWeight: 700, color: 'var(--text)' }}>{q}</span>
         <ChevronDown size={18} style={{ color: open ? 'var(--blue)' : 'var(--text3)', flexShrink: 0, transform: open ? 'rotate(180deg)' : 'rotate(0)', transition: 'transform .25s' }} />
       </button>
@@ -235,6 +258,17 @@ export default function Landing() {
   const navScrolled = useNavbarScroll();
   const [serviceQuery, setServiceQuery] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
+  const [showTop, setShowTop] = useState(false);
+
+  // Tampilkan tombol "ke atas" setelah scroll cukup jauh
+  useEffect(() => {
+    const onScroll = () => setShowTop(window.scrollY > 500);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  const scrollToTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
 
   // Kunci scroll body saat drawer mobile terbuka
   useEffect(() => {
@@ -278,14 +312,15 @@ export default function Landing() {
       {/* ── BLOB BG ── */}
       <div style={{ position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none', overflow: 'hidden' }}>
         {/* Light mode: richer gradient base */}
-        {!dark && <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(160deg, #EEF4FF 0%, #F8FAFF 40%, #F0F7FF 100%)' }} />}
+        {!dark && <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(160deg, #EAF1FF 0%, #F4F8FF 45%, #EAF2FF 100%)' }} />}
         {/* Dark mode: central hero glow ala fintech landing — kuat & terpusat di atas */}
         {dark && <div style={{ position: 'absolute', top: -200, left: '50%', transform: 'translateX(-50%)', width: 1100, height: 700, borderRadius: '50%', background: 'radial-gradient(ellipse, rgba(37,99,235,.22) 0%, rgba(37,99,235,.08) 35%, transparent 65%)', filter: 'blur(20px)' }} />}
         <div style={{ position: 'absolute', top: -120, left: -100, width: 600, height: 600, borderRadius: '50%', background: dark ? 'radial-gradient(circle, rgba(37,99,235,.16) 0%, transparent 70%)' : 'radial-gradient(circle, rgba(37,99,235,.18) 0%, transparent 65%)', animation: 'blobFloat 12s ease-in-out infinite' }} />
-        <div style={{ position: 'absolute', top: 200, right: -150, width: 500, height: 500, borderRadius: '50%', background: dark ? 'radial-gradient(circle, rgba(59,130,246,.12) 0%, transparent 70%)' : 'radial-gradient(circle, rgba(99,102,241,.12) 0%, transparent 65%)', animation: 'blobFloat 15s ease-in-out 2s infinite' }} />
+        <div style={{ position: 'absolute', top: 200, right: -150, width: 500, height: 500, borderRadius: '50%', background: dark ? 'radial-gradient(circle, rgba(59,130,246,.12) 0%, transparent 70%)' : 'radial-gradient(circle, rgba(59,130,246,.16) 0%, transparent 65%)', animation: 'blobFloat 15s ease-in-out 2s infinite' }} />
         <div style={{ position: 'absolute', bottom: -100, left: '30%', width: 400, height: 400, borderRadius: '50%', background: dark ? 'radial-gradient(circle, rgba(99,102,241,.08) 0%, transparent 70%)' : 'radial-gradient(circle, rgba(59,130,246,.1) 0%, transparent 65%)', animation: 'blobFloat 10s ease-in-out 4s infinite' }} />
         {/* Extra light mode accent blob */}
-        {!dark && <div style={{ position: 'absolute', top: '40%', left: '20%', width: 300, height: 300, borderRadius: '50%', background: 'radial-gradient(circle, rgba(139,92,246,.07) 0%, transparent 70%)', animation: 'blobFloat 18s ease-in-out 3s infinite' }} />}
+        {!dark && <div style={{ position: 'absolute', top: '40%', left: '20%', width: 300, height: 300, borderRadius: '50%', background: 'radial-gradient(circle, rgba(37,99,235,.1) 0%, transparent 70%)', animation: 'blobFloat 18s ease-in-out 3s infinite' }} />}
+        <div className="hero-grid" />
       </div>
 
       {/* ── NAVBAR ── */}
@@ -311,11 +346,11 @@ export default function Landing() {
             {NAV_LINKS.map(({ label, id, href }) => (
               href ? (
                 <Link key={label} href={href}
-                  style={{ color: 'var(--text2)', textDecoration: 'none', padding: '7px 14px', borderRadius: 9, background: 'transparent', transition: 'background .15s', cursor: 'pointer' }}>{label}</Link>
+                  style={{ color: 'var(--text2)', textDecoration: 'none', padding: '7px 16px', borderRadius: 50, background: 'transparent', transition: 'background .15s', cursor: 'pointer' }}>{label}</Link>
               ) : (
                 <a key={label} href={`#${id}`}
                   onClick={e => { e.preventDefault(); goTo(id); }}
-                  style={{ color: 'var(--text2)', textDecoration: 'none', padding: '7px 14px', borderRadius: 9, background: 'transparent', transition: 'background .15s', cursor: 'pointer' }}>{label}</a>
+                  style={{ color: 'var(--text2)', textDecoration: 'none', padding: '7px 16px', borderRadius: 50, background: 'transparent', transition: 'background .15s', cursor: 'pointer' }}>{label}</a>
               )
             ))}
           </div>
@@ -324,10 +359,10 @@ export default function Landing() {
               {dark ? <Sun size={18} /> : <Moon size={18} />}
             </button>
             <div className="nav-desktop-only" style={{ alignItems: 'center', gap: 6 }}>
-              <button onClick={() => router.push('/login')} style={{ background: 'none', border: '1.5px solid var(--border)', cursor: 'pointer', fontWeight: 700, fontSize: 12, color: 'var(--text2)', fontFamily: "'Plus Jakarta Sans',sans-serif", padding: '6px 12px', borderRadius: 9, whiteSpace: 'nowrap', transition: 'all .15s' }}>
+              <button onClick={() => router.push('/login')} style={{ background: 'none', border: '1.5px solid var(--border)', cursor: 'pointer', fontWeight: 700, fontSize: 12, color: 'var(--text2)', fontFamily: "'Outfit','Plus Jakarta Sans',sans-serif", padding: '6px 12px', borderRadius: 50, whiteSpace: 'nowrap', transition: 'all .15s' }}>
                 Masuk
               </button>
-              <button onClick={() => router.push('/register')} style={{ background: 'var(--blue)', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 12, color: '#fff', fontFamily: "'Plus Jakarta Sans',sans-serif", padding: '6px 12px', borderRadius: 9, whiteSpace: 'nowrap', transition: 'all .15s', display: 'flex', alignItems: 'center', gap: 4 }}>
+              <button onClick={() => router.push('/register')} style={{ background: 'var(--blue)', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 12, color: '#fff', fontFamily: "'Outfit','Plus Jakarta Sans',sans-serif", padding: '6px 12px', borderRadius: 50, whiteSpace: 'nowrap', transition: 'all .15s', display: 'flex', alignItems: 'center', gap: 4 }}>
                 Daftar
               </button>
             </div>
@@ -415,11 +450,11 @@ export default function Landing() {
           {/* CTA bawah */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingTop: 14, marginTop: 14, borderTop: '1px solid var(--border)' }}>
             <button onClick={() => { setMenuOpen(false); router.push('/login'); }}
-              style={{ width: '100%', background: 'var(--bg2)', border: '1.5px solid var(--border)', borderRadius: 12, padding: '12px', fontSize: 14, fontWeight: 700, color: 'var(--text)', cursor: 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif" }}>
+              style={{ width: '100%', background: 'var(--bg2)', border: '1.5px solid var(--border)', borderRadius: 12, padding: '12px', fontSize: 14, fontWeight: 700, color: 'var(--text)', cursor: 'pointer', fontFamily: "'Outfit','Plus Jakarta Sans',sans-serif" }}>
               Masuk
             </button>
             <button onClick={() => { setMenuOpen(false); router.push('/register'); }}
-              style={{ width: '100%', background: 'var(--blue)', border: 'none', borderRadius: 12, padding: '12px', fontSize: 14, fontWeight: 800, color: '#fff', cursor: 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif", display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, boxShadow: '0 8px 24px rgba(37,99,235,.4)' }}>
+              style={{ width: '100%', background: 'var(--blue)', border: 'none', borderRadius: 12, padding: '12px', fontSize: 14, fontWeight: 800, color: '#fff', cursor: 'pointer', fontFamily: "'Outfit','Plus Jakarta Sans',sans-serif", display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, boxShadow: '0 8px 24px rgba(37,99,235,.4)' }}>
               <UserPlus size={15} /> Daftar Sekarang Gratis
             </button>
           </div>
@@ -459,38 +494,50 @@ export default function Landing() {
             <ArrowRight className="badge-chevron" size={13} style={{ color: dark ? '#93C5FD' : 'var(--blue)', flexShrink: 0 }} />
           </div>
 
-          <h1 style={{ fontSize: 'clamp(32px, 8vw, 48px)', fontWeight: 800, textShadow: dark ? 'none' : '0 2px 8px rgba(37,99,235,.08)', lineHeight: 1.15, color: 'var(--text)', marginBottom: 18, letterSpacing: '-1px' }}>
-            <span className="grad-text">SuntikSosmed</span> — Platform SMM<br /><span className="grad-text">Terbaik &amp; Terpercaya</span> di Indonesia
+          <h1 style={{ fontSize: 'clamp(34px, 8.5vw, 56px)', fontWeight: 800, textShadow: dark ? 'none' : '0 2px 8px rgba(37,99,235,.08)', lineHeight: 1.1, color: 'var(--text)', marginBottom: 18, letterSpacing: '-1.5px' }}>
+            Bikin Sosmed Kamu<br /><span className="grad-text">Meledak</span> Hari Ini
           </h1>
-          <p style={{ color: 'var(--text2)', fontSize: 15, lineHeight: 1.7, marginBottom: 28, maxWidth: 460, margin: '0 auto 28px' }}>
-            Tingkatkan followers, likes, dan views di semua media sosial. Proses cepat, harga mulai Rp 1/K, dengan garansi refill &amp; support 24 jam.
+          <p style={{ color: 'var(--text2)', fontSize: 16, lineHeight: 1.7, marginBottom: 28, maxWidth: 480, margin: '0 auto 28px' }}>
+            Followers, likes, dan views buat semua media sosial. Proses kilat, harga mulai <b style={{ color: 'var(--text)' }}>Rp 1/K</b>, garansi refill &amp; support 24 jam.
           </p>
 
-          <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginBottom: 24, flexWrap: 'wrap' }}>
-            <button onClick={() => router.push('/register')} style={{ background: 'var(--blue)', border: 'none', borderRadius: 50, padding: '10px 20px', fontSize: 13.5, fontWeight: 800, color: '#fff', cursor: 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif", display: 'inline-flex', alignItems: 'center', gap: 7, boxShadow: '0 8px 30px rgba(37,99,235,.5), 0 0 0 1px rgba(59,130,246,.3)', transition: 'transform .2s, box-shadow .2s', width: 'fit-content' }}>
-              Daftar Sekarang Gratis! <UserPlus size={13} />
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginBottom: 36, flexWrap: 'wrap' }}>
+            <button onClick={() => router.push('/register')} className="hero-cta" style={{ background: 'var(--blue)', border: 'none', borderRadius: 50, padding: '13px 26px', fontSize: 14.5, fontWeight: 800, color: '#fff', cursor: 'pointer', fontFamily: "'Outfit','Plus Jakarta Sans',sans-serif", display: 'inline-flex', alignItems: 'center', gap: 8, boxShadow: '0 8px 30px rgba(37,99,235,.5), 0 0 0 1px rgba(59,130,246,.3)', transition: 'transform .2s, box-shadow .2s', width: 'fit-content' }}>
+              Daftar Sekarang Gratis! <UserPlus size={15} />
             </button>
-            <button onClick={() => router.push('/login')} style={{ background: 'var(--white)', border: '1.5px solid var(--border)', borderRadius: 50, padding: '10px 20px', fontSize: 13.5, fontWeight: 700, cursor: 'pointer', color: 'var(--text)', fontFamily: "'Plus Jakarta Sans',sans-serif", boxShadow: 'var(--shadow)', width: 'fit-content', display: 'inline-flex', alignItems: 'center' }}>
+            <button onClick={() => router.push('/login')} style={{ background: 'var(--white)', border: '1.5px solid var(--border)', borderRadius: 50, padding: '13px 26px', fontSize: 14.5, fontWeight: 700, cursor: 'pointer', color: 'var(--text)', fontFamily: "'Outfit','Plus Jakarta Sans',sans-serif", boxShadow: 'var(--shadow)', width: 'fit-content', display: 'inline-flex', alignItems: 'center' }}>
               Masuk
             </button>
           </div>
 
-          {/* Avatars + rating */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, marginBottom: 22 }}>
-            <div style={{ display: 'flex' }}>
-              {[
-                { t: 'A', bg: '#2563EB' },
-                { t: 'R', bg: '#7C3AED' },
-                { t: 'D', bg: '#059669' },
-              ].map((a, i) => (
-                <div key={i} style={{ width: 36, height: 36, borderRadius: '50%', border: '2px solid var(--white)', marginRight: -10, background: a.bg, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 14, fontFamily: "'Plus Jakarta Sans',sans-serif" }}>{a.t}</div>
-              ))}
+          {/* Stat counters — fakta platform, bukan klaim volume palsu */}
+          <div className="hero-stats" style={{ display: 'flex', justifyContent: 'center', gap: 'clamp(20px, 6vw, 56px)', marginBottom: 36, flexWrap: 'wrap' }}>
+            {[
+              { val: 2288, decimals: 0, suffix: '+', label: 'Layanan tersedia' },
+              { val: 20, decimals: 0, prefix: '', suffix: '', label: 'Platform didukung' },
+              { val: 1, decimals: 0, prefix: 'Rp ', suffix: '/Perak', label: 'Harga mulai dari' },
+              { val: 24, decimals: 0, suffix: '/7', label: 'Proses & support' },
+            ].map(s => (
+              <div key={s.label} style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: 'clamp(24px, 5vw, 34px)', fontWeight: 800, color: 'var(--text)', letterSpacing: '-1px', lineHeight: 1.1 }} className="grad-text">
+                  <CountUp end={s.val} decimals={s.decimals} prefix={s.prefix || ''} suffix={s.suffix} />
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--text3)', fontWeight: 600, marginTop: 3 }}>{s.label}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Trust row — sinyal kepercayaan yang jujur (tanpa klaim review palsu) */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 18, marginBottom: 22, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: 'var(--text2)', fontWeight: 600 }}>
+              <ShieldCheck size={15} style={{ color: 'var(--blue)' }} /> Pembayaran aman QRIS
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginLeft: 16 }}>
-              <Star size={14} fill="#F59E0B" style={{ color: '#F59E0B' }} />
-              <span style={{ fontWeight: 800, fontSize: 13.5, color: 'var(--text)' }}>4.8 / 5</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: 'var(--text2)', fontWeight: 600 }}>
+              <Zap size={15} style={{ color: '#F59E0B' }} /> Proses otomatis & instan
             </div>
-            <span style={{ fontSize: 12.5, color: 'var(--text2)' }}>dari 500+ ulasan</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: 'var(--text2)', fontWeight: 600 }}>
+              <CheckCircle size={15} style={{ color: '#10B981' }} /> Garansi refill
+            </div>
           </div>
 
           {/* Feature pills */}
@@ -524,7 +571,7 @@ export default function Landing() {
 
 
       {/* ── FEATURES ── */}
-      <RevealSection variant="up" duration={600}>
+      <RevealSection variant="up" duration={850}>
         <div style={{ position: 'relative', zIndex: 10, maxWidth: 1160, margin: '0 auto', padding: '0 16px 60px' }}>
           <div style={{ textAlign: 'center', marginBottom: 48 }}>
             <div style={{ display: 'inline-block', background: 'var(--blue)', border: 'none', borderRadius: 50, padding: '5px 16px', fontSize: 12.5, fontWeight: 700, color: '#fff', marginBottom: 14 }}>KENAPA SUNTIK SOSMED</div>
@@ -533,7 +580,7 @@ export default function Landing() {
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 18 }}>
             {FEATURES.map((f, i) => (
-              <RevealSection key={i} delay={i * 120} variant="scale" duration={650}>
+              <RevealSection key={i} delay={i * 120} variant="scale" duration={900}>
                 <div className="feature-card">
                   <div style={{ width: 52, height: 52, borderRadius: 16, background: f.iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 18, boxShadow: '0 6px 20px rgba(0,0,0,.15)' }}>{f.icon}</div>
                   <div style={{ fontWeight: 800, fontSize: 15.5, color: 'var(--text)', marginBottom: 8 }}>{f.title}</div>
@@ -546,7 +593,7 @@ export default function Landing() {
 
       </RevealSection>
 
-      <RevealSection variant="fade" duration={500}>
+      <RevealSection variant="fade" duration={800}>
         <div id="panduan" style={{ position: 'relative', zIndex: 10, padding: '48px 16px' }}>
           <div style={{ maxWidth: 1160, margin: '0 auto' }}>
             <div style={{ textAlign: 'center', marginBottom: 52 }}>
@@ -558,7 +605,7 @@ export default function Landing() {
               {/* connector line */}
               <div style={{ position: 'absolute', top: 44, left: '18%', right: '18%', height: 2, background: `linear-gradient(90deg, var(--blue), #10B981, #8B5CF6)`, borderRadius: 2, zIndex: 0, opacity: 0.3 }} />
               {STEPS.map((s, i) => (
-                <RevealSection key={i} delay={i * 160} variant="up" duration={680}>
+                <RevealSection key={i} delay={i * 160} variant="up" duration={950}>
                   <div style={{ background: 'var(--white)', border: `1.5px solid ${s.color}22`, borderRadius: 22, padding: '32px 26px', position: 'relative', zIndex: 1, boxShadow: 'var(--shadow)', transition: 'transform .2s, box-shadow .2s' }}
                     onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.boxShadow = '0 16px 40px rgba(0,0,0,.1)'; }}
                     onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = 'var(--shadow)'; }}>
@@ -593,7 +640,7 @@ export default function Landing() {
 
 
       {/* ── SERVICES TABLE ── */}
-      <RevealSection variant="up" duration={700}>
+      <RevealSection variant="up" duration={950}>
         <div style={{ position: 'relative', zIndex: 10, maxWidth: 1160, margin: '0 auto', padding: '48px 16px' }}>
           <div style={{ textAlign: 'center', marginBottom: 40 }}>
             <div style={{ display: 'inline-block', background: 'rgba(245,158,11,.1)', border: '1px solid rgba(245,158,11,.2)', borderRadius: 50, padding: '5px 16px', fontSize: 12.5, fontWeight: 700, color: '#F59E0B', marginBottom: 14 }}>LAYANAN POPULER</div>
@@ -632,7 +679,7 @@ export default function Landing() {
                         <span style={{ fontWeight: 800, fontSize: 16, background: 'var(--blue)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>{sv.price}</span>
                       </td>
                       <td style={{ padding: '15px 20px', textAlign: 'center' }}>
-                        <button onClick={() => router.push('/register')} style={{ background: 'var(--blue-l)', border: 'none', borderRadius: 8, padding: '6px 14px', fontSize: 12.5, fontWeight: 700, color: '#1D4ED8', cursor: 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif" }}>Order</button>
+                        <button onClick={() => router.push('/register')} style={{ background: 'var(--blue-l)', border: 'none', borderRadius: 50, padding: '6px 16px', fontSize: 12.5, fontWeight: 700, color: '#4F46E5', cursor: 'pointer', fontFamily: "'Outfit','Plus Jakarta Sans',sans-serif" }}>Order</button>
                       </td>
                     </tr>
                   ))}
@@ -647,7 +694,7 @@ export default function Landing() {
               </table>
             </div>
             <div style={{ padding: '16px 20px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'center' }}>
-              <button onClick={() => router.push('/register')} style={{ background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13.5, fontFamily: "'Plus Jakarta Sans',sans-serif", display: 'inline-flex', alignItems: 'center', gap: 7, color: 'var(--blue)' }}>
+              <button onClick={() => router.push('/register')} style={{ background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13.5, fontFamily: "'Outfit','Plus Jakarta Sans',sans-serif", display: 'inline-flex', alignItems: 'center', gap: 7, color: 'var(--blue)' }}>
                 <span onClick={() => router.push('/register')} style={{ cursor: 'pointer' }}>Lihat 2.000+ layanan — Daftar gratis <ArrowRight size={14} style={{ color: 'var(--blue)', display: 'inline-block', verticalAlign: 'middle' }} /></span>
               </button>
             </div>
@@ -655,15 +702,11 @@ export default function Landing() {
         </div>
 
         {/* ── TESTIMONIALS (Animated Scroll) ── */}
-        <div id="testimoni" style={{ position: 'relative', zIndex: 10, padding: '80px 0', background: 'var(--bg)', overflow: 'hidden' }}>
+        <div id="testimoni" style={{ position: 'relative', zIndex: 10, padding: '80px 0', overflow: 'hidden' }}>
           {/* Blob decorations */}
           <div style={{ position: 'absolute', top: '10%', left: '-5%', width: 400, height: 400, borderRadius: '50%', background: 'radial-gradient(circle, rgba(37,99,235,.08) 0%, transparent 70%)', filter: 'blur(40px)', pointerEvents: 'none' }} />
           <div style={{ position: 'absolute', top: '40%', right: '-5%', width: 350, height: 350, borderRadius: '50%', background: 'radial-gradient(circle, rgba(16,185,129,.07) 0%, transparent 70%)', filter: 'blur(40px)', pointerEvents: 'none' }} />
           <div style={{ position: 'absolute', bottom: '10%', left: '30%', width: 300, height: 300, borderRadius: '50%', background: 'radial-gradient(circle, rgba(139,92,246,.06) 0%, transparent 70%)', filter: 'blur(50px)', pointerEvents: 'none' }} />
-          {/* Top & bottom fade masks */}
-          <div className="testi-mask" style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 120, background: 'linear-gradient(to bottom, var(--white), transparent)', zIndex: 2, pointerEvents: 'none' }} />
-          <div className="testi-mask" style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 120, background: 'linear-gradient(to top, var(--white), transparent)', zIndex: 2, pointerEvents: 'none' }} />
-
           <div style={{ maxWidth: 1160, margin: '0 auto', padding: '0 24px', textAlign: 'center', marginBottom: 52 }}>
             <div style={{ display: 'inline-block', background: 'linear-gradient(135deg,rgba(37,99,235,.1),rgba(37,99,235,.05))', border: '1px solid rgba(37,99,235,.2)', borderRadius: 50, padding: '5px 16px', fontSize: 12.5, fontWeight: 700, color: 'var(--blue)', marginBottom: 14 }}>TESTIMONI</div>
             <h2 style={{ fontSize: 'clamp(24px, 4vw, 38px)', fontWeight: 800, color: 'var(--text)', letterSpacing: '-.5px', marginBottom: 10 }}>Apa Kata Pengguna Kami</h2>
@@ -672,7 +715,7 @@ export default function Landing() {
 
           {/* DESKTOP: 3 kolom berjalan · MOBILE: carousel geser */}
           <div style={{ maxWidth: 1160, margin: '0 auto', padding: '0 24px' }}>
-            <div className="testi-desktop" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 16, height: 600, overflow: 'hidden' }}>
+            <div className="testi-desktop" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 16, height: 600, overflow: 'hidden', WebkitMaskImage: 'linear-gradient(to bottom, transparent, #000 12%, #000 88%, transparent)', maskImage: 'linear-gradient(to bottom, transparent, #000 12%, #000 88%, transparent)' }}>
               {TESTI_COLUMNS.map((col, ci) => (
                 <div key={ci} style={{ overflow: 'hidden', height: '100%' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 14, animation: `scrollUp${col.speed} ${col.speed}s linear infinite` }}>
@@ -708,6 +751,31 @@ export default function Landing() {
           }
           html { scroll-behavior: smooth; }
           .root h1, .root h2 { font-family: 'Sora','Plus Jakarta Sans',sans-serif; }
+          /* Teks kecil/body landing pakai Outfit (judul tetap Sora di atas) */
+          .root { font-family: 'Outfit','Plus Jakarta Sans',sans-serif; }
+
+          /* ── Hero CTA hover ── */
+          .hero-cta:hover {
+            transform: translateY(-2px) scale(1.02);
+            box-shadow: 0 12px 38px rgba(37,99,235,.6), 0 0 0 1px rgba(59,130,246,.4) !important;
+          }
+          .hero-cta:active { transform: translateY(0) scale(.99); }
+
+          /* ── Subtle grid pattern overlay (hero depth) ── */
+          .hero-grid {
+            position: absolute; inset: 0; pointer-events: none; z-index: 1;
+            background-image:
+              linear-gradient(to right, rgba(37,99,235,.06) 1px, transparent 1px),
+              linear-gradient(to bottom, rgba(37,99,235,.06) 1px, transparent 1px);
+            background-size: 56px 56px;
+            -webkit-mask-image: radial-gradient(ellipse 70% 55% at 50% 22%, #000 0%, transparent 75%);
+            mask-image: radial-gradient(ellipse 70% 55% at 50% 22%, #000 0%, transparent 75%);
+          }
+          .root.dark .hero-grid {
+            background-image:
+              linear-gradient(to right, rgba(96,165,250,.08) 1px, transparent 1px),
+              linear-gradient(to bottom, rgba(96,165,250,.08) 1px, transparent 1px);
+          }
 
           /* ── Hero announcement badge ── */
           .hero-badge {
@@ -765,7 +833,6 @@ export default function Landing() {
           @media (max-width: 768px) {
             .testi-desktop { display: none; }
             .testi-mobile { display: block; }
-            .testi-mask { display: none; }
           }
           @media (max-width: 820px) {
             .nav-desktop-only { display: none !important; }
@@ -792,7 +859,7 @@ export default function Landing() {
       </RevealSection>
 
       {/* ── METODE PEMBAYARAN ── */}
-      <RevealSection variant="up" duration={700}>
+      <RevealSection variant="up" duration={950}>
         <div style={{ position: 'relative', zIndex: 10, maxWidth: 1160, margin: '0 auto', padding: '56px 16px' }}>
           <div style={{ textAlign: 'center', marginBottom: 32 }}>
             <div style={{ display: 'inline-block', background: 'linear-gradient(135deg,rgba(16,185,129,.1),rgba(5,150,105,.1))', border: '1px solid rgba(16,185,129,.2)', borderRadius: 50, padding: '5px 16px', fontSize: 12.5, fontWeight: 700, color: '#10B981', marginBottom: 14 }}>PEMBAYARAN MUDAH</div>
@@ -821,7 +888,7 @@ export default function Landing() {
       </RevealSection>
 
       {/* ── FAQ ── */}
-      <RevealSection variant="up" duration={700}>
+      <RevealSection variant="up" duration={950}>
         <div id="faq" style={{ position: 'relative', zIndex: 10, maxWidth: 760, margin: '0 auto', padding: '40px 16px 64px' }}>
           <div style={{ textAlign: 'center', marginBottom: 36 }}>
             <div style={{ display: 'inline-block', background: 'linear-gradient(135deg,rgba(37,99,235,.1),rgba(37,99,235,.05))', border: '1px solid rgba(37,99,235,.2)', borderRadius: 50, padding: '5px 16px', fontSize: 12.5, fontWeight: 700, color: 'var(--blue)', marginBottom: 14 }}>FAQ</div>
@@ -848,7 +915,7 @@ export default function Landing() {
       </RevealSection>
 
       {/* ── CTA PENUTUP ── */}
-      <RevealSection variant="scale" delay={50} duration={750}>
+      <RevealSection variant="scale" delay={50} duration={1000}>
         <div style={{ position: 'relative', zIndex: 10, maxWidth: 1160, margin: '0 auto', padding: '0 16px 60px' }}>
           <div style={{ background: 'var(--blue)', borderRadius: 28, padding: 'clamp(32px, 6vw, 64px) clamp(20px, 5vw, 48px)', textAlign: 'center', position: 'relative', overflow: 'hidden' }}>
             {/* inner deco */}
@@ -861,10 +928,10 @@ export default function Landing() {
               <h2 style={{ fontSize: 'clamp(24px, 6vw, 44px)', fontWeight: 800, color: '#fff', marginBottom: 14, letterSpacing: '-.5px', lineHeight: 1.15 }}>Siap meningkatkan<br />jangkauan kamu?</h2>
               <p style={{ fontSize: 'clamp(13px, 3vw, 16px)', color: 'rgba(255,255,255,.75)', marginBottom: 32, maxWidth: 420, margin: '0 auto 32px', lineHeight: 1.7 }}>Bergabung dengan 50.000+ kreator yang sudah menggunakan SuntikSosmed setiap hari.</p>
               <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
-                <button onClick={() => router.push('/register')} style={{ background: '#fff', border: 'none', borderRadius: 50, padding: '12px 28px', fontSize: 'clamp(13px, 3vw, 15px)', fontWeight: 800, color: 'var(--blue)', cursor: 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif", display: 'inline-flex', alignItems: 'center', gap: 8, boxShadow: '0 8px 32px rgba(0,0,0,.2)', transition: 'transform .2s' }}>
+                <button onClick={() => router.push('/register')} style={{ background: '#fff', border: 'none', borderRadius: 50, padding: '12px 28px', fontSize: 'clamp(13px, 3vw, 15px)', fontWeight: 800, color: 'var(--blue)', cursor: 'pointer', fontFamily: "'Outfit','Plus Jakarta Sans',sans-serif", display: 'inline-flex', alignItems: 'center', gap: 8, boxShadow: '0 8px 32px rgba(0,0,0,.2)', transition: 'transform .2s' }}>
                   Mulai Sekarang <ArrowRight size={16} />
                 </button>
-                <button onClick={() => router.push('/login')} style={{ background: 'rgba(255,255,255,.15)', border: '1.5px solid rgba(255,255,255,.3)', borderRadius: 50, padding: '12px 24px', fontSize: 'clamp(13px, 3vw, 15px)', fontWeight: 700, color: '#fff', cursor: 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif", backdropFilter: 'blur(8px)' }}>
+                <button onClick={() => router.push('/login')} style={{ background: 'rgba(255,255,255,.15)', border: '1.5px solid rgba(255,255,255,.3)', borderRadius: 50, padding: '12px 24px', fontSize: 'clamp(13px, 3vw, 15px)', fontWeight: 700, color: '#fff', cursor: 'pointer', fontFamily: "'Outfit','Plus Jakarta Sans',sans-serif", backdropFilter: 'blur(8px)' }}>
                   Sign In
                 </button>
               </div>
@@ -918,6 +985,27 @@ export default function Landing() {
           </div>
         </div>
       </footer>
+
+      {/* Scroll to top */}
+      <button
+        onClick={scrollToTop}
+        aria-label="Kembali ke atas"
+        style={{
+          position: 'fixed', bottom: 24, right: 24, zIndex: 90,
+          width: 46, height: 46, borderRadius: 14, border: 'none', cursor: 'pointer',
+          background: 'var(--blue)', color: '#fff',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          boxShadow: '0 8px 24px rgba(37,99,235,.4)',
+          opacity: showTop ? 1 : 0,
+          transform: showTop ? 'translateY(0) scale(1)' : 'translateY(16px) scale(.9)',
+          pointerEvents: showTop ? 'auto' : 'none',
+          transition: 'opacity .3s ease, transform .3s cubic-bezier(.34,1.56,.64,1)',
+        }}
+        onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px) scale(1.05)'; }}
+        onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0) scale(1)'; }}
+      >
+        <ArrowUp size={20} />
+      </button>
     </div>
   );
 }

@@ -129,7 +129,7 @@ export default function ViewSettings({ user, onLogout }) {
       {/* Tabs */}
       <div style={{ display: 'flex', gap: 6, marginBottom: 20, flexWrap: 'wrap' }}>
         {tabs.map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)} style={{ padding: '7px 16px', borderRadius: 9, border: `1.5px solid ${tab === t.id ? 'var(--blue)' : 'var(--border)'}`, background: tab === t.id ? 'var(--blue-l)' : 'transparent', color: tab === t.id ? 'var(--blue)' : 'var(--text2)', fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif", transition: 'all .18s' }}>{t.label}</button>
+          <button key={t.id} onClick={() => setTab(t.id)} style={{ padding: '7px 16px', borderRadius: 9, border: `1.5px solid ${tab === t.id ? 'var(--blue)' : 'var(--border)'}`, background: tab === t.id ? 'var(--blue-l)' : 'transparent', color: tab === t.id ? 'var(--blue)' : 'var(--text2)', fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: "'Outfit',sans-serif", transition: 'all .18s' }}>{t.label}</button>
         ))}
       </div>
 
@@ -263,7 +263,7 @@ export default function ViewSettings({ user, onLogout }) {
                 { id: true, label: 'Mode Gelap', icon: <Moon size={20} />, desc: 'Nyaman di mata' },
               ].map(t => (
                 <button key={t.label} onClick={() => { if (dark !== t.id) toggle(); }}
-                  style={{ flex: 1, padding: '18px 16px', borderRadius: 14, border: `2px solid ${dark === t.id ? 'var(--blue)' : 'var(--border)'}`, background: dark === t.id ? 'var(--blue-l)' : 'var(--bg2)', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, fontFamily: "'Plus Jakarta Sans',sans-serif", transition: 'all .18s' }}>
+                  style={{ flex: 1, padding: '18px 16px', borderRadius: 14, border: `2px solid ${dark === t.id ? 'var(--blue)' : 'var(--border)'}`, background: dark === t.id ? 'var(--blue-l)' : 'var(--bg2)', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, fontFamily: "'Outfit',sans-serif", transition: 'all .18s' }}>
                   <span style={{ color: dark === t.id ? 'var(--blue)' : 'var(--text2)' }}>{t.icon}</span>
                   <div>
                     <div style={{ fontSize: 13.5, fontWeight: 700, color: dark === t.id ? 'var(--blue)' : 'var(--text2)', marginBottom: 2 }}>{t.label}</div>
@@ -332,7 +332,7 @@ export default function ViewSettings({ user, onLogout }) {
                       <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
                         <button
                           onClick={() => { setShowDeleteModal(false); setDeleteError(''); }}
-                          style={{ flex: 1, padding: '10px 0', borderRadius: 9, border: '1px solid var(--border)', background: 'var(--bg2)', color: 'var(--text)', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif" }}>
+                          style={{ flex: 1, padding: '10px 0', borderRadius: 9, border: '1px solid var(--border)', background: 'var(--bg2)', color: 'var(--text)', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: "'Outfit',sans-serif" }}>
                           Batal
                         </button>
                         <button
@@ -353,7 +353,7 @@ export default function ViewSettings({ user, onLogout }) {
                             if (res.ok) { setShowDeleteModal(false); onLogout(); }
                             else { setDeleteError('Gagal menghapus akun. Hubungi admin.'); }
                           }}
-                          style={{ flex: 1, padding: '10px 0', borderRadius: 9, border: 'none', background: 'var(--red)', color: '#fff', fontSize: 13, fontWeight: 700, cursor: deleteLoading ? 'not-allowed' : 'pointer', opacity: deleteLoading ? 0.7 : 1, fontFamily: "'Plus Jakarta Sans',sans-serif" }}>
+                          style={{ flex: 1, padding: '10px 0', borderRadius: 9, border: 'none', background: 'var(--red)', color: '#fff', fontSize: 13, fontWeight: 700, cursor: deleteLoading ? 'not-allowed' : 'pointer', opacity: deleteLoading ? 0.7 : 1, fontFamily: "'Outfit',sans-serif" }}>
                           {deleteLoading ? 'Menghapus...' : 'Ya, Hapus Akun'}
                         </button>
                       </div>

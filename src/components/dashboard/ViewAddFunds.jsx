@@ -570,11 +570,11 @@ export default function ViewAddFunds({ user, balance: balanceProp = null }) {
 
             <div style={{ display: 'flex', gap: 10, marginBottom: 10, alignItems: 'center' }}>
               {/* Kembali jadi tombol utama */}
-              <button onClick={() => setShowBackConfirm(true)} style={{ flex: 1, padding: '12px 0', borderRadius: 11, border: '1.5px solid var(--border)', background: 'var(--bg2)', color: 'var(--text)', fontWeight: 700, fontSize: 14, cursor: 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif" }}>Kembali</button>
+              <button onClick={() => setShowBackConfirm(true)} style={{ flex: 1, padding: '12px 0', borderRadius: 11, border: '1.5px solid var(--border)', background: 'var(--bg2)', color: 'var(--text)', fontWeight: 700, fontSize: 14, cursor: 'pointer', fontFamily: "'Outfit',sans-serif" }}>Kembali</button>
               {/* Cek manual jadi tombol sekunder kecil — cadangan saja */}
               <button onClick={checkQrisStatus} disabled={qrisChecking || qrisStatus === 'paid' || qrisStatus === 'expired'}
                 title="Auto-cek sudah jalan. Tombol ini opsional untuk cek manual."
-                style={{ padding: '9px 14px', borderRadius: 10, border: '1px solid var(--border)', background: 'transparent', color: 'var(--text3)', fontWeight: 600, fontSize: 12.5, cursor: (qrisChecking || qrisStatus === 'paid' || qrisStatus === 'expired') ? 'default' : 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif", display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap', opacity: (qrisStatus === 'paid' || qrisStatus === 'expired') ? 0.5 : 1 }}>
+                style={{ padding: '9px 14px', borderRadius: 10, border: '1px solid var(--border)', background: 'transparent', color: 'var(--text3)', fontWeight: 600, fontSize: 12.5, cursor: (qrisChecking || qrisStatus === 'paid' || qrisStatus === 'expired') ? 'default' : 'pointer', fontFamily: "'Outfit',sans-serif", display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap', opacity: (qrisStatus === 'paid' || qrisStatus === 'expired') ? 0.5 : 1 }}>
                 {qrisChecking ? <><RefreshCw size={13} style={{ animation: 'spin .7s linear infinite' }} /> Mengecek</> : <><RefreshCw size={13} /> Cek manual</>}
               </button>
             </div>
@@ -610,7 +610,7 @@ export default function ViewAddFunds({ user, balance: balanceProp = null }) {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
                   {METHODS.map(m => (
                     <button key={m.id} onClick={() => !m.coming_soon && handleMethodChange(m.id)}
-                      style={{ padding: '14px 16px', borderRadius: 14, border: `2px solid ${method === m.id ? m.color : 'var(--border)'}`, background: method === m.id ? m.bg : 'var(--bg2)', cursor: m.coming_soon ? 'not-allowed' : 'pointer', textAlign: 'left', transition: 'all .18s', position: 'relative', overflow: 'hidden', fontFamily: "'Plus Jakarta Sans',sans-serif", opacity: m.coming_soon ? 0.6 : 1 }}>
+                      style={{ padding: '14px 16px', borderRadius: 14, border: `2px solid ${method === m.id ? m.color : 'var(--border)'}`, background: method === m.id ? m.bg : 'var(--bg2)', cursor: m.coming_soon ? 'not-allowed' : 'pointer', textAlign: 'left', transition: 'all .18s', position: 'relative', overflow: 'hidden', fontFamily: "'Outfit',sans-serif", opacity: m.coming_soon ? 0.6 : 1 }}>
                       {/* Coming Soon overlay */}
                       {m.coming_soon && (
                         <div style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(247,147,26,.15)', color: '#F7931A', fontSize: 9.5, fontWeight: 800, padding: '3px 8px', borderRadius: 20, border: '1px solid rgba(247,147,26,.3)' }}>🕐 Akan Datang</div>
@@ -636,7 +636,7 @@ export default function ViewAddFunds({ user, balance: balanceProp = null }) {
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
                   {PRESETS_IDR.filter(p => p >= minAmount).map(p => (
                     <button key={p} onClick={() => setAmountIDR(String(p))}
-                      style={{ padding: '8px 14px', borderRadius: 9, border: `1.5px solid ${amountIDR === String(p) ? 'var(--blue)' : 'var(--border)'}`, background: amountIDR === String(p) ? 'var(--blue)' : 'transparent', color: amountIDR === String(p) ? '#fff' : 'var(--text2)', fontWeight: 700, fontSize: 12.5, cursor: 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif", transition: 'all .18s' }}>
+                      style={{ padding: '8px 14px', borderRadius: 9, border: `1.5px solid ${amountIDR === String(p) ? 'var(--blue)' : 'var(--border)'}`, background: amountIDR === String(p) ? 'var(--blue)' : 'transparent', color: amountIDR === String(p) ? '#fff' : 'var(--text2)', fontWeight: 700, fontSize: 12.5, cursor: 'pointer', fontFamily: "'Outfit',sans-serif", transition: 'all .18s' }}>
                       {formatIDR(p)}
                     </button>
                   ))}
@@ -695,7 +695,7 @@ export default function ViewAddFunds({ user, balance: balanceProp = null }) {
 
           {step === 2 && (
             <div className="card" style={{ padding: 26 }}>
-              <button onClick={() => setStep(1)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text3)', fontSize: 13, fontFamily: "'Plus Jakarta Sans',sans-serif", fontWeight: 600, marginBottom: 18, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <button onClick={() => setStep(1)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text3)', fontSize: 13, fontFamily: "'Outfit',sans-serif", fontWeight: 600, marginBottom: 18, display: 'flex', alignItems: 'center', gap: 6 }}>
                 ← Kembali
               </button>
               <div style={{ fontWeight: 800, fontSize: 17, color: 'var(--text)', marginBottom: 6 }}>Konfirmasi Pembayaran</div>
@@ -822,7 +822,7 @@ export default function ViewAddFunds({ user, balance: balanceProp = null }) {
             </p>
             <div style={{ display: 'flex', gap: 10 }}>
               <button onClick={() => setShowBackConfirm(false)}
-                style={{ flex: 1, padding: '10px 0', borderRadius: 9, border: '1.5px solid var(--border)', background: 'transparent', color: 'var(--text)', fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif" }}>
+                style={{ flex: 1, padding: '10px 0', borderRadius: 9, border: '1.5px solid var(--border)', background: 'transparent', color: 'var(--text)', fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: "'Outfit',sans-serif" }}>
                 Tetap di sini
               </button>
               <button onClick={async () => {
@@ -838,7 +838,7 @@ export default function ViewAddFunds({ user, balance: balanceProp = null }) {
                 } catch { }
                 setShowBackConfirm(false); setStep(1); setQrisData(null); setQrisStatus(null); setQrisError('');
               }}
-                style={{ flex: 1, padding: '10px 0', borderRadius: 9, border: 'none', background: 'var(--red)', color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif" }}>
+                style={{ flex: 1, padding: '10px 0', borderRadius: 9, border: 'none', background: 'var(--red)', color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: "'Outfit',sans-serif" }}>
                 Ya, Kembali
               </button>
             </div>
