@@ -265,6 +265,14 @@ export default async function handler(req, res) {
             return res.status(200).json({ disabled: Array.isArray(ids) ? ids : [] });
         }
 
+        // Ambil tier bonus deposit
+        if (action === 'get_bonus_tiers') {
+            const { data } = await supabase.from('settings').select('value').eq('key', 'deposit_bonus_tiers').maybeSingle();
+            let tiers = [];
+            try { tiers = data?.value ? JSON.parse(data.value) : []; } catch { tiers = []; }
+            return res.status(200).json({ value: Array.isArray(tiers) ? tiers : [] });
+        }
+
         return res.status(400).json({ error: 'Unknown action' });
     }
 
@@ -577,6 +585,23 @@ export default async function handler(req, res) {
             if (error) return res.status(500).json({ error: error.message });
             await logAudit(supabase, req, { action: 'change_password', target: null, detail: null });
             return res.status(200).json({ ok: true });
+        }
+
+        // Simpan tier bonus deposit
+        if (action === 'save_bonus_tiers') {
+            const raw = body.value;
+            if (!Array.isArray(raw)) return res.status(400).json({ error: 'Format tier tidak valid.' });
+            // Validasi tiap tier: min >= 0, percent 0..100. Buang yang invalid, urutkan menaik.
+            const clean = raw
+                .map(t => ({ min: parseInt(t?.min, 10), percent: parseFloat(t?.percent) }))
+                .filter(t => Number.isFinite(t.min) && t.min >= 0 && Number.isFinite(t.percent) && t.percent >= 0 && t.percent <= 100)
+                .sort((a, b) => a.min - b.min);
+            const { error } = await supabase.from('settings').upsert({
+                key: 'deposit_bonus_tiers', value: JSON.stringify(clean), updated_at: new Date().toISOString()
+            }, { onConflict: 'key' });
+            if (error) return res.status(500).json({ error: error.message });
+            await logAudit(supabase, req, { action: 'save_bonus_tiers', target: null, detail: { count: clean.length } });
+            return res.status(200).json({ ok: true, value: clean });
         }
 
         return res.status(400).json({ error: 'Unknown action' });

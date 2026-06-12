@@ -163,13 +163,11 @@ export default function AdminPanel() {
     const [markupLoaded, setMarkupLoaded] = useState(false); // false sampai nilai markup asli dari DB ke-load
     const [markupSaved, setMarkupSaved] = useState(false);
     const [users, setUsers] = useState([]);
-    const [chartRange, setChartRange] = useState('30d');
     const [apiStatus, setApiStatus] = useState('unknown');
     const [dbOrders, setDbOrders] = useState([]); // orders dari Supabase (akurat, semua user)
     const [servicePage, setServicePage] = useState(0); // pagination services
     const [disabledServices, setDisabledServices] = useState([]); // service id yang dimatikan admin
     const SERVICES_PER_PAGE = 100;
-    const rangeDropdownRef = useRef(null); // close-on-outside-click
 
     // ── Orders: search / filter / pagination / aksi ──
     const [orderSearch, setOrderSearch] = useState('');
@@ -213,23 +211,22 @@ export default function AdminPanel() {
     const [pwForm, setPwForm] = useState({ current: '', next: '', confirm: '' });
     const [savingPw, setSavingPw] = useState(false);
 
+    // ── Bonus deposit bertingkat (disimpan di settings 'deposit_bonus_tiers') ──
+    const [bonusTiers, setBonusTiers] = useState([]);
+    const [savingBonus, setSavingBonus] = useState(false);
+
     // ── Markup per-kategori / per-service ──
     const [markupRules, setMarkupRules] = useState({ categories: {}, services: {} });
     const [rulesDraft, setRulesDraft] = useState({ categories: {}, services: {} });
     const [savingRules, setSavingRules] = useState(false);
     const [svcOverrideSearch, setSvcOverrideSearch] = useState('');
 
-    const RANGE_OPTIONS = [
-        { label: 'Last 7 days', value: '7d', days: 7 },
-        { label: 'Last 30 days', value: '30d', days: 30 },
-        { label: 'Last 90 days', value: '90d', days: 90 },
-        { label: 'Last 12 months', value: '12m', days: 365 },
-    ];
-    const [rangeDropdownOpen, setRangeDropdownOpen] = useState(false);
+    // Mapping periode (statsPeriod) → jumlah hari yang digambar di grafik.
+    // 'Semua waktu' digambar 90 hari terakhir biar grafik tetap informatif.
+    const PERIOD_TO_DAYS = { all: 90, today: 7, '7d': 7, '30d': 30 };
 
-    const generateChartData = (range) => {
-        const opt = RANGE_OPTIONS.find(o => o.value === range) || RANGE_OPTIONS[1];
-        const days = opt.days;
+    const generateChartData = (period) => {
+        const days = PERIOD_TO_DAYS[period] ?? 30;
         const now = new Date();
         const data = [];
 
@@ -622,6 +619,7 @@ export default function AdminPanel() {
             fetchDisabledServices();
             fetchOrders();
             loadUsers();
+            loadBonusTiers();
         };
         doRefresh();
         const interval = setInterval(doRefresh, 300 * 1000);
@@ -701,6 +699,56 @@ export default function AdminPanel() {
         setSavingRate(false);
     };
 
+    // ── Bonus deposit: load dari settings, simpan via admin-api ──
+    // Default tier kalau belum ada konfigurasi.
+    const DEFAULT_BONUS_TIERS = [
+        { min: 50000, percent: 2 },
+        { min: 100000, percent: 3 },
+        { min: 250000, percent: 5 },
+        { min: 500000, percent: 7 },
+        { min: 1000000, percent: 10 },
+    ];
+
+    const loadBonusTiers = useCallback(async () => {
+        try {
+            const res = await adminFetch('/api/admin-api?action=get_bonus_tiers');
+            if (res.ok) {
+                const d = await res.json().catch(() => ({}));
+                const val = d.value ?? d.tiers ?? d;
+                const parsed = typeof val === 'string' ? JSON.parse(val) : val;
+                if (Array.isArray(parsed) && parsed.length > 0) { setBonusTiers(parsed); return; }
+            }
+            setBonusTiers(DEFAULT_BONUS_TIERS);
+        } catch { setBonusTiers(DEFAULT_BONUS_TIERS); }
+    }, []);
+
+    const updateTier = (i, field, val) => {
+        setBonusTiers(prev => prev.map((t, idx) => idx === i
+            ? { ...t, [field]: parseInt(String(val).replace(/[^\d]/g, ''), 10) || 0 }
+            : t));
+    };
+    const addTier = () => setBonusTiers(prev => [...prev, { min: 0, percent: 0 }]);
+    const removeTier = (i) => setBonusTiers(prev => prev.filter((_, idx) => idx !== i));
+
+    // Simpan tier. Butuh endpoint: POST /api/admin-api?action=save_bonus_tiers { value: [...] }
+    const saveBonusTiers = async () => {
+        // Validasi: min & percent harus angka >= 0, buang baris kosong, urutkan
+        const clean = bonusTiers
+            .filter(t => t.min != null && t.percent != null)
+            .map(t => ({ min: Number(t.min), percent: Number(t.percent) }))
+            .filter(t => t.min >= 0 && t.percent >= 0 && t.percent <= 100)
+            .sort((a, b) => a.min - b.min);
+        setSavingBonus(true);
+        try {
+            const res = await adminFetch('/api/admin-api?action=save_bonus_tiers', { method: 'POST', body: JSON.stringify({ value: clean }) });
+            if (res.status === 401) { logout(); return; }
+            const d = await res.json().catch(() => ({}));
+            if (res.ok && !d.error) { setBonusTiers(clean); showToast('Tier bonus disimpan.', 'success'); }
+            else showToast(d.error || 'Endpoint save_bonus_tiers belum tersedia di backend.', 'error');
+        } catch (e) { showToast(`Error: ${e.message}`, 'error'); }
+        setSavingBonus(false);
+    };
+
     // Ganti password admin. Butuh endpoint backend: POST /api/admin-api?action=change_password { current, next }
     const changePassword = async () => {
         if (!pwForm.current || !pwForm.next) { showToast('Lengkapi semua field.', 'error'); return; }
@@ -770,18 +818,6 @@ export default function AdminPanel() {
         a.href = url; a.download = filename; a.click();
         URL.revokeObjectURL(url);
     };
-
-    // ✅ Close range dropdown on click-outside
-    useEffect(() => {
-        if (!rangeDropdownOpen) return;
-        const handler = (e) => {
-            if (rangeDropdownRef.current && !rangeDropdownRef.current.contains(e.target)) {
-                setRangeDropdownOpen(false);
-            }
-        };
-        document.addEventListener('mousedown', handler);
-        return () => document.removeEventListener('mousedown', handler);
-    }, [rangeDropdownOpen]);
 
     // ── Toast & confirm helpers ──
     const showToast = (msg, type = 'info') => {
@@ -994,7 +1030,7 @@ export default function AdminPanel() {
 
     // ── MAIN ──
     return (
-        <div className={`root${dark ? ' dark' : ''}`} style={{ display: 'flex', height: '100vh', overflow: 'hidden', fontFamily: "'Plus Jakarta Sans',sans-serif" }}>
+        <div className={`root admin-shell${dark ? ' dark' : ''}`} style={{ display: 'flex', height: '100vh', overflow: 'hidden', fontFamily: "'Plus Jakarta Sans',sans-serif" }}>
 
             <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
 
@@ -1555,7 +1591,7 @@ export default function AdminPanel() {
 
                     {/* ── REVENUE ── */}
                     {menu === 'Revenue' && (() => {
-                        const chartData = generateChartData(chartRange);
+                        const chartData = generateChartData(statsPeriod);
                         return (
                             <div>
                                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 22, flexWrap: 'wrap', gap: 10 }}>
@@ -1588,7 +1624,7 @@ export default function AdminPanel() {
                                         <div>
                                             <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text)' }}>Pendapatan & User Baru</div>
                                             <div style={{ fontSize: 12.5, color: 'var(--text3)', marginTop: 2 }}>
-                                                {RANGE_OPTIONS.find(o => o.value === chartRange)?.label} · data real order
+                                                {PERIOD_OPTIONS.find(o => o.value === statsPeriod)?.label} · data real order
                                             </div>
                                         </div>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
@@ -1597,28 +1633,6 @@ export default function AdminPanel() {
                                                     Rp {chartData.reduce((s, d) => s + d.revenue, 0).toLocaleString('id-ID')}
                                                 </div>
                                                 <div style={{ fontSize: 11.5, color: 'var(--text3)' }}>Total periode ini</div>
-                                            </div>
-                                            {/* ✅ Dropdown Range Selector — close on outside click */}
-                                            <div ref={rangeDropdownRef} style={{ position: 'relative' }}>
-                                                <button onClick={() => setRangeDropdownOpen(v => !v)}
-                                                    style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 9, border: '1.5px solid var(--border)', background: 'var(--white)', cursor: 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif", fontWeight: 600, fontSize: 13, color: 'var(--text2)' }}>
-                                                    {RANGE_OPTIONS.find(o => o.value === chartRange)?.label}
-                                                    <ChevronRight size={13} style={{ transform: rangeDropdownOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform .15s', color: 'var(--text3)' }} />
-                                                </button>
-                                                {rangeDropdownOpen && (
-                                                    <div style={{ position: 'absolute', right: 0, top: 'calc(100% + 6px)', background: 'var(--white)', border: '1px solid var(--border)', borderRadius: 12, boxShadow: '0 8px 24px rgba(0,0,0,.1)', zIndex: 100, minWidth: 160, overflow: 'hidden' }}>
-                                                        {RANGE_OPTIONS.map(opt => (
-                                                            <button key={opt.value} onClick={() => { setChartRange(opt.value); setRangeDropdownOpen(false); }}
-                                                                style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '10px 14px', border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif", fontWeight: chartRange === opt.value ? 700 : 500, fontSize: 13, color: chartRange === opt.value ? 'var(--blue)' : 'var(--text)', textAlign: 'left' }}
-                                                                onMouseEnter={e => e.currentTarget.style.background = 'var(--bg2)'}
-                                                                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                                                                {chartRange === opt.value && <CheckCircle size={13} style={{ color: 'var(--blue)', flexShrink: 0 }} />}
-                                                                {chartRange !== opt.value && <span style={{ width: 13 }} />}
-                                                                {opt.label}
-                                                            </button>
-                                                        ))}
-                                                    </div>
-                                                )}
                                             </div>
                                         </div>
                                     </div>
@@ -1983,6 +1997,48 @@ export default function AdminPanel() {
                                         <Save size={15} /> {savingPw ? 'Menyimpan...' : 'Ubah Password'}
                                     </button>
                                 </div>
+                            </div>
+                            {/* Bonus Deposit Bertingkat */}
+                            <div className="card" style={{ padding: 22, marginBottom: 16 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6, flexWrap: 'wrap', gap: 8 }}>
+                                    <div>
+                                        <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text)' }}>Bonus Deposit Bertingkat</div>
+                                        <p style={{ fontSize: 12, color: 'var(--text3)', marginTop: 3 }}>Makin besar deposit, makin besar bonus. Berlaku untuk QRIS & crypto.</p>
+                                    </div>
+                                    <button onClick={addTier} className="btn btn-outline" style={{ padding: '7px 14px', borderRadius: 9, fontSize: 12.5 }}>
+                                        + Tambah Tier
+                                    </button>
+                                </div>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, margin: '14px 0' }}>
+                                    {bonusTiers.length === 0 && (
+                                        <p style={{ fontSize: 12.5, color: 'var(--text3)', textAlign: 'center', padding: '12px 0' }}>Belum ada tier. Klik "Tambah Tier" untuk membuat.</p>
+                                    )}
+                                    {bonusTiers.map((t, i) => (
+                                        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                                            <span style={{ fontSize: 12.5, color: 'var(--text3)', fontWeight: 600, minWidth: 70 }}>Deposit ≥</span>
+                                            <div style={{ position: 'relative', flex: '1 1 130px' }}>
+                                                <span style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', fontSize: 12.5, color: 'var(--text3)', fontWeight: 700 }}>Rp</span>
+                                                <input className="inp" inputMode="numeric" value={t.min ? Number(t.min).toLocaleString('id-ID') : ''}
+                                                    onChange={e => updateTier(i, 'min', e.target.value)}
+                                                    placeholder="50.000" style={{ paddingLeft: 34, height: 38 }} />
+                                            </div>
+                                            <span style={{ fontSize: 12.5, color: 'var(--text3)', fontWeight: 600 }}>bonus</span>
+                                            <div style={{ position: 'relative', width: 90 }}>
+                                                <input className="inp" inputMode="numeric" value={t.percent ?? ''}
+                                                    onChange={e => updateTier(i, 'percent', e.target.value)}
+                                                    placeholder="5" style={{ paddingRight: 26, height: 38 }} />
+                                                <span style={{ position: 'absolute', right: 11, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: 'var(--text3)', fontWeight: 700 }}>%</span>
+                                            </div>
+                                            <button onClick={() => removeTier(i)} aria-label="Hapus tier"
+                                                style={{ background: 'var(--red-l)', border: 'none', borderRadius: 8, width: 38, height: 38, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--red)', flexShrink: 0 }}>
+                                                <Trash2 size={15} />
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                                <button className="btn btn-blue" onClick={saveBonusTiers} disabled={savingBonus} style={{ width: '100%', padding: 11, borderRadius: 10, opacity: savingBonus ? 0.6 : 1 }}>
+                                    <Save size={15} /> {savingBonus ? 'Menyimpan...' : 'Simpan Tier Bonus'}
+                                </button>
                             </div>
                             <div className="card" style={{ padding: 20, border: '1.5px solid rgba(239,68,68,.2)' }}>
                                 <div style={{ fontWeight: 700, fontSize: 13.5, color: 'var(--red)', marginBottom: 10 }}>Danger Zone</div>

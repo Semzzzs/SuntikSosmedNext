@@ -1463,3 +1463,135 @@ a {
   color: #fff;
   transform: translateY(-1px);
 }
+
+/* ============================================================
+   Glow biru + lift pas hover kartu layanan (/layanan/[slug])
+   → konsisten dengan kartu di landing. .root.dark → --blue #3B82F6
+   ============================================================ */
+
+.landing-svc-card::after {
+  content: '';
+  position: absolute;
+  top: -40px;
+  right: -40px;
+  width: 160px;
+  height: 160px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(59, 130, 246, .26) 0%, transparent 70%);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--ease);
+  z-index: 0;
+}
+
+.landing-svc-card:hover::after {
+  opacity: 1;
+}
+
+.landing-svc-card>* {
+  position: relative;
+  z-index: 1;
+}
+
+.landing-svc-card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(59, 130, 246, .45);
+  box-shadow: 0 16px 40px rgba(59, 130, 246, .18), 0 0 0 1px rgba(59, 130, 246, .15);
+}
+
+.landing-svc-price-val {
+  background: linear-gradient(135deg, #3B82F6, #2563EB);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* ============================================================
+   ADMIN POLISH — upgrade tampilan /Voltaraz tanpa rombak JSX.
+   Semua di-scope ke .admin-shell → AMAN, tidak bocor ke
+   landing / halaman user. Paste di AKHIR globals.css.
+   (Wrapper admin sudah diberi class "admin-shell".)
+   ============================================================ */
+
+/* ---- 1. CARD: transisi konsisten + border nyala halus saat hover ---- */
+.admin-shell .card {
+  transition: transform var(--ease), box-shadow var(--ease), border-color var(--ease);
+}
+
+.admin-shell .card:hover {
+  border-color: var(--border2);
+}
+
+/* ---- 2. TABEL: header sticky + uppercase + zebra + hover biru ---- */
+.admin-shell thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--bg2);
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: .05em;
+  color: var(--text3);
+}
+
+.admin-shell.dark thead th {
+  background: var(--white);
+}
+
+/* Zebra halus — baris genap sedikit beda */
+.admin-shell tbody tr:nth-child(even) td {
+  background: rgba(127, 127, 127, .025);
+}
+
+/* Hover baris lebih jelas (biru tipis), override zebra */
+.admin-shell tr:hover td {
+  background: var(--blue-l) !important;
+}
+
+/* Kolom pertama (ID/nama) sedikit lebih tegas */
+.admin-shell tbody td:first-child {
+  font-weight: 600;
+}
+
+/* ---- 3. BUTTON: shadow tipis + press feedback ---- */
+.admin-shell .btn-blue {
+  box-shadow: 0 2px 8px rgba(37, 99, 235, .25);
+}
+
+.admin-shell .btn:active {
+  transform: translateY(0) scale(.98);
+}
+
+/* ---- 4. INPUT: focus ring lembut ---- */
+.admin-shell .inp:focus {
+  box-shadow: 0 0 0 3px var(--blue-l);
+}
+
+/* ---- 5. SCROLLBAR tipis ala dashboard modern ---- */
+.admin-shell ::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+.admin-shell ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.admin-shell ::-webkit-scrollbar-thumb {
+  background: var(--border2);
+  border-radius: 6px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.admin-shell ::-webkit-scrollbar-thumb:hover {
+  background: var(--text3);
+  background-clip: padding-box;
+}
+
+/* ---- 6. AKSESIBILITAS: focus-visible keyboard ---- */
+.admin-shell .btn:focus-visible,
+.admin-shell .inp:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}

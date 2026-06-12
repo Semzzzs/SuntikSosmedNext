@@ -5,7 +5,7 @@ import {
   Target, Moon, Sun, ArrowRight, UserPlus, Wallet, ShoppingCart,
   Instagram, Youtube, Twitter, Facebook, Play, Star, Sparkles,
   ShieldCheck, TrendingUp, CheckCircle, Zap, Globe, Lock, Search, ChevronDown,
-  Menu, X, Home, LayoutGrid, HelpCircle, ArrowUp
+  Menu, X, Home, LayoutGrid, HelpCircle
 } from 'lucide-react';
 import { useTheme } from '@/context/ThemeContext';
 
@@ -132,7 +132,7 @@ const FEATURES = [
   { icon: <Star size={22} />, iconBg: 'var(--yellow-l)', iconColor: 'var(--yellow)', title: 'Kualitas Premium', desc: 'Engagement berkualitas tinggi dari akun nyata di seluruh dunia.' },
   { icon: <ShieldCheck size={22} />, iconBg: 'var(--green-l)', iconColor: 'var(--green)', title: 'Aman & Terpercaya', desc: 'Metode 100% aman, tidak perlu password. Perlindungan terjamin.' },
   { icon: <Zap size={22} />, iconBg: 'rgba(139,92,246,.1)', iconColor: 'var(--purple)', title: 'Pengiriman Instan', desc: 'Order mulai diproses dalam hitungan menit. Super cepat.' },
-  { icon: <Globe size={22} />, grad: 'var(--blue)', title: 'Support 24/7', desc: 'Tim kami selalu siap membantu kapanpun, siang maupun malam.' },
+  { icon: <Globe size={22} />, iconBg: 'var(--blue-l)', iconColor: 'var(--blue)', title: 'Support 24/7', desc: 'Tim kami selalu siap membantu kapanpun, siang maupun malam.' },
 ];
 
 const STEPS = [
@@ -258,17 +258,6 @@ export default function Landing() {
   const navScrolled = useNavbarScroll();
   const [serviceQuery, setServiceQuery] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
-  const [showTop, setShowTop] = useState(false);
-
-  // Tampilkan tombol "ke atas" setelah scroll cukup jauh
-  useEffect(() => {
-    const onScroll = () => setShowTop(window.scrollY > 500);
-    window.addEventListener('scroll', onScroll, { passive: true });
-    onScroll();
-    return () => window.removeEventListener('scroll', onScroll);
-  }, []);
-
-  const scrollToTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
 
   // Kunci scroll body saat drawer mobile terbuka
   useEffect(() => {
@@ -498,7 +487,7 @@ export default function Landing() {
             Bikin Sosmed Kamu<br /><span className="grad-text">Meledak</span> Hari Ini
           </h1>
           <p style={{ color: 'var(--text2)', fontSize: 16, lineHeight: 1.7, marginBottom: 28, maxWidth: 480, margin: '0 auto 28px' }}>
-            Followers, likes, dan views buat semua media sosial. Proses kilat, harga mulai <b style={{ color: 'var(--text)' }}>Rp 1/K</b>, garansi refill &amp; support 24 jam.
+            Followers, likes, dan views buat semua media sosial. Proses kilat, harga mulai <b style={{ color: 'var(--text)' }}>Rp 1 Perak</b>, garansi refill &amp; support 24 jam.
           </p>
 
           <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginBottom: 36, flexWrap: 'wrap' }}>
@@ -515,7 +504,7 @@ export default function Landing() {
             {[
               { val: 2288, decimals: 0, suffix: '+', label: 'Layanan tersedia' },
               { val: 20, decimals: 0, prefix: '', suffix: '', label: 'Platform didukung' },
-              { val: 1, decimals: 0, prefix: 'Rp ', suffix: '/Perak', label: 'Harga mulai dari' },
+              { val: 1, decimals: 0, prefix: 'Rp ', suffix: ' Perak', label: 'Harga mulai dari' },
               { val: 24, decimals: 0, suffix: '/7', label: 'Proses & support' },
             ].map(s => (
               <div key={s.label} style={{ textAlign: 'center' }}>
@@ -582,7 +571,7 @@ export default function Landing() {
             {FEATURES.map((f, i) => (
               <RevealSection key={i} delay={i * 120} variant="scale" duration={900}>
                 <div className="feature-card">
-                  <div style={{ width: 52, height: 52, borderRadius: 16, background: f.iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 18, boxShadow: '0 6px 20px rgba(0,0,0,.15)' }}>{f.icon}</div>
+                  <div style={{ width: 52, height: 52, borderRadius: 16, background: f.iconBg, color: f.iconColor, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 18, boxShadow: '0 6px 20px rgba(0,0,0,.15)' }}>{f.icon}</div>
                   <div style={{ fontWeight: 800, fontSize: 15.5, color: 'var(--text)', marginBottom: 8 }}>{f.title}</div>
                   <p style={{ fontSize: 13.5, color: 'var(--text2)', lineHeight: 1.65 }}>{f.desc}</p>
                 </div>
@@ -985,27 +974,6 @@ export default function Landing() {
           </div>
         </div>
       </footer>
-
-      {/* Scroll to top */}
-      <button
-        onClick={scrollToTop}
-        aria-label="Kembali ke atas"
-        style={{
-          position: 'fixed', bottom: 24, right: 24, zIndex: 90,
-          width: 46, height: 46, borderRadius: 14, border: 'none', cursor: 'pointer',
-          background: 'var(--blue)', color: '#fff',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          boxShadow: '0 8px 24px rgba(37,99,235,.4)',
-          opacity: showTop ? 1 : 0,
-          transform: showTop ? 'translateY(0) scale(1)' : 'translateY(16px) scale(.9)',
-          pointerEvents: showTop ? 'auto' : 'none',
-          transition: 'opacity .3s ease, transform .3s cubic-bezier(.34,1.56,.64,1)',
-        }}
-        onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px) scale(1.05)'; }}
-        onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0) scale(1)'; }}
-      >
-        <ArrowUp size={20} />
-      </button>
     </div>
   );
 }

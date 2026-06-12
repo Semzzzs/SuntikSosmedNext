@@ -52,6 +52,31 @@ const METHODS = [
 
 const PRESETS_IDR = [5000, 10000, 15000, 20000, 50000, 100000];
 
+// ── Default tier bonus deposit (dipakai kalau admin belum set di settings) ──
+// min = nominal minimum (inklusif), percent = persen bonus.
+// Diurutkan dari kecil ke besar. Bonus dihitung dari tier TERTINGGI yang lolos.
+const DEFAULT_BONUS_TIERS = [
+  { min: 50000, percent: 2 },
+  { min: 100000, percent: 3 },
+  { min: 250000, percent: 5 },
+  { min: 500000, percent: 7 },
+  { min: 1000000, percent: 10 },
+];
+
+// Hitung persen bonus untuk nominal tertentu berdasarkan daftar tier.
+// Mengembalikan persen (number). 0 kalau tidak ada tier yang lolos.
+function getBonusPercent(amount, tiers) {
+  if (!amount || !Array.isArray(tiers) || tiers.length === 0) return 0;
+  // urut menaik berdasarkan min, ambil tier tertinggi yang <= amount
+  const sorted = [...tiers].filter(t => t && t.min != null && t.percent != null)
+    .sort((a, b) => a.min - b.min);
+  let pct = 0;
+  for (const t of sorted) {
+    if (amount >= t.min) pct = t.percent;
+  }
+  return pct;
+}
+
 const formatIDR = (num) => {
   if (!num) return 'Rp 0';
   return 'Rp ' + Math.round(num).toLocaleString('id-ID');
@@ -68,6 +93,7 @@ export default function ViewAddFunds({ user, balance: balanceProp = null }) {
   const [amountIDR, setAmountIDR] = useState('');
   const [balanceIDRUser, setBalanceIDRUser] = useState(balanceProp);
   const [rate, setRate] = useState(null);
+  const [bonusTiers, setBonusTiers] = useState(DEFAULT_BONUS_TIERS);
   const [rateUpdated, setRateUpdated] = useState(null);
   const [rateSource, setRateSource] = useState(null);
   const [loadingRate, setLoadingRate] = useState(true);
@@ -241,6 +267,19 @@ export default function ViewAddFunds({ user, balance: balanceProp = null }) {
     fetchRate();
   }, []);
 
+  // Ambil konfigurasi tier bonus deposit dari Supabase settings.
+  // Disimpan admin di key 'deposit_bonus_tiers' sebagai JSON string.
+  useEffect(() => {
+    supabase.from('settings').select('value').eq('key', 'deposit_bonus_tiers').maybeSingle()
+      .then(({ data }) => {
+        if (!data?.value) return;
+        try {
+          const parsed = typeof data.value === 'string' ? JSON.parse(data.value) : data.value;
+          if (Array.isArray(parsed) && parsed.length > 0) setBonusTiers(parsed);
+        } catch { /* pakai default kalau parse gagal */ }
+      });
+  }, []);
+
   // Sync balance dari prop (dihitung di dashboard.jsx dari user_transactions)
   useEffect(() => {
     if (balanceProp !== null) setBalanceIDRUser(balanceProp);
@@ -251,8 +290,10 @@ export default function ViewAddFunds({ user, balance: balanceProp = null }) {
   const numUSD = rate ? numIDR / rate : 0;
   const balanceIDR = balanceIDRUser;
   const feeIDR = method === 'qris' ? (200 + numIDR * 0.007) : method === 'card' ? numIDR * 0.025 : 0;
-  const bonusIDR = method === 'crypto' && numIDR >= 1000000 ? numIDR * 0.05 : 0;
   const totalIDR = numIDR + feeIDR;
+  // Bonus tiered (berlaku untuk qris & crypto, tidak untuk transfer manual).
+  const bonusPercent = (method === 'qris' || method === 'crypto') ? getBonusPercent(numIDR, bonusTiers) : 0;
+  const bonusIDR = Math.round(numIDR * bonusPercent / 100);
   const receiveIDR = numIDR + bonusIDR;
   const selectedMethod = METHODS.find(m => m.id === method);
 
@@ -648,17 +689,34 @@ export default function ViewAddFunds({ user, balance: balanceProp = null }) {
                     onChange={handleAmountChange}
                     placeholder="0" />
                 </div>
-                {numIDR > 0 && rate && (
-                  <div style={{ fontSize: 12.5, color: 'var(--text3)', marginBottom: 14 }}>
+
+                {/* Info tier bonus — biar user tau "deposit segini dapet bonus segini" */}
+                {(method === 'qris' || method === 'crypto') && bonusTiers.length > 0 && (
+                  <div style={{ background: 'var(--green-l)', border: '1px solid rgba(16,185,129,.2)', borderRadius: 10, padding: '12px 14px', marginBottom: 14 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, fontWeight: 800, color: 'var(--green)', marginBottom: 8 }}>
+                      <Star size={13} /> Bonus Deposit Bertingkat
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      {[...bonusTiers].sort((a, b) => a.min - b.min).map((t, i) => {
+                        const active = numIDR >= t.min &&
+                          (i === bonusTiers.length - 1 || numIDR < [...bonusTiers].sort((a, b) => a.min - b.min)[i + 1].min);
+                        return (
+                          <div key={t.min} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: active ? 800 : 600, color: active ? 'var(--green)' : 'var(--text2)' }}>
+                            <span>Deposit ≥ {formatIDR(t.min)}</span>
+                            <span>+{t.percent}% bonus{active ? '  ✓' : ''}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
 
-                {/* Crypto bonus */}
-                {method === 'crypto' && numIDR >= 1000000 && (
-                  <div style={{ marginBottom: 14, background: 'rgba(247,147,26,.08)', border: '1px solid rgba(247,147,26,.25)', borderRadius: 10, padding: '10px 14px', display: 'flex', gap: 10, alignItems: 'center' }}>
-                    <Star size={15} style={{ color: '#F7931A', flexShrink: 0 }} />
-                    <div style={{ fontSize: 13, fontWeight: 700, color: '#F7931A' }}>
-                      🎉 Bonus 5% Crypto — kamu dapat +{formatIDR(bonusIDR)} extra!
+                {/* Bonus deposit (tiered) */}
+                {bonusIDR > 0 && (
+                  <div style={{ marginBottom: 14, background: 'var(--green-l)', border: '1px solid rgba(16,185,129,.25)', borderRadius: 10, padding: '10px 14px', display: 'flex', gap: 10, alignItems: 'center' }}>
+                    <Star size={15} style={{ color: 'var(--green)', flexShrink: 0 }} />
+                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--green)' }}>
+                      🎉 Bonus {bonusPercent}% — kamu dapat +{formatIDR(bonusIDR)} extra saldo!
                     </div>
                   </div>
                 )}
@@ -668,7 +726,7 @@ export default function ViewAddFunds({ user, balance: balanceProp = null }) {
                     {[
                       { l: 'Jumlah Top Up', v: formatIDR(numIDR) },
                       ...(feeIDR > 0 ? [{ l: method === 'qris' ? 'Biaya QRIS (Rp 200 + 0.7%)' : 'Biaya Layanan (2.5%)', v: `+${formatIDR(Math.round(feeIDR))}`, c: 'var(--red)' }] : []),
-                      ...(bonusIDR > 0 ? [{ l: 'Bonus Crypto (5%)', v: `+${formatIDR(bonusIDR)}`, c: 'var(--green)' }] : []),
+                      ...(bonusIDR > 0 ? [{ l: `Bonus Deposit (${bonusPercent}%)`, v: `+${formatIDR(bonusIDR)}`, c: 'var(--green)' }] : []),
                       { l: 'Total Bayar', v: formatIDR(totalIDR), bold: true },
                       { l: 'Saldo yang Diterima', v: formatIDR(receiveIDR), bold: true, c: 'var(--blue)' },
                     ].map((r, i, arr) => (
@@ -707,7 +765,7 @@ export default function ViewAddFunds({ user, balance: balanceProp = null }) {
                   { l: 'Jumlah Top Up', v: formatIDR(numIDR) },
                   { l: 'Setara USD', v: `≈ $${numUSD.toFixed(4)}` },
                   ...(feeIDR > 0 ? [{ l: 'Biaya Layanan', v: `+${formatIDR(feeIDR)}`, c: 'var(--red)' }] : []),
-                  ...(bonusIDR > 0 ? [{ l: 'Bonus Crypto 5%', v: `+${formatIDR(bonusIDR)}`, c: 'var(--green)' }] : []),
+                  ...(bonusIDR > 0 ? [{ l: `Bonus Deposit ${bonusPercent}%`, v: `+${formatIDR(bonusIDR)}`, c: 'var(--green)' }] : []),
                   { l: 'Total Bayar', v: formatIDR(totalIDR), bold: true },
                   { l: 'Saldo yang Diterima', v: formatIDR(receiveIDR), bold: true, c: 'var(--blue)' },
                 ].map((r, i, arr) => (

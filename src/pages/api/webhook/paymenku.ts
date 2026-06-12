@@ -7,6 +7,31 @@ const supabaseAdmin = createClient(
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
 );
 
+// ── Bonus deposit: dihitung DI SERVER (sumber kebenaran), bukan dari client ──
+// Tier diambil dari settings 'deposit_bonus_tiers'. Kalau belum diset, bonus = 0
+// (aman: lebih baik tidak kasih bonus daripada salah kasih).
+async function getBonusAmount(baseAmount: number): Promise<{ bonus: number; percent: number }> {
+    try {
+        const { data } = await supabaseAdmin
+            .from('settings').select('value').eq('key', 'deposit_bonus_tiers').maybeSingle();
+        if (!data?.value) return { bonus: 0, percent: 0 };
+        const tiers = typeof data.value === 'string' ? JSON.parse(data.value) : data.value;
+        if (!Array.isArray(tiers) || tiers.length === 0) return { bonus: 0, percent: 0 };
+        // ambil persen dari tier tertinggi yang min-nya <= baseAmount
+        const sorted = tiers
+            .filter((t: any) => t && Number.isFinite(Number(t.min)) && Number.isFinite(Number(t.percent)))
+            .sort((a: any, b: any) => Number(a.min) - Number(b.min));
+        let percent = 0;
+        for (const t of sorted) {
+            if (baseAmount >= Number(t.min)) percent = Number(t.percent);
+        }
+        const bonus = Math.round(baseAmount * percent / 100);
+        return { bonus, percent };
+    } catch {
+        return { bonus: 0, percent: 0 };
+    }
+}
+
 export default async function handler(req: any, res: any) {
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
@@ -80,9 +105,13 @@ export default async function handler(req: any, res: any) {
             // ✅ Kreditkan saldo pakai NOMINAL DEPOSIT yang user minta (tersimpan di baris pending),
             // BUKAN amount_received dari Paymenku. amount_received = net setelah potongan fee,
             // yang bisa keliru kalau mode fee berubah. Nominal deposit user adalah sumber kebenaran.
-            const creditAmount = Math.round(
+            const baseAmount = Math.round(
                 Number(pendingRow.qr_amount) || Number(pendingRow.amount) || amount
             );
+            // ✅ Hitung bonus di server dari nominal deposit asli (anti-curang).
+            const { bonus, percent } = await getBonusAmount(baseAmount);
+            const creditAmount = baseAmount + bonus;
+            const bonusNote = bonus > 0 ? ` (+bonus ${percent}%: Rp ${bonus})` : '';
             // ✅ Email sudah benar dari awal — tinggal jadikan deposit success.
             const { error: updErr } = await supabaseAdmin
                 .from('transactions')
@@ -90,14 +119,14 @@ export default async function handler(req: any, res: any) {
                     type: 'deposit',
                     status: 'success',
                     amount: creditAmount,
-                    description: `Top up QRIS - Ref: ${reference_id} - TrxID: ${trx_id}`,
+                    description: `Top up QRIS - Ref: ${reference_id} - TrxID: ${trx_id}${bonusNote}`,
                 })
                 .eq('id', pendingRow.id);
             if (updErr) {
                 console.error('[Webhook] update pending row error:', updErr.message);
                 return res.status(500).json({ error: 'DB update failed' });
             }
-            console.log(`[Webhook] Deposit OK (via pending row): ${trx_id} - Rp ${creditAmount} - ${pendingRow.email}`);
+            console.log(`[Webhook] Deposit OK (via pending row): ${trx_id} - Rp ${baseAmount}${bonusNote} = Rp ${creditAmount} - ${pendingRow.email}`);
             return res.status(200).json({ received: true });
         }
 
@@ -133,16 +162,24 @@ export default async function handler(req: any, res: any) {
         const status = verifiedEmail ? 'success' : 'pending_webhook';
         const emailToSave = verifiedEmail || email || '';
 
+        // ✅ Bonus hanya diberikan kalau deposit terverifikasi (status success).
+        // Kalau pending_webhook (butuh review manual admin), jangan tambah bonus dulu.
+        const baseAmt = Math.round(amount);
+        const { bonus: fbBonus, percent: fbPercent } =
+            status === 'success' ? await getBonusAmount(baseAmt) : { bonus: 0, percent: 0 };
+        const fbCredit = baseAmt + fbBonus;
+        const fbBonusNote = fbBonus > 0 ? ` (+bonus ${fbPercent}%: Rp ${fbBonus})` : '';
+
         const { error: insErr } = await supabaseAdmin.from('transactions').insert({
             user_id: verifiedUserId,
             email: emailToSave,
             type: 'deposit',
-            amount: Math.round(amount),
-            description: `Top up QRIS - Ref: ${reference_id} - TrxID: ${trx_id}`,
+            amount: fbCredit,
+            description: `Top up QRIS - Ref: ${reference_id} - TrxID: ${trx_id}${fbBonusNote}`,
             status,
         });
         if (insErr) console.error('[Webhook] insert error:', insErr.message);
-        console.log(`[Webhook] Deposit (via fallback): ${trx_id} - Rp ${amount} - email: ${emailToSave || 'unknown'} - status: ${status}`);
+        console.log(`[Webhook] Deposit (via fallback): ${trx_id} - Rp ${baseAmt}${fbBonusNote} = Rp ${fbCredit} - email: ${emailToSave || 'unknown'} - status: ${status}`);
     }
 
     return res.status(200).json({ received: true });
