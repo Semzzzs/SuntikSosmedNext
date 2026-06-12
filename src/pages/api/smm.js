@@ -79,7 +79,7 @@ export default async function handler(req, res) {
     }
 
     // ✅ Whitelist params — cegah override 'key' atau inject param arbitrary
-    const ALLOWED = new Set(['action', 'service', 'link', 'quantity', 'order', 'orders']);
+    const ALLOWED = new Set(['action', 'service', 'link', 'quantity', 'order', 'orders', 'comments']);
     const safeQuery = Object.fromEntries(
         Object.entries(req.query).filter(([k]) => ALLOWED.has(k))
     );
@@ -154,9 +154,14 @@ export default async function handler(req, res) {
     }
 
     try {
+        // Custom Comments: provider menghitung jumlah dari daftar komentar,
+        // jadi 'quantity' tidak diteruskan ke provider (tetap dipakai untuk cek saldo di atas).
+        const forwardQuery = { ...safeQuery };
+        if (forwardQuery.comments) delete forwardQuery.quantity;
+
         const body = new URLSearchParams({
             key: apiKey,
-            ...safeQuery,
+            ...forwardQuery,
         });
 
         const response = await fetch(`${apiUrl}/api/v2`, {

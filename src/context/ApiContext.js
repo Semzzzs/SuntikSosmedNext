@@ -27,7 +27,7 @@ export function ApiProvider({ children }) {
 }
 
 // ── Whitelist params yang diizinkan ke /api/smm ────────────────────────────
-const ALLOWED_PARAMS = new Set(['action', 'service', 'link', 'quantity', 'order', 'orders']);
+const ALLOWED_PARAMS = new Set(['action', 'service', 'link', 'quantity', 'order', 'orders', 'comments']);
 
 /* ── SMM API HELPER — lewat proxy /api/smm dengan auth token ── */
 export async function smmRequest(params) {
@@ -82,7 +82,8 @@ export function useSmmApi() {
   return {
     getServices: () => smmRequest({ action: 'services' }),
     getBalance: () => smmRequest({ action: 'balance' }),
-    addOrder: (service, link, quantity) => smmRequest({ action: 'add', service, link, quantity }),
+    addOrder: (service, link, quantity, opts = {}) =>
+      smmRequest({ action: 'add', service, link, quantity, ...(opts.comments ? { comments: opts.comments } : {}) }),
     getStatus: (order) => smmRequest({ action: 'status', order }),
     getMultiStatus: (orders) => smmRequest({ action: 'status', orders: orders.join(',') }),
   };

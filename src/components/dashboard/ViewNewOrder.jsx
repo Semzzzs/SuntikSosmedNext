@@ -129,6 +129,7 @@ function SearchSelect({ options, value, onChange, placeholder, disabled }) {
 export default function ViewNewOrder({ user, setMenu }) {
   const [tab, setTab] = useState('New Order');
   const [qty, setQty] = useState('');
+  const [comments, setComments] = useState(''); // daftar komentar custom (1 per baris)
   const [link, setLink] = useState('');
   const [selectedService, setSelectedService] = useState(null);
   const [services, setServices] = useState([]);
@@ -267,16 +268,45 @@ export default function ViewNewOrder({ user, setMenu }) {
   }, []);
 
   const handleOrder = async () => {
-    if (!selectedService || !link || !qty) { setError('Lengkapi semua field terlebih dahulu.'); return; }
+    if (!selectedService) { setError('Pilih layanan dulu.'); return; }
+
+    // Deteksi layanan Custom Comments (butuh daftar komentar, bukan quantity)
+    const ccType = String(selectedService.type || '').toLowerCase();
+    const ccName = String(selectedService.name || '').toLowerCase();
+    const isCustomComments = ccType.includes('custom comment') || ccName.includes('custom comment');
+
+    // Daftar komentar (1 per baris). Quantity untuk custom comments = jumlah baris.
+    const commentList = comments.split('\n').map(s => s.trim()).filter(Boolean);
+    const effectiveQty = isCustomComments ? commentList.length : parseInt(qty);
+
+    // Validasi field
+    if (!link) { setError('Lengkapi link/username dulu.'); return; }
+    if (isCustomComments) {
+      if (commentList.length === 0) { setError('Isi minimal satu komentar (satu komentar per baris).'); return; }
+    } else if (!qty) {
+      setError('Lengkapi jumlah (quantity) dulu.'); return;
+    }
+
+    // Validasi min/max berdasar jumlah komentar / quantity
+    const minV = Number(selectedService.min) || 0;
+    const maxV = Number(selectedService.max) || Infinity;
+    if (effectiveQty < minV || effectiveQty > maxV) {
+      setError(`Jumlah harus antara ${minV} dan ${maxV}.${isCustomComments ? ` Kamu menulis ${commentList.length} komentar.` : ''}`);
+      return;
+    }
+
     // Validasi saldo sebelum order
-    const totalIDRCheck = Math.round(parseInt(qty) * parseFloat(selectedService.rate || 0) / 1000 * (rate || 17687) * resolveMarkup(selectedService));
+    const totalIDRCheck = Math.round(effectiveQty * parseFloat(selectedService.rate || 0) / 1000 * (rate || 17687) * resolveMarkup(selectedService));
     if (balance !== null && totalIDRCheck > balance) {
       setError(`Saldo tidak cukup. Saldo kamu Rp ${Math.round(balance).toLocaleString('id-ID')}, dibutuhkan Rp ${totalIDRCheck.toLocaleString('id-ID')}.`);
       return;
     }
     setOrderLoading(true); setError(''); setOrderResult(null);
     try {
-      const res = await api.addOrder(selectedService.service, link, qty);
+      // Custom Comments → kirim daftar komentar; lainnya → kirim quantity biasa.
+      const res = isCustomComments
+        ? await api.addOrder(selectedService.service, link, effectiveQty, { comments: commentList.join('\n') })
+        : await api.addOrder(selectedService.service, link, effectiveQty);
       setOrderResult({ success: true, orderId: res.order, msg: `Order #${res.order} berhasil dibuat!` });
       // Simpan order ID ke sessionStorage
       if (typeof window !== 'undefined' && res.order) {
@@ -288,8 +318,9 @@ export default function ViewNewOrder({ user, setMenu }) {
           service: selectedService.service,
           serviceName: selectedService.name,
           link,
-          qty: parseInt(qty),
+          qty: effectiveQty,
           rate: selectedService.rate,
+          comments: isCustomComments ? commentList : undefined,
           createdAt: new Date().toISOString(),
         };
         if (!existing.find(o => (typeof o === 'object' ? o.orderId : o) === String(res.order))) {
@@ -303,7 +334,7 @@ export default function ViewNewOrder({ user, setMenu }) {
           sessionStorage.setItem('smm_order_ids', JSON.stringify(session.slice(0, 100)));
         }
         // Simpan transaksi order ke Supabase
-        const totalIDR = Math.round(parseInt(qty) * parseFloat(selectedService.rate || 0) / 1000 * (rate || 17687) * resolveMarkup(selectedService));
+        const totalIDR = Math.round(effectiveQty * parseFloat(selectedService.rate || 0) / 1000 * (rate || 17687) * resolveMarkup(selectedService));
         await supabase.from('transactions').insert({
           email: user?.email || '',
           user_id: user?.id || null,
@@ -312,16 +343,16 @@ export default function ViewNewOrder({ user, setMenu }) {
           // ✅ Simpan order_id dan service_id supaya muncul di admin Orders
           order_id: String(res.order),
           service_id: String(selectedService.service),
-          charge: parseFloat(selectedService.rate || 0) * parseInt(qty) / 1000,
+          charge: parseFloat(selectedService.rate || 0) * effectiveQty / 1000,
           description: `Order #${res.order} - ${selectedService.name?.slice(0, 60)}`,
           status: 'success',
           link: link || null,
-          qty: parseInt(qty) || null,
+          qty: effectiveQty || null,
         });
         // Update balance state langsung tanpa reload
         setBalance(prev => Math.max(0, (prev || 0) - totalIDR));
       }
-      setLink(''); setQty(''); setSelectedService(null);
+      setLink(''); setQty(''); setComments(''); setSelectedService(null);
     } catch (e) { setError(e.message); }
     setOrderLoading(false);
   };
@@ -539,7 +570,7 @@ export default function ViewNewOrder({ user, setMenu }) {
               <SearchSelect
                 options={(selectedCategory ? services.filter(s => s.category === selectedCategory) : services).map(s => ({ value: String(s.service), label: s.name || cleanName(s.name), sub: `#${s.service}` }))}
                 value={selectedService ? String(selectedService.service) : ''}
-                onChange={v => { const svc = services.find(s => String(s.service) === v) || null; setSelectedService(svc); if (svc) setQty(String(svc.min)); }}
+                onChange={v => { const svc = services.find(s => String(s.service) === v) || null; setSelectedService(svc); setComments(''); if (svc) setQty(String(svc.min)); }}
                 placeholder="— Pilih Service —"
                 disabled={loadingServices}
               />
@@ -732,17 +763,57 @@ export default function ViewNewOrder({ user, setMenu }) {
                 );
               })()}
             </div>
-            <div>
-              <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: 'var(--text)', marginBottom: 7 }}>
-                Quantity {selectedService && <span style={{ fontWeight: 500, color: 'var(--text3)' }}>Min: {selectedService.min} — Max: {selectedService.max}</span>}
-              </label>
-              <input className="inp" type="number" placeholder={selectedService ? `${selectedService.min} – ${selectedService.max}` : 'Pilih service dulu'} value={qty} onChange={e => setQty(e.target.value)} />
-            </div>
+            {(() => {
+              const t = String(selectedService?.type || '').toLowerCase();
+              const nm = String(selectedService?.name || '').toLowerCase();
+              const isCC = !!selectedService && (t.includes('custom comment') || nm.includes('custom comment'));
+              const ccLines = comments.split('\n').map(s => s.trim()).filter(Boolean);
+
+              if (isCC) {
+                const overMax = selectedService && ccLines.length > Number(selectedService.max);
+                return (
+                  <div>
+                    <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: 'var(--text)', marginBottom: 7 }}>
+                      Komentar Custom <span style={{ fontWeight: 500, color: 'var(--text3)' }}>(satu komentar per baris)</span>
+                    </label>
+                    <textarea
+                      className="inp"
+                      rows={6}
+                      placeholder={'Tulis satu komentar per baris:\nKeren banget kak! 🔥\nProduknya bagus, recommended\nMantap, langganan terus'}
+                      value={comments}
+                      onChange={e => setComments(e.target.value)}
+                      style={{ resize: 'vertical', lineHeight: 1.6, fontFamily: "'Plus Jakarta Sans',sans-serif" }}
+                    />
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6, fontSize: 11.5, color: 'var(--text3)' }}>
+                      <span>Jumlah komentar: <strong style={{ color: overMax ? 'var(--red)' : 'var(--blue)' }}>{ccLines.length}</strong></span>
+                      <span>Min {selectedService.min} — Max {selectedService.max}</span>
+                    </div>
+                    {overMax && (
+                      <div style={{ fontSize: 11.5, color: 'var(--red)', marginTop: 4, fontWeight: 600 }}>
+                        Komentar melebihi batas maksimal ({selectedService.max}). Kurangi dulu.
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+
+              return (
+                <div>
+                  <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: 'var(--text)', marginBottom: 7 }}>
+                    Quantity {selectedService && <span style={{ fontWeight: 500, color: 'var(--text3)' }}>Min: {selectedService.min} — Max: {selectedService.max}</span>}
+                  </label>
+                  <input className="inp" type="number" placeholder={selectedService ? `${selectedService.min} – ${selectedService.max}` : 'Pilih service dulu'} value={qty} onChange={e => setQty(e.target.value)} />
+                </div>
+              );
+            })()}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--blue-l)', border: '1px solid rgba(37,99,235,.15)', borderRadius: 12, padding: '12px 16px' }}>
               <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text2)' }}>Total Pembayaran</span>
               <span style={{ fontSize: 18, fontWeight: 800, color: 'var(--blue)' }}>
                 {(() => {
-                  const q = parseInt(qty) || 0;
+                  const t = String(selectedService?.type || '').toLowerCase();
+                  const nm = String(selectedService?.name || '').toLowerCase();
+                  const isCC = !!selectedService && (t.includes('custom comment') || nm.includes('custom comment'));
+                  const q = isCC ? comments.split('\n').map(s => s.trim()).filter(Boolean).length : (parseInt(qty) || 0);
                   const p = selectedService ? parseFloat(selectedService.rate || 0) / 1000 : 0;
                   const r = rate || 17687;
                   const total = Math.round(q * p * r * resolveMarkup(selectedService));
