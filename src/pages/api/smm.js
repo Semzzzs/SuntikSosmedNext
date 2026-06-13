@@ -51,6 +51,22 @@ export default async function handler(req, res) {
         }
     }
 
+    // ✅ Endpoint publik: estimasi durasi per service (dari worker poller).
+    //    Dipakai halaman Services untuk menampilkan estimasi berbasis order asli.
+    if (req.query.action === 'service_stats') {
+        try {
+            const supa = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+            const { data } = await supa.from('service_stats').select('service_id, avg_seconds, sample_count');
+            const stats = {};
+            for (const r of (data || [])) {
+                stats[String(r.service_id)] = { avg_seconds: r.avg_seconds, sample_count: r.sample_count };
+            }
+            return res.status(200).json(stats);
+        } catch (e) {
+            return res.status(200).json({});
+        }
+    }
+
     // ✅ Kalau bukan admin, cek Supabase user token
     // Kecuali action=services — boleh tanpa login (untuk landing page)
     const publicAction = req.query.action === 'services';

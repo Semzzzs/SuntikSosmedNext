@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo, lazy, Suspense } from 'react';
 import { useRouter } from 'next/router';
 import {
-  ShoppingCart, Package, CreditCard,
+  ShoppingCart, Package, CreditCard, List,
   ChevronRight, ChevronLeft, Bell, Moon, Sun, LogOut, Settings,
   Target, ChevronDown, X, Menu, Ticket, Phone, BarChart2, ArrowLeftRight, HelpCircle, MessageCircle, Newspaper,
   Check, Megaphone, Pin, Info, CheckCircle, AlertCircle, Zap, Clock
@@ -13,6 +13,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useNotifications } from '@/hooks/useNotifications';
 
 const ViewNewOrder = lazy(() => import('@/components/dashboard/ViewNewOrder'));
+const ViewServices = lazy(() => import('@/components/dashboard/ViewServices'));
 const ViewMyOrders = lazy(() => import('@/components/dashboard/ViewMyOrders'));
 const ViewAddFunds = lazy(() => import('@/components/dashboard/ViewAddFunds'));
 const ViewTickets = lazy(() => import('@/components/dashboard/ViewTickets'));
@@ -156,6 +157,33 @@ function NewsPopup({ dark, items, onClose }) {
     </div>
   );
 }
+// ── Avatar gambar otomatis (DiceBear "avataaars") — unik & konsisten per user.
+//    Seed dari email/nama; fallback ke inisial huruf kalau gambar gagal load. ──
+function avatarUrl(seed = '') {
+  const s = encodeURIComponent((seed || 'user').trim().toLowerCase());
+  return `https://api.dicebear.com/9.x/avataaars/svg?seed=${s}&radius=50&backgroundColor=b6e3f4,c0aede,d1d4f9,ffd5dc,ffdfbf,c8e6c9,fff9c4`;
+}
+function Avatar({ seed, fallback = 'U', size = 36, radius = 10, fontSize }) {
+  return (
+    <div style={{ width: size, height: size, borderRadius: radius, overflow: 'hidden', flexShrink: 0, background: 'var(--bg2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <img
+        src={avatarUrl(seed)}
+        alt="Avatar"
+        width={size} height={size}
+        style={{ display: 'block', width: '100%', height: '100%', objectFit: 'cover' }}
+        onError={(e) => {
+          e.currentTarget.style.display = 'none';
+          const fb = e.currentTarget.nextSibling;
+          if (fb) fb.style.display = 'flex';
+        }}
+      />
+      <span style={{ display: 'none', width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, fontSize: fontSize || Math.round(size * 0.4) }}>
+        {fallback}
+      </span>
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const router = useRouter();
   const { dark, toggle } = useTheme();
@@ -313,6 +341,7 @@ export default function DashboardPage() {
 
   const navItems = [
     { id: 'New Order', icon: <ShoppingCart size={17} /> },
+    { id: 'Services', icon: <List size={17} /> },
     { id: 'My Orders', icon: <Package size={17} /> },
     { id: 'Add Funds', icon: <CreditCard size={17} /> },
     { id: 'Transactions', icon: <ArrowLeftRight size={17} /> },
@@ -329,6 +358,7 @@ export default function DashboardPage() {
   // ✅ useMemo — views tidak re-create tiap render
   const views = useMemo(() => ({
     'New Order': <ViewNewOrder user={user} setMenu={setMenu} />,
+    'Services': <ViewServices />,
     'My Orders': <ViewMyOrders />,
     'Add Funds': <ViewAddFunds user={user} balance={balance} />,
     'Transactions': <ViewTransactions user={user} />,
@@ -391,9 +421,7 @@ export default function DashboardPage() {
         {/* User card */}
         <div style={{ padding: '0 12px 12px' }}>
           <div onClick={() => setMenuAndSave('Settings')} style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 12, padding: '10px 12px', display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
-            <div style={{ width: 36, height: 36, borderRadius: 10, background: 'var(--blue)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 13, flexShrink: 0 }}>
-              {user?.initials || 'U'}
-            </div>
+            <Avatar seed={user?.email || user?.name} fallback={user?.initials || 'U'} size={36} radius={10} fontSize={13} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 10, color: 'var(--text3)', fontWeight: 600 }}>My Account</div>
               <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user?.name || 'User'}</div>
@@ -478,12 +506,12 @@ export default function DashboardPage() {
             </div>
             <div style={{ position: 'relative' }}>
               <button ref={profileBtnRef} onClick={handleProfileOpen} style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 9, padding: '5px', cursor: 'pointer', display: 'flex', alignItems: 'center', fontFamily: "'Outfit',sans-serif" }}>
-                <div style={{ width: 28, height: 28, borderRadius: 8, background: 'var(--blue)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 12 }}>{user?.initials?.charAt(0) || 'U'}</div>
+                <Avatar seed={user?.email || user?.name} fallback={user?.initials?.charAt(0) || 'U'} size={28} radius={8} fontSize={12} />
               </button>
               {profileOpen && !isMobile && (
                 <div className="card fu" style={{ position: 'fixed', right: profileDropPos.right, top: profileDropPos.top, width: 220, zIndex: 9999, overflow: 'hidden', padding: '6px 0' }}>
                   <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', display: 'flex', gap: 10, alignItems: 'center' }}>
-                    <div style={{ width: 34, height: 34, borderRadius: 10, background: 'var(--blue)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 14 }}>{user?.initials?.charAt(0) || 'U'}</div>
+                    <Avatar seed={user?.email || user?.name} fallback={user?.initials?.charAt(0) || 'U'} size={34} radius={10} fontSize={14} />
                     <div>
                       <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text)' }}>{user?.name}</div>
                       <div style={{ fontSize: 11, color: 'var(--text3)' }}>{user?.email}</div>
@@ -545,7 +573,7 @@ export default function DashboardPage() {
             <div style={{ width: 36, height: 4, borderRadius: 2, background: 'var(--border2)', margin: '12px auto 16px' }} />
             {/* User info */}
             <div style={{ padding: '0 20px 16px', borderBottom: '1px solid var(--border)', display: 'flex', gap: 12, alignItems: 'center' }}>
-              <div style={{ width: 40, height: 40, borderRadius: 12, background: 'var(--blue)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 16, flexShrink: 0 }}>{user?.initials?.charAt(0) || 'U'}</div>
+              <Avatar seed={user?.email || user?.name} fallback={user?.initials?.charAt(0) || 'U'} size={40} radius={12} fontSize={16} />
               <div>
                 <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text)' }}>{user?.name}</div>
                 <div style={{ fontSize: 12, color: 'var(--text3)' }}>{user?.email}</div>

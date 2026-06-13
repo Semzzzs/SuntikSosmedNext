@@ -6,6 +6,54 @@ import { supabase } from '@/lib/supabase';
 const NOTIF_KEY = 'user_notif_prefs';
 // ✅ Fix: PROFILE_KEY dihapus — phone & website sekarang disimpan ke Supabase profiles
 
+// ── Avatar inisial warna-warni: warna di-generate dari string (email/nama),
+//    konsisten — user yang sama selalu dapat warna yang sama. ──
+const AVATAR_COLORS = [
+  ['#2563EB', '#1D4ED8'], ['#059669', '#047857'], ['#DC2626', '#B91C1C'],
+  ['#7C3AED', '#6D28D9'], ['#DB2777', '#BE185D'], ['#EA580C', '#C2410C'],
+  ['#0891B2', '#0E7490'], ['#CA8A04', '#A16207'], ['#4F46E5', '#4338CA'],
+  ['#16A34A', '#15803D'],
+];
+function avatarColor(seed = '') {
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
+  return AVATAR_COLORS[h % AVATAR_COLORS.length];
+}
+function initials(name = '', email = '') {
+  const src = (name || email || 'U').trim();
+  const parts = src.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+  return src.charAt(0).toUpperCase();
+}
+
+// ── Avatar gambar otomatis (DiceBear "avataaars") — unik & konsisten per user.
+//    Tidak perlu upload; seed dari email/nama. ──
+function avatarUrl(seed = '') {
+  const s = encodeURIComponent((seed || 'user').trim().toLowerCase());
+  // backgroundColor: kumpulan warna pastel; DiceBear pilih satu secara konsisten per seed.
+  return `https://api.dicebear.com/9.x/avataaars/svg?seed=${s}&radius=50&backgroundColor=b6e3f4,c0aede,d1d4f9,ffd5dc,ffdfbf,c8e6c9,fff9c4`;
+}
+
+// ── Validasi: hanya berlaku kalau field DIISI (boleh dikosongkan). ──
+// Telepon: digit Indonesia, boleh diawali + atau 0, panjang wajar 9–15 digit.
+function validatePhone(v) {
+  const s = (v || '').trim();
+  if (!s) return null; // kosong = boleh
+  const cleaned = s.replace(/[\s\-().]/g, '');
+  if (!/^\+?\d+$/.test(cleaned)) return 'Nomor telepon hanya boleh angka.';
+  const digits = cleaned.replace(/^\+/, '');
+  if (digits.length < 9 || digits.length > 15) return 'Nomor telepon tidak valid (9–15 digit).';
+  return null;
+}
+// Website: harus terlihat seperti domain/URL (ada titik + TLD), http(s) opsional.
+function validateWebsite(v) {
+  const s = (v || '').trim();
+  if (!s) return null; // kosong = boleh
+  const re = /^(https?:\/\/)?([\w-]+\.)+[a-z]{2,}(\/[\w\-./?%&=#]*)?$/i;
+  if (!re.test(s)) return 'Format website tidak valid (contoh: namasitus.com).';
+  return null;
+}
+
 export default function ViewSettings({ user, onLogout }) {
   const { dark, toggle } = useTheme();
   const [tab, setTab] = useState('Profile');
@@ -20,6 +68,7 @@ export default function ViewSettings({ user, onLogout }) {
   // Profile fields
   const [phone, setPhone] = useState('');
   const [website, setWebsite] = useState('');
+  const [profileErr, setProfileErr] = useState({ phone: '', website: '' });
 
   // Password fields
   const [pw, setPw] = useState({ cur: '', new: '', con: '' });
@@ -53,6 +102,12 @@ export default function ViewSettings({ user, onLogout }) {
   }, []);
 
   const handleSaveProfile = async () => {
+    // ✅ Validasi dulu — hanya field yang diisi yang dicek
+    const pErr = validatePhone(phone);
+    const wErr = validateWebsite(website);
+    setProfileErr({ phone: pErr || '', website: wErr || '' });
+    if (pErr || wErr) return; // batalkan simpan kalau ada yang tidak valid
+
     // ✅ Fix High: simpan ke Supabase profiles, bukan localStorage
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user?.id) return;
@@ -137,8 +192,22 @@ export default function ViewSettings({ user, onLogout }) {
       {tab === 'Profile' && (
         <div className="card" style={{ padding: 26 }}>
           <div style={{ display: 'flex', gap: 18, alignItems: 'center', marginBottom: 26 }}>
-            <div style={{ width: 68, height: 68, borderRadius: 18, background: 'var(--blue)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 26, flexShrink: 0 }}>
-              {(user?.name || user?.email || 'U').charAt(0).toUpperCase()}
+            <div style={{ width: 68, height: 68, borderRadius: 18, overflow: 'hidden', flexShrink: 0, boxShadow: '0 4px 14px rgba(0,0,0,.12)', background: 'var(--bg2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <img
+                src={avatarUrl(user?.email || user?.name)}
+                alt="Avatar"
+                width={68} height={68}
+                style={{ display: 'block', width: '100%', height: '100%', objectFit: 'cover' }}
+                onError={(e) => {
+                  // Fallback: kalau gambar gagal load, tampilkan inisial
+                  e.currentTarget.style.display = 'none';
+                  const fb = e.currentTarget.nextSibling;
+                  if (fb) fb.style.display = 'flex';
+                }}
+              />
+              <span style={{ display: 'none', width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, fontSize: 24, letterSpacing: '.5px' }}>
+                {initials(user?.name, user?.email)}
+              </span>
             </div>
             <div>
               <div style={{ fontWeight: 800, fontSize: 17, color: 'var(--text)', marginBottom: 2 }}>{user?.name || 'User'}</div>
@@ -164,15 +233,31 @@ export default function ViewSettings({ user, onLogout }) {
               <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--text2)', marginBottom: 7 }}>Nomor Telepon</label>
               <div style={{ position: 'relative' }}>
                 <Phone size={13} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text3)' }} />
-                <input className="inp" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+62 xxx xxxx xxxx" style={{ paddingLeft: 34, fontSize: 13.5 }} />
+                <input className="inp" value={phone}
+                  onChange={e => { setPhone(e.target.value); if (profileErr.phone) setProfileErr(p => ({ ...p, phone: '' })); }}
+                  placeholder="+62 xxx xxxx xxxx"
+                  style={{ paddingLeft: 34, fontSize: 13.5, borderColor: profileErr.phone ? 'var(--red)' : undefined }} />
               </div>
+              {profileErr.phone && (
+                <div style={{ marginTop: 5, fontSize: 11.5, color: 'var(--red)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <AlertCircle size={11} /> {profileErr.phone}
+                </div>
+              )}
             </div>
             <div>
               <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--text2)', marginBottom: 7 }}>Website</label>
               <div style={{ position: 'relative' }}>
                 <Globe size={13} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text3)' }} />
-                <input className="inp" value={website} onChange={e => setWebsite(e.target.value)} placeholder="yourwebsite.com" style={{ paddingLeft: 34, fontSize: 13.5 }} />
+                <input className="inp" value={website}
+                  onChange={e => { setWebsite(e.target.value); if (profileErr.website) setProfileErr(p => ({ ...p, website: '' })); }}
+                  placeholder="yourwebsite.com"
+                  style={{ paddingLeft: 34, fontSize: 13.5, borderColor: profileErr.website ? 'var(--red)' : undefined }} />
               </div>
+              {profileErr.website && (
+                <div style={{ marginTop: 5, fontSize: 11.5, color: 'var(--red)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <AlertCircle size={11} /> {profileErr.website}
+                </div>
+              )}
             </div>
           </div>
           {saved && (
