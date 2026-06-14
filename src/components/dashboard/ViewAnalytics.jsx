@@ -42,7 +42,7 @@ export default function ViewAnalytics({ user }) {
       .catch((e) => { if (alive) console.error('[Analytics]', e); });
 
     return () => { alive = false; };
-  }, [user]);
+  }, [user?.email]);
 
   const tx = Array.isArray(transactions) ? transactions : [];
   const totalDeposit = tx.filter(t => ['deposit', 'bonus', 'refund'].includes(t?.type) && t?.status === 'success').reduce((s, t) => s + (t.amount || 0), 0);

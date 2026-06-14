@@ -213,7 +213,7 @@ export default function DashboardPage() {
       const t = setTimeout(() => setToast(null), 5000);
       return () => clearTimeout(t);
     }
-  }, [unreadCount]);
+  }, [unreadCount, notifications[0]?.id]);
   const [profileOpen, setProfileOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
@@ -267,26 +267,34 @@ export default function DashboardPage() {
   }, [authUser, authLoading]);
 
   useEffect(() => {
+    // Hanya jalan kalau ada user login. Saat ganti user / logout,
+    // effect cleanup membersihkan interval lama → saldo akun lama tidak nyangkut.
+    const email = authUser?.email;
+    if (!email) { setBalance(null); return; }
+
+    let alive = true;
     const loadBalance = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
-        const email = session?.user?.email;
-        if (!email) { setBalance(0); return; }
+        const sessionEmail = session?.user?.email;
+        // Pastikan session masih milik user yang sama (hindari race saat ganti akun)
+        if (!sessionEmail || sessionEmail !== email) { if (alive) setBalance(0); return; }
         const { data } = await supabase
           .from('transactions')
           .select('type, amount, status')
-          .eq('email', email);
+          .eq('email', sessionEmail);
+        if (!alive) return;
         if (!data) { setBalance(0); return; }
         const masuk = data.filter(t => ['deposit', 'bonus', 'refund'].includes(t.type) && t.status === 'success').reduce((s, t) => s + (t.amount || 0), 0);
         const keluar = data.filter(t => ['order', 'purchase'].includes(t.type) && t.status === 'success').reduce((s, t) => s + (t.amount || 0), 0);
         setBalance(Math.max(0, masuk - keluar));
-      } catch { setBalance(0); }
+      } catch { if (alive) setBalance(0); }
     };
     loadBalance();
     // Auto-refresh saldo setiap 30 detik
     const interval = setInterval(loadBalance, 30000);
-    return () => clearInterval(interval);
-  }, []);
+    return () => { alive = false; clearInterval(interval); };
+  }, [authUser?.email]);
 
   // ── Berita Terbaru: muncul tiap buka dashboard, kecuali user "jangan tampilkan lagi" ──
   // Pengecualian: kalau ada pengumuman baru (updated_at lebih baru dari yang terakhir dilihat), tetap muncul.
@@ -357,7 +365,7 @@ export default function DashboardPage() {
 
   // ✅ useMemo — views tidak re-create tiap render
   const views = useMemo(() => ({
-    'New Order': <ViewNewOrder user={user} setMenu={setMenu} />,
+    'New Order': <ViewNewOrder user={user} setMenu={setMenuAndSave} />,
     'Services': <ViewServices />,
     'My Orders': <ViewMyOrders />,
     'Add Funds': <ViewAddFunds user={user} balance={balance} />,

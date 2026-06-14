@@ -454,7 +454,34 @@ export default function ViewAddFunds({ user, balance: balanceProp = null }) {
   // Auto-poll setiap 5 detik saat QR ditampilkan
   useEffect(() => {
     if (step !== 3 || !qrisData || qrisStatus === 'paid' || qrisStatus === 'expired') return;
+
+    // Helper: QR sudah lewat waktu expiry? (expiry bisa ISO / epoch detik / epoch ms)
+    const expiryPassed = () => {
+      const exp = qrisData?.expiry;
+      if (!exp) return false;
+      let t;
+      if (typeof exp === 'number') t = exp < 1e12 ? exp * 1000 : exp;
+      else if (/^\d+$/.test(String(exp))) { const n = parseInt(exp, 10); t = n < 1e12 ? n * 1000 : n; }
+      else t = new Date(exp).getTime();
+      return !isNaN(t) && Date.now() > t;
+    };
+
+    // Kalau dibuka saat sudah expired, langsung tandai tanpa polling
+    if (expiryPassed()) { setQrisStatus('expired'); return; }
+
+    // Batas aman: berhenti polling setelah ~30 menit (360 × 5 dtk) walau
+    // webhook/Paymenku tak pernah balikin status final → cegah loop tak terbatas.
+    let attempts = 0;
+    const MAX_ATTEMPTS = 360;
+
     const interval = setInterval(async () => {
+      // Hentikan kalau QR sudah lewat waktu expiry
+      if (expiryPassed()) {
+        setQrisStatus('expired');
+        clearInterval(interval);
+        return;
+      }
+      if (++attempts > MAX_ATTEMPTS) { clearInterval(interval); return; }
       try {
         // 1) Sumber kebenaran: Supabase (di-update webhook saat lunas)
         if (await checkPaidViaSupabase()) {

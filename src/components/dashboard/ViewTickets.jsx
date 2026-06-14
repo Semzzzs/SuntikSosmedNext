@@ -29,21 +29,21 @@ export default function ViewTickets() {
     return session?.user?.email || null;
   };
 
-  const load = async () => {
+  const load = async ({ initial = false } = {}) => {
     const email = await getAuthEmail();
-    if (!email) return;
-    setLoading(true);
+    if (!email) { if (initial) setLoading(false); return; }
+    if (initial) setLoading(true);
     const { data } = await supabase
       .from('tickets')
       .select('*')
       .eq('email', email)
       .order('created_at', { ascending: false });
     setTickets(data || []);
-    setLoading(false);
+    if (initial) setLoading(false);
   };
 
   useEffect(() => {
-    load();
+    load({ initial: true });
     let interval = null;
     const start = () => { if (!interval) interval = setInterval(load, 30000); };
     const stop = () => { if (interval) { clearInterval(interval); interval = null; } };

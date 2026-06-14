@@ -1595,3 +1595,38 @@ a {
   outline: 2px solid var(--blue);
   outline-offset: 2px;
 }
+
+/* ══════════════════════════════════════
+   LANDING HERO — biar stagger child (heroRise di index.jsx)
+   gak dobel sama fadeUp parent .fu
+   ══════════════════════════════════════ */
+.root .fu {
+  animation: none;
+}
+
+/* ══════════════════════════════════════
+   AKSESIBILITAS: prefers-reduced-motion
+   Matikan animasi & smooth-scroll untuk user
+   yang sensitif gerakan (juga bagus utk Lighthouse)
+   ══════════════════════════════════════ */
+@media (prefers-reduced-motion: reduce) {
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .fltA,
+  .fltB,
+  .spin {
+    animation: none !important;
+  }
+
+  [style*="blobFloat"] {
+    animation: none !important;
+  }
+}

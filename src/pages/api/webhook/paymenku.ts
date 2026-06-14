@@ -80,13 +80,15 @@ export default async function handler(req: any, res: any) {
         }
 
         // ── Anti-duplikat: kalau sudah pernah jadi 'deposit success' untuk trx ini, stop ──
-        const { data: alreadyDone } = await supabaseAdmin
+        // Pakai limit(1) (bukan maybeSingle) supaya tidak throw kalau kebetulan ada >1 baris match.
+        const { data: dupRows } = await supabaseAdmin
             .from('transactions')
             .select('id')
             .eq('type', 'deposit')
             .eq('status', 'success')
             .or(`description.ilike.%${trx_id}%,description.ilike.%${reference_id}%`)
-            .maybeSingle();
+            .limit(1);
+        const alreadyDone = (dupRows || [])[0];
 
         if (alreadyDone) {
             return res.status(200).json({ received: true, note: 'already processed' });
@@ -95,11 +97,13 @@ export default async function handler(req: any, res: any) {
         // ── STRATEGI UTAMA: cari baris 'qris_pending' yang dibuat saat user bikin QRIS ──
         // Baris itu SUDAH punya email + (idealnya) user_id yang benar dari session user.
         // Cocokkan via trx_id (disimpan di qr_trx_id atau di description "QRIS_PENDING_<trx_id>").
-        const { data: pendingRow } = await supabaseAdmin
+        const { data: pendingRows } = await supabaseAdmin
             .from('transactions')
             .select('id, email, user_id, amount, qr_amount')
             .or(`qr_trx_id.eq.${trx_id},description.eq.QRIS_PENDING_${trx_id}`)
-            .maybeSingle();
+            .order('created_at', { ascending: false })
+            .limit(1);
+        const pendingRow = (pendingRows || [])[0];
 
         if (pendingRow && pendingRow.email) {
             // ✅ Kreditkan saldo pakai NOMINAL DEPOSIT yang user minta (tersimpan di baris pending),
@@ -140,21 +144,25 @@ export default async function handler(req: any, res: any) {
             if (cand.includes('@') && cand.includes('.')) email = cand;
         }
 
-        // Verifikasi ke auth.users (sumber kebenaran), fallback ke profiles
+        // Verifikasi email: utamakan query profiles (indexed, scalable),
+        // fallback ke auth.users hanya kalau profiles tidak menemukan.
         let verifiedEmail = '';
         let verifiedUserId: string | null = null;
         if (email) {
-            try {
-                const { data: list } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 });
-                const u = list?.users?.find((x: any) => (x.email || '').toLowerCase() === email);
-                if (u) { verifiedEmail = u.email!.toLowerCase(); verifiedUserId = u.id; }
-            } catch (e: any) {
-                console.error('[Webhook] auth.users lookup error:', e?.message);
-            }
-            if (!verifiedEmail) {
-                const { data: profile } = await supabaseAdmin
-                    .from('profiles').select('id, email').eq('email', email).maybeSingle();
-                if (profile?.email) { verifiedEmail = profile.email.toLowerCase(); verifiedUserId = profile.id || null; }
+            const { data: profile } = await supabaseAdmin
+                .from('profiles').select('id, email').eq('email', email).maybeSingle();
+            if (profile?.email) {
+                verifiedEmail = profile.email.toLowerCase();
+                verifiedUserId = profile.id || null;
+            } else {
+                // Fallback: cek auth.users (untuk akun yang belum punya baris profiles)
+                try {
+                    const { data: list } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+                    const u = list?.users?.find((x: any) => (x.email || '').toLowerCase() === email);
+                    if (u) { verifiedEmail = u.email!.toLowerCase(); verifiedUserId = u.id; }
+                } catch (e: any) {
+                    console.error('[Webhook] auth.users lookup error:', e?.message);
+                }
             }
         }
 

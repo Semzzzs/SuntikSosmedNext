@@ -60,22 +60,35 @@ export async function smmRequest(params) {
 
   if (res.status === 401) throw new Error('Sesi habis. Silakan login ulang.');
 
-  // ✅ Fix: jangan bocorkan raw response text ke UI — log saja ke console
+  // ✅ Fix: jangan bocorkan raw response text ke UI — log saja ke console.
+  //         Tapi error TERSTRUKTUR dari API kita sendiri ({ error: "..." }) aman
+  //         dan memang ditujukan ke user (mis. 402 "Saldo tidak cukup"), jadi diteruskan.
   const text = await res.text();
   if (!res.ok) {
     console.error(`[suntiksosmedRequest] HTTP ${res.status}:`, text);
-    throw new Error(`Permintaan gagal (${res.status}). Coba lagi.`);
+    let serverMsg = null;
+    try {
+      const err = JSON.parse(text);
+      if (err?.error) serverMsg = String(err.error);
+    } catch { /* body bukan JSON -> pakai pesan generik */ }
+    throw new Error(serverMsg || `Permintaan gagal (${res.status}). Coba lagi.`);
   }
 
+  // ✅ Fix: pisahkan parsing dari handling error.
+  //         Sebelumnya `throw new Error(data.error)` ada di dalam try yang sama,
+  //         jadi ke-catch dan diganti pesan generik — error spesifik dari server
+  //         (mis. "saldo tidak cukup") gak pernah sampai ke user.
+  let data;
   try {
-    const data = JSON.parse(text);
-    if (data.error) throw new Error(data.error);
-    return data;
+    data = JSON.parse(text);
   } catch {
-    // ✅ Fix: log raw response untuk debugging, lempar pesan generik ke UI
+    // Hanya response yang bukan JSON valid yang jadi pesan generik
     console.error('[suntiksosmedRequest] Response tidak valid:', text);
     throw new Error('Response dari server tidak valid.');
   }
+  // Error spesifik dari server diteruskan apa adanya ke UI
+  if (data.error) throw new Error(data.error);
+  return data;
 }
 
 export function useSmmApi() {

@@ -34,7 +34,9 @@ export default function AuthForm({ type }) {
       redirectTo: `${window.location.origin}/reset-password`,
     });
     setResetLoading(false);
-    if (err) return setError('Gagal mengirim email reset. Coba lagi beberapa saat.');
+    // Jangan bocorkan apakah email terdaftar — pesan selalu sama (anti user-enumeration).
+    // Error (mis. rate limit) cukup dicatat di console, tidak ditampilkan beda ke user.
+    if (err) console.error('[auth] reset password error:', err.message);
     setResetSent(true);
   };
 
@@ -82,12 +84,9 @@ export default function AuthForm({ type }) {
           return setError('Cek email kamu untuk konfirmasi akun, lalu login.');
         }
 
-        const name = form.name.trim();
-        sessionStorage.setItem('user', JSON.stringify({
-          name,
-          initials: (name[0] + (name.split(' ')[1]?.[0] || '')).toUpperCase(),
-        }));
-
+        // Tidak menyimpan sessionStorage di sini: user belum login (belum ada
+        // session). Data 'user' diisi saat login berhasil, biar tidak ada
+        // state nyangkut tanpa session yang valid.
         router.push('/login?registered=1');
       } catch (err) {
         setLoading(false);

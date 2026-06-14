@@ -330,7 +330,7 @@ export default function ViewMyOrders() {
                           {progress !== null ? (
                             <div>
                               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text3)', marginBottom: 4 }}>
-                                <span>{o.startCount > 0 ? `${Math.max(0, o.startCount - o.remains)}/${o.startCount}` : ''}</span>
+                                <span>{o.startCount > 0 && o.remains != null ? `${Math.max(0, o.startCount - o.remains)}/${o.startCount}` : ''}</span>
                                 <span style={{ fontWeight: 700 }}>{progress}%</span>
                               </div>
                               <div style={{ height: 6, background: 'var(--bg2)', borderRadius: 99, overflow: 'hidden' }}>

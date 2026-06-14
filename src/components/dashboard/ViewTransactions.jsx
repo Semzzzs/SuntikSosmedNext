@@ -6,12 +6,12 @@ export default function ViewTransactions({ user }) {
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const load = async () => {
-    setLoading(true);
+  const load = async ({ initial = false } = {}) => {
+    if (initial) setLoading(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const email = session?.user?.email || user?.email;
-      if (!email) { setLoading(false); return; }
+      if (!email) { if (initial) setLoading(false); return; }
       const { data } = await supabase
         .from('transactions')
         .select('*')
@@ -19,11 +19,11 @@ export default function ViewTransactions({ user }) {
         .order('created_at', { ascending: false });
       setTransactions(data || []);
     } catch { }
-    setLoading(false);
+    if (initial) setLoading(false);
   };
 
   useEffect(() => {
-    load();
+    load({ initial: true });
     let interval = null;
     const start = () => { if (!interval) interval = setInterval(load, 30000); };
     const stop = () => { if (interval) { clearInterval(interval); interval = null; } };

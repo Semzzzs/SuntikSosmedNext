@@ -100,72 +100,114 @@ export default async function handler(req, res) {
         Object.entries(req.query).filter(([k]) => ALLOWED.has(k))
     );
 
-    // ✅ Validasi saldo server-side saat action=add (user biasa, bukan admin)
+    // ✅ Validasi + pemotongan saldo ATOMIC saat action=add (user biasa, bukan admin).
+    //
+    //    Versi lama: cuma BACA saldo (sum ledger) lalu bandingkan, dan pemotongan
+    //    di-insert CLIENT-SIDE setelah sukses. Itu bocor total:
+    //      - client bisa skip pemotongan  -> order tak terbatas
+    //      - bulk/multi-tab baca saldo sama -> over-spend (race)
+    //      - catch fail-open               -> error = order tetap jalan
+    //
+    //    Versi ini: biaya dihitung server-side (FAIL-CLOSED), lalu di-debit lewat
+    //    RPC `debit_user_balance` yang ngecek + insert debit dalam SATU transaksi DB
+    //    dengan lock per-user. Tiap request bener-bener motong saldo sebelum request
+    //    berikutnya dicek, jadi bulk otomatis aman tanpa penanganan khusus.
+    //
+    //    PENTING: client TIDAK BOLEH lagi insert transaksi 'order' sendiri (lihat catatan
+    //    di ViewNewOrder) — kalau masih, saldo kepotong dobel.
+    let debitInfo = null; // { email, amount, tx_id } -> dipakai buat refund kalau provider gagal
     if (safeQuery.action === 'add' && !isAdmin) {
+        const supabaseSvc = createClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL,
+            process.env.SUPABASE_SERVICE_ROLE_KEY
+        );
+
+        // 1) Hitung biaya order server-side. FAIL-CLOSED: kalau biaya tak bisa
+        //    ditentukan (service tak ketemu / harga gagal diambil), TOLAK order.
+        let totalIDR = null;
+        let userEmail = null;
+        let svcName = null;
+        let svcRate = null;
         try {
             const token = authHeader.split(' ')[1];
-            const supabaseCheck = createClient(
-                process.env.NEXT_PUBLIC_SUPABASE_URL,
-                process.env.SUPABASE_SERVICE_ROLE_KEY
-            );
-            const { data: { user: u } } = await supabaseCheck.auth.getUser(token);
-            if (u?.email) {
-                const { data: txs } = await supabaseCheck
-                    .from('transactions')
-                    .select('type, amount, status')
-                    .eq('email', u.email);
+            const { data: { user: u } } = await supabaseSvc.auth.getUser(token);
+            userEmail = u?.email || null;
+            if (!userEmail) return res.status(401).json({ error: 'Sesi tidak valid. Silakan login ulang.' });
 
-                const masuk = (txs || []).filter(t => ['deposit', 'bonus', 'refund'].includes(t.type) && t.status === 'success').reduce((s, t) => s + (t.amount || 0), 0);
-                const keluar = (txs || []).filter(t => t.type === 'order' && t.status === 'success').reduce((s, t) => s + (t.amount || 0), 0);
-                const balance = Math.max(0, masuk - keluar);
-
-                // Ambil rate USD->IDR — tanpa self-fetch ke /api/rate (cegah error localhost di production)
-                let rate = 17689;
-                try {
-                    // 1) Override manual admin di settings.rate_override (menang atas live)
-                    const { data: rOverride } = await supabaseCheck.from('settings').select('value').eq('key', 'rate_override').maybeSingle();
-                    const ov = rOverride?.value ? parseInt(rOverride.value, 10) : 0;
-                    if (ov && ov >= 1000) {
-                        rate = ov;
-                    } else {
-                        // 2) Rate live langsung dari sumber eksternal
-                        const rr = await fetch('https://open.er-api.com/v6/latest/USD');
-                        const rd = await rr.json();
-                        if (rd?.result === 'success' && rd?.rates?.IDR) rate = Math.round(rd.rates.IDR);
-                    }
-                } catch { }
-
-                // Ambil markup global + rules per-kategori/per-service
-                let markup = 1;
-                let markupRules = { categories: {}, services: {} };
-                try {
-                    const { data: mkData } = await supabaseCheck.from('settings').select('value').eq('key', 'markup').maybeSingle();
-                    if (mkData?.value) markup = parseFloat(mkData.value);
-                    const { data: rulesData } = await supabaseCheck.from('settings').select('value').eq('key', 'markup_rules').maybeSingle();
-                    if (rulesData?.value) { const p = JSON.parse(rulesData.value); markupRules = { categories: p.categories || {}, services: p.services || {} }; }
-                } catch { }
-
-                // Ambil harga service dari SMMSOC
-                const svcRes = await fetch(`${apiUrl}/api/v2`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: new URLSearchParams({ key: apiKey, action: 'services' }).toString(),
-                });
-                const svcData = await svcRes.json();
-                const svc = Array.isArray(svcData) ? svcData.find(s => String(s.service) === String(safeQuery.service)) : null;
-
-                if (svc) {
-                    const qty = parseInt(safeQuery.quantity) || 0;
-                    const effMarkup = markupRules.services?.[String(svc.service)] ?? markupRules.categories?.[svc.category] ?? markup;
-                    const totalIDR = Math.round(qty * parseFloat(svc.rate || 0) / 1000 * rate * effMarkup);
-                    if (totalIDR > balance) {
-                        return res.status(402).json({ error: `Saldo tidak cukup. Saldo: Rp ${Math.round(balance).toLocaleString('id-ID')}, Dibutuhkan: Rp ${totalIDR.toLocaleString('id-ID')}` });
-                    }
+            // Rate USD->IDR
+            let rate = 17689;
+            try {
+                const { data: rOverride } = await supabaseSvc.from('settings').select('value').eq('key', 'rate_override').maybeSingle();
+                const ov = rOverride?.value ? parseInt(rOverride.value, 10) : 0;
+                if (ov && ov >= 1000) {
+                    rate = ov;
+                } else {
+                    const rr = await fetch('https://open.er-api.com/v6/latest/USD');
+                    const rd = await rr.json();
+                    if (rd?.result === 'success' && rd?.rates?.IDR) rate = Math.round(rd.rates.IDR);
                 }
+            } catch { }
+
+            // Markup global + rules per-kategori/per-service
+            let markup = 1;
+            let markupRules = { categories: {}, services: {} };
+            try {
+                const { data: mkData } = await supabaseSvc.from('settings').select('value').eq('key', 'markup').maybeSingle();
+                if (mkData?.value) markup = parseFloat(mkData.value);
+                const { data: rulesData } = await supabaseSvc.from('settings').select('value').eq('key', 'markup_rules').maybeSingle();
+                if (rulesData?.value) { const p = JSON.parse(rulesData.value); markupRules = { categories: p.categories || {}, services: p.services || {} }; }
+            } catch { }
+
+            // Harga service dari SMMSOC
+            const svcRes = await fetch(`${apiUrl}/api/v2`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: new URLSearchParams({ key: apiKey, action: 'services' }).toString(),
+            });
+            const svcData = await svcRes.json();
+            const svc = Array.isArray(svcData) ? svcData.find(s => String(s.service) === String(safeQuery.service)) : null;
+
+            // FAIL-CLOSED: tanpa harga yang valid, jangan pasang order.
+            if (!svc) return res.status(400).json({ error: 'Layanan tidak ditemukan / harga tidak tersedia.' });
+
+            svcName = svc.name || null;
+            svcRate = svc.rate || null;
+
+            const qty = parseInt(safeQuery.quantity) || 0;
+            if (qty <= 0) return res.status(400).json({ error: 'Jumlah order tidak valid.' });
+
+            const effMarkup = markupRules.services?.[String(svc.service)] ?? markupRules.categories?.[svc.category] ?? markup;
+            totalIDR = Math.round(qty * parseFloat(svc.rate || 0) / 1000 * rate * effMarkup);
+            if (!Number.isFinite(totalIDR) || totalIDR <= 0) {
+                return res.status(400).json({ error: 'Gagal menghitung biaya order.' });
             }
         } catch (e) {
-            console.error('[smm] Balance check error:', e.message);
-            // Fail open — jangan block order kalau balance check error
+            console.error('[smm] Cost calc error:', e.message);
+            return res.status(502).json({ error: 'Gagal memvalidasi biaya order. Coba lagi.' });
+        }
+
+        // 2) Debit ATOMIC via RPC (check + insert debit dalam 1 transaksi, terkunci per-user).
+        try {
+            const { data: debit, error: rpcErr } = await supabaseSvc.rpc('debit_user_balance', {
+                p_email: userEmail,
+                p_amount: totalIDR,
+                p_description: `Order service ${safeQuery.service} qty ${safeQuery.quantity}`,
+            });
+            if (rpcErr) {
+                console.error('[smm] debit RPC error:', rpcErr.message);
+                return res.status(502).json({ error: 'Gagal memproses saldo. Coba lagi.' });
+            }
+            if (!debit?.ok) {
+                if (debit?.error === 'insufficient') {
+                    const bal = Math.round(debit.balance || 0);
+                    return res.status(402).json({ error: `Saldo tidak cukup. Saldo: Rp ${bal.toLocaleString('id-ID')}, Dibutuhkan: Rp ${totalIDR.toLocaleString('id-ID')}` });
+                }
+                return res.status(400).json({ error: 'Order ditolak.' });
+            }
+            debitInfo = { email: userEmail, amount: totalIDR, tx_id: debit.tx_id, svcName, svcRate };
+        } catch (e) {
+            console.error('[smm] debit exception:', e.message);
+            return res.status(502).json({ error: 'Gagal memproses saldo. Coba lagi.' });
         }
     }
 
@@ -190,6 +232,22 @@ export default async function handler(req, res) {
         try {
             const data = JSON.parse(text);
 
+            // ✅ Order ke provider gagal tapi saldo SUDAH didebit -> refund (kompensasi).
+            //    SMMSOC sukses kalau ada `data.order`; selain itu dianggap gagal.
+            if (debitInfo && (!response.ok || !data || data.error || !data.order)) {
+                try {
+                    const supaRefund = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+                    await supaRefund.rpc('refund_order_tx', {
+                        p_tx_id: debitInfo.tx_id,
+                        p_email: debitInfo.email,
+                        p_amount: debitInfo.amount,
+                        p_reason: 'provider_failed',
+                    });
+                } catch (e) {
+                    console.error('[smm] refund gagal (PERLU rekonsiliasi manual):', e.message, debitInfo);
+                }
+                return res.status(502).json({ error: data?.error || 'Order gagal di provider. Saldo dikembalikan.' });
+            }
             // ✅ Sembunyikan layanan yang dimatikan admin dari daftar service.
             //    Hanya untuk user/publik (admin tetap lihat semua agar bisa kelola).
             if (safeQuery.action === 'services' && Array.isArray(data) && !isAdmin) {
@@ -209,8 +267,43 @@ export default async function handler(req, res) {
                 }
             }
 
+            // ✅ Order sukses: lengkapi baris transaksi debit dengan metadata order.
+            //    Ini menggantikan insert client lama di ViewNewOrder, jadi histori/admin
+            //    Orders tetap punya order_id, service_id, link, qty, charge, description.
+            if (debitInfo && data?.order) {
+                try {
+                    const qtyNum = parseInt(safeQuery.quantity) || null;
+                    const supaEnrich = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+                    await supaEnrich.from('transactions').update({
+                        order_id: String(data.order),
+                        service_id: String(safeQuery.service),
+                        link: safeQuery.link || null,
+                        qty: qtyNum,
+                        charge: debitInfo.svcRate != null ? (parseFloat(debitInfo.svcRate) * (qtyNum || 0) / 1000) : null,
+                        description: `Order #${data.order} - ${(debitInfo.svcName || String(safeQuery.service)).slice(0, 60)}`,
+                    }).eq('id', debitInfo.tx_id);
+                } catch (e) {
+                    console.error('[smm] enrich tx gagal (non-fatal, saldo tetap benar):', e.message);
+                }
+            }
+
             return res.status(200).json(data);
         } catch {
+            // Response provider bukan JSON valid. Kalau saldo udah didebit -> refund.
+            if (debitInfo) {
+                try {
+                    const supaRefund = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+                    await supaRefund.rpc('refund_order_tx', {
+                        p_tx_id: debitInfo.tx_id,
+                        p_email: debitInfo.email,
+                        p_amount: debitInfo.amount,
+                        p_reason: 'provider_bad_response',
+                    });
+                } catch (e) {
+                    console.error('[smm] refund gagal (PERLU rekonsiliasi manual):', e.message, debitInfo);
+                }
+                return res.status(502).json({ error: 'Order gagal di provider. Saldo dikembalikan.' });
+            }
             return res.status(response.status).send(text);
         }
     } catch (err) {

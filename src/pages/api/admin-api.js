@@ -340,16 +340,28 @@ export default async function handler(req, res) {
             return res.status(200).json({ ok: true });
         }
 
-        // Hapus user — hapus transactions + (opsional) Supabase Auth user
+        // Hapus user — hapus Supabase Auth user DULU, baru transactions.
+        // Urutan ini penting: kalau hapus data dulu lalu hapus-auth gagal, user
+        // masih bisa login tapi datanya hilang. Hapus akses dulu baru bersihkan data.
         if (action === 'delete_user') {
             const { email } = body;
             if (!email) return res.status(400).json({ error: 'Email wajib diisi.' });
 
-            // Hapus transactions
+            // 1) Hapus akun Supabase Auth dulu (cabut akses login)
+            const { data: profile } = await supabase.from('profiles').select('id').eq('email', email).maybeSingle();
+            if (profile?.id) {
+                const { error: authErr } = await supabase.auth.admin.deleteUser(profile.id);
+                // Abaikan "user not found" (sudah terhapus), tapi gagalkan error lain
+                if (authErr && !/not found|does not exist/i.test(authErr.message || '')) {
+                    return res.status(500).json({ error: `Gagal menghapus akun auth: ${authErr.message}` });
+                }
+            }
+
+            // 2) Baru hapus transactions
             const { error: txError } = await supabase.from('transactions').delete().eq('email', email);
             if (txError) return res.status(500).json({ error: txError.message });
 
-            // Hapus dari blocked_emails settings jika ada
+            // 3) Hapus dari blocked_emails settings jika ada
             const { data: blockData } = await supabase.from('settings').select('value').eq('key', 'blocked_emails').maybeSingle();
             if (blockData?.value) {
                 const list = JSON.parse(blockData.value).filter(e => e !== email);
@@ -358,13 +370,6 @@ export default async function handler(req, res) {
                     value: JSON.stringify(list),
                     updated_at: new Date().toISOString()
                 }, { onConflict: 'key' });
-            }
-
-            // ✅ Hapus juga akun Supabase Auth (fix bug: sebelumnya akun masih bisa login)
-            // Perlu cari user_id dulu dari profiles
-            const { data: profile } = await supabase.from('profiles').select('id').eq('email', email).maybeSingle();
-            if (profile?.id) {
-                await supabase.auth.admin.deleteUser(profile.id);
             }
 
             await logAudit(supabase, req, { action: 'delete_user', target: email });

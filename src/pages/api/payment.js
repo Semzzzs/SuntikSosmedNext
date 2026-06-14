@@ -93,12 +93,14 @@ export default async function handler(req, res) {
                 process.env.NEXT_PUBLIC_SUPABASE_URL,
                 process.env.SUPABASE_SERVICE_ROLE_KEY
             );
-            const { data: tx } = await supabase
+            const { data: txRows } = await supabase
                 .from('transactions')
                 .select('*')
                 .ilike('description', `%${sanitizedOrderId}%`)
                 .eq('email', user.email)
-                .maybeSingle();
+                .order('created_at', { ascending: false })
+                .limit(1);
+            const tx = (txRows || [])[0];
 
             if (tx?.status === 'success') {
                 return res.status(200).json({ status: 'success', data: tx });

@@ -6,8 +6,8 @@ function parseInfo(name = '') {
   const n = name.toLowerCase();
   let speed = null;
   if (n.includes('instant')) speed = { label: 'Instant', icon: 'zap' };
-  else if (/(\d+)\s*hour/.test(n)) speed = { label: name.match(/(\d+)\s*hours?/i)?.[0], icon: 'clock' };
-  else if (/(\d+)\s*min/.test(n)) speed = { label: name.match(/(\d+)\s*min/i)?.[0], icon: 'clock' };
+  else if (/(\d+)\s*hour/i.test(name)) speed = { label: name.match(/(\d+)\s*hours?/i)?.[0], icon: 'clock' };
+  else if (/(\d+)\s*min/i.test(name)) speed = { label: name.match(/(\d+)\s*min/i)?.[0], icon: 'clock' };
   else if (n.includes('fast')) speed = { label: 'Fast', icon: 'zap' };
   else if (n.includes('gradual') || n.includes('slow')) speed = { label: 'Gradual', icon: 'clock' };
   return { speed };

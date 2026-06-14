@@ -25,9 +25,14 @@ export function AuthProvider({ children }) {
 
         // Listen perubahan login/logout
         const { data: { subscription } } = supabase.auth.onAuthStateChange(
-            (_event, session) => {
+            (event, session) => {
                 setUser(session?.user ?? null);
-                setAuthError(null); // reset error saat ada perubahan auth
+                // ✅ Fix: JANGAN reset authError saat INITIAL_SESSION.
+                //         onAuthStateChange nge-emit INITIAL_SESSION pas mount lewat
+                //         callback ini. Kalau di-reset di sini, error dari getSession()
+                //         (network / refresh token gagal) bisa ke-wipe secara racy.
+                //         Reset hanya pada perubahan auth yang sebenarnya.
+                if (event !== 'INITIAL_SESSION') setAuthError(null);
                 setLoading(false);
             }
         );

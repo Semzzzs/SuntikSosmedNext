@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { ShoppingCart, AlertCircle, CheckCircle, Search, ChevronDown, X, ArrowRight, CreditCard, Package, Activity } from 'lucide-react';
 import { useApi, useSmmApi } from '@/context/ApiContext';
 import { supabase } from '@/lib/supabase';
@@ -194,26 +194,26 @@ export default function ViewNewOrder({ user, setMenu }) {
     loadSettings();
   }, []);
 
-  // Balance — dari Supabase
-  useEffect(() => {
-    const loadBalance = async () => {
-      try {
-        // ✅ Fix: email dari session Supabase, bukan sessionStorage yang bisa dimanipulasi
-        const { data: { session } } = await supabase.auth.getSession();
-        const authEmail = session?.user?.email;
-        if (!authEmail) { setBalance(0); return; }
-        const { data } = await supabase
-          .from('transactions')
-          .select('type, amount')
-          .eq('email', authEmail);
-        if (!data) { setBalance(0); return; }
-        const masuk = data.filter(t => ['deposit', 'bonus', 'refund'].includes(t.type)).reduce((s, t) => s + (t.amount || 0), 0);
-        const keluar = data.filter(t => t.type === 'order').reduce((s, t) => s + (t.amount || 0), 0);
-        setBalance(Math.max(0, masuk - keluar));
-      } catch { setBalance(0); }
-    };
-    loadBalance();
+  // Balance — dari Supabase. Dibuat reusable supaya bisa di-refresh setelah order.
+  // Saldo dipotong server-side (RPC), jadi habis order kita cukup baca ulang ledger.
+  const refreshBalance = useCallback(async () => {
+    try {
+      // ✅ Fix: email dari session Supabase, bukan sessionStorage yang bisa dimanipulasi
+      const { data: { session } } = await supabase.auth.getSession();
+      const authEmail = session?.user?.email;
+      if (!authEmail) { setBalance(0); return; }
+      const { data } = await supabase
+        .from('transactions')
+        .select('type, amount, status')
+        .eq('email', authEmail);
+      if (!data) { setBalance(0); return; }
+      const masuk = data.filter(t => ['deposit', 'bonus', 'refund'].includes(t.type) && t.status === 'success').reduce((s, t) => s + (t.amount || 0), 0);
+      const keluar = data.filter(t => ['order', 'purchase'].includes(t.type) && t.status === 'success').reduce((s, t) => s + (t.amount || 0), 0);
+      setBalance(Math.max(0, masuk - keluar));
+    } catch { setBalance(0); }
   }, []);
+
+  useEffect(() => { refreshBalance(); }, [refreshBalance]);
 
   // Order count — dari Supabase
   useEffect(() => {
@@ -333,24 +333,10 @@ export default function ViewNewOrder({ user, setMenu }) {
           session.unshift(String(res.order));
           sessionStorage.setItem('smm_order_ids', JSON.stringify(session.slice(0, 100)));
         }
-        // Simpan transaksi order ke Supabase
-        const totalIDR = Math.round(effectiveQty * parseFloat(selectedService.rate || 0) / 1000 * (rate || 17687) * resolveMarkup(selectedService));
-        await supabase.from('transactions').insert({
-          email: user?.email || '',
-          user_id: user?.id || null,
-          type: 'order',
-          amount: totalIDR,
-          // ✅ Simpan order_id dan service_id supaya muncul di admin Orders
-          order_id: String(res.order),
-          service_id: String(selectedService.service),
-          charge: parseFloat(selectedService.rate || 0) * effectiveQty / 1000,
-          description: `Order #${res.order} - ${selectedService.name?.slice(0, 60)}`,
-          status: 'success',
-          link: link || null,
-          qty: effectiveQty || null,
-        });
-        // Update balance state langsung tanpa reload
-        setBalance(prev => Math.max(0, (prev || 0) - totalIDR));
+        // ✅ Saldo & baris transaksi 'order' SUDAH ditangani server (RPC debit + enrich).
+        //    Client tidak boleh insert transaksi sendiri (dobel potong + diblok RLS).
+        //    Cukup baca ulang saldo dari ledger biar angka di UI sinkron.
+        await refreshBalance();
       }
       setLink(''); setQty(''); setComments(''); setSelectedService(null);
     } catch (e) { setError(e.message); }
@@ -377,26 +363,15 @@ export default function ViewNewOrder({ user, setMenu }) {
             sessionStorage.setItem('smm_order_ids', JSON.stringify(existing.slice(0, 100)));
           }
         }
-        // ✅ Simpan bulk order ke Supabase
-        const svc = services.find(s => String(s.service) === String(serviceId));
-        const totalIDR = svc ? Math.round(parseInt(orderQty) * parseFloat(svc.rate || 0) / 1000 * (rate || 17687) * resolveMarkup(svc)) : 0;
-        await supabase.from('transactions').insert({
-          email: user?.email || '',
-          user_id: user?.id || null,
-          type: 'order',
-          amount: totalIDR,
-          order_id: String(res.order),
-          service_id: String(serviceId),
-          charge: svc ? parseFloat(svc.rate || 0) * parseInt(orderQty) / 1000 : 0,
-          description: `Order #${res.order} - ${svc?.name?.slice(0, 60) || serviceId}`,
-          status: 'success',
-        });
+        // ✅ Saldo & baris transaksi 'order' ditangani server per-baris (RPC).
+        //    Karena server motong saldo atomik tiap request, bulk over-spend gak mungkin lagi.
         results.push({ line, status: 'success', msg: `Order #${res.order} berhasil!` });
       } catch (e) {
         results.push({ line, status: 'error', msg: e.message });
       }
     }
     setBulkResults(results);
+    await refreshBalance();
     setBulkLoading(false);
   };
 

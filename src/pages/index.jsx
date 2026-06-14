@@ -19,24 +19,45 @@ const EASE = {
 // ── CountUp: angka berhitung naik saat mount ───────────────────
 function CountUp({ end, duration = 2000, decimals = 0, prefix = '', suffix = '' }) {
   const [val, setVal] = useState(0);
+  const ref = useRef(null);
   useEffect(() => {
-    let raf, start;
-    const step = (ts) => {
-      if (!start) start = ts;
-      const p = Math.min((ts - start) / duration, 1);
-      // ease-out cubic
-      const eased = 1 - Math.pow(1 - p, 3);
-      setVal(end * eased);
-      if (p < 1) raf = requestAnimationFrame(step);
-      else setVal(end);
+    const el = ref.current;
+    if (!el) return;
+
+    // Hormati reduced-motion: langsung tampilkan nilai akhir tanpa animasi
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    if (reduce) { setVal(end); return; }
+
+    let raf, start, hasRun = false;
+    const run = () => {
+      const step = (ts) => {
+        if (!start) start = ts;
+        const p = Math.min((ts - start) / duration, 1);
+        // ease-out cubic
+        const eased = 1 - Math.pow(1 - p, 3);
+        setVal(end * eased);
+        if (p < 1) raf = requestAnimationFrame(step);
+        else setVal(end);
+      };
+      raf = requestAnimationFrame(step);
     };
-    raf = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(raf);
+
+    // Mulai berhitung saat masuk viewport (sekali saja)
+    const obs = new IntersectionObserver(([e]) => {
+      if (e.isIntersecting && !hasRun) {
+        hasRun = true;
+        run();
+        obs.unobserve(el);
+      }
+    }, { threshold: 0.4 });
+    obs.observe(el);
+
+    return () => { cancelAnimationFrame(raf); obs.disconnect(); };
   }, [end, duration]);
   const display = decimals > 0
     ? val.toFixed(decimals)
     : Math.round(val).toLocaleString('id-ID');
-  return <>{prefix}{display}{suffix}</>;
+  return <span ref={ref}>{prefix}{display}{suffix}</span>;
 }
 
 // ── RevealSection: animasi saat masuk viewport ─────────────────
@@ -61,6 +82,15 @@ function RevealSection({ children, delay = 0, duration = 850, variant = 'up', st
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
+
+    // Reduced motion: tampilkan langsung, lewati semua animasi
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    if (reduce) {
+      el.style.opacity = '1';
+      el.style.transform = 'none';
+      Array.from(el.children).forEach(c => { c.style.opacity = '1'; c.style.transform = 'none'; });
+      return;
+    }
 
     // Set initial state
     const initStyles = getInit().split(';');
@@ -738,6 +768,11 @@ export default function Landing() {
             33% { transform: translateY(-18px) scale(1.03); }
             66% { transform: translateY(10px) scale(0.97); }
           }
+          @media (prefers-reduced-motion: reduce) {
+            [style*="blobFloat"] { animation: none !important; }
+            .testi-marquee,
+            .testi-desktop [style*="scrollUp"] { animation: none !important; }
+          }
           html { scroll-behavior: smooth; }
           .root h1, .root h2 { font-family: 'Sora','Plus Jakarta Sans',sans-serif; }
           /* Teks kecil/body landing pakai Outfit (judul tetap Sora di atas) */
@@ -749,6 +784,30 @@ export default function Landing() {
             box-shadow: 0 12px 38px rgba(37,99,235,.6), 0 0 0 1px rgba(59,130,246,.4) !important;
           }
           .hero-cta:active { transform: translateY(0) scale(.99); }
+
+          /* ── Hero stagger masuk saat load ── */
+          @keyframes heroRise {
+            from { opacity: 0; transform: translateY(22px); }
+            to   { opacity: 1; transform: translateY(0); }
+          }
+          .fu > .hero-badge,
+          .fu > h1,
+          .fu > p,
+          .fu > div {
+            opacity: 0;
+            animation: heroRise .75s cubic-bezier(0.16,1,0.3,1) forwards;
+          }
+          .fu > .hero-badge { animation-delay: .05s; }
+          .fu > h1          { animation-delay: .15s; }
+          .fu > p           { animation-delay: .27s; }
+          .fu > div:nth-of-type(1) { animation-delay: .39s; } /* CTA row */
+          .fu > div:nth-of-type(2) { animation-delay: .50s; } /* stats */
+          .fu > div:nth-of-type(3) { animation-delay: .58s; } /* trust row */
+          @media (prefers-reduced-motion: reduce) {
+            .fu > .hero-badge, .fu > h1, .fu > p, .fu > div {
+              opacity: 1 !important; animation: none !important; transform: none !important;
+            }
+          }
 
           /* ── Subtle grid pattern overlay (hero depth) ── */
           .hero-grid {
