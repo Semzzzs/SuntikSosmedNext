@@ -106,23 +106,10 @@ export default function ViewAddFunds({ user, balance: balanceProp = null }) {
   const [qrisError, setQrisError] = useState('');
   const [showBackConfirm, setShowBackConfirm] = useState(false);
 
-  // Simpan/hapus QR ke Supabase
-  const saveQrisToDB = async (data) => {
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const email = session?.user?.email;
-      if (!email || !data) return;
-      await supabase.from('transactions').update({
-        qr_url: data.qr_url || null,
-        qr_string: data.qr_string || null,
-        qr_trx_id: data.trx_id || null,
-        qr_expiry: data.expiry || null,
-        qr_total: data.totalAmount || null,
-        qr_amount: data.amount || null,
-        qr_ref: data.reference_id || null,
-      }).eq('description', `QRIS_PENDING_${data.trx_id}`).eq('email', email);
-    } catch { }
-  };
+  // Pembuatan/penyimpanan baris qris_pending sekarang TANGGUNG JAWAB SERVER
+  // (lewat /api/payment, service_role). Client tidak menulis ke transactions lagi —
+  // RLS memblokir tulisan client dan webhook yang mencatat deposit.
+  const saveQrisToDB = async () => { /* no-op: dipindah ke server */ };
 
   const setQrisData = (data) => {
     setQrisDataRaw(data);
@@ -352,25 +339,8 @@ export default function ViewAddFunds({ user, balance: balanceProp = null }) {
           setQrisData(qrisPayload);
           setQrisStatus('pending');
           setStep(3);
-          // Simpan ke Supabase untuk restore lintas device/tab
-          try {
-            const { data: { session: s } } = await supabase.auth.getSession();
-            await supabase.from('transactions').insert({
-              user_id: s?.user?.id || null,
-              email: s?.user?.email,
-              type: 'qris_pending',
-              amount: numIDR,
-              description: `QRIS_PENDING_${data.data.trx_id}`,
-              status: 'pending_webhook',
-              qr_url: qrisPayload.qr_url || null,
-              qr_string: qrisPayload.qr_string || null,
-              qr_trx_id: qrisPayload.trx_id || null,
-              qr_expiry: qrisPayload.expiry || null,
-              qr_total: qrisPayload.totalAmount || null,
-              qr_amount: qrisPayload.amount || null,
-              qr_ref: qrisPayload.reference_id || null,
-            });
-          } catch { }
+          // Baris qris_pending dibuat di SERVER (/api/payment) pakai service_role.
+          // Client tidak insert ke transactions lagi — itu diblokir RLS dan bikin 403.
         } else {
           setQrisError(data.message || 'Gagal membuat transaksi QRIS. Coba lagi.');
         }
@@ -911,16 +881,8 @@ export default function ViewAddFunds({ user, balance: balanceProp = null }) {
                 Tetap di sini
               </button>
               <button onClick={async () => {
-                // Tandai baris QR pending ini batal di Supabase agar tidak ter-restore lagi
-                try {
-                  const trx = qrisData?.trx_id;
-                  if (trx) {
-                    await supabase.from('transactions')
-                      .update({ status: 'failed' })
-                      .eq('qr_trx_id', trx)
-                      .eq('status', 'pending_webhook');
-                  }
-                } catch { }
+                // Pembatalan baris pending ditangani server (webhook/cron pembersih QRIS).
+                // Client tidak menulis ke transactions lagi (diblokir RLS).
                 setShowBackConfirm(false); setStep(1); setQrisData(null); setQrisStatus(null); setQrisError('');
               }}
                 style={{ flex: 1, padding: '10px 0', borderRadius: 9, border: 'none', background: 'var(--red)', color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: "'Outfit',sans-serif" }}>
