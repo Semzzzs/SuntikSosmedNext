@@ -485,25 +485,53 @@ export default async function handler(req, res) {
             return res.status(200).json({ ok: true, refunded: refundAmt, email: orderTx.email });
         }
 
-        // Deposit manual oleh admin
+        // Deposit / pengurangan manual oleh admin
         if (action === 'manual_deposit') {
-            const { email, amount, note } = body;
+            const { email, amount, note, mode } = body;
             if (!email || !email.includes('@')) return res.status(400).json({ error: 'Email tidak valid.' });
             const amt = parseInt(amount);
             if (!amt || amt <= 0) return res.status(400).json({ error: 'Jumlah tidak valid.' });
 
+            const isDeduct = mode === 'deduct';
+
+            // Cek user terdaftar (boleh di profiles atau pernah ada transaksi)
             const { data: profile } = await supabase.from('profiles').select('email').eq('email', email).maybeSingle();
-            if (!profile) return res.status(400).json({ error: `Email ${email} tidak terdaftar di sistem.` });
+            if (!profile) {
+                const { data: txUser } = await supabase.from('transactions').select('email').eq('email', email).limit(1).maybeSingle();
+                if (!txUser) return res.status(400).json({ error: `Email ${email} tidak terdaftar di sistem.` });
+            }
+
+            // Untuk pengurangan: cegah saldo jadi negatif
+            if (isDeduct) {
+                const { data: txs } = await supabase
+                    .from('transactions')
+                    .select('type, amount, status')
+                    .eq('email', email);
+                let saldo = 0;
+                for (const t of (txs || [])) {
+                    if (t.status !== 'success') continue;
+                    if (['deposit', 'bonus', 'refund'].includes(t.type)) saldo += (t.amount || 0);
+                    else if (['order', 'purchase'].includes(t.type)) saldo -= (t.amount || 0);
+                }
+                saldo = Math.max(0, saldo);
+                if (amt > saldo) {
+                    return res.status(400).json({ error: `Saldo tidak cukup (saldo: Rp ${saldo.toLocaleString('id-ID')}).` });
+                }
+            }
 
             const { error } = await supabase.from('transactions').insert({
                 email,
-                type: 'deposit',
+                type: isDeduct ? 'order' : 'deposit',
                 amount: amt,
-                description: note || 'Deposit manual oleh admin',
+                description: note || (isDeduct ? 'Pengurangan saldo manual oleh admin' : 'Deposit manual oleh admin'),
                 status: 'success',
             });
             if (error) return res.status(500).json({ error: error.message });
-            await logAudit(supabase, req, { action: 'manual_deposit', target: email, detail: { amount: amt, note: note || '' } });
+            await logAudit(supabase, req, {
+                action: 'manual_deposit',
+                target: email,
+                detail: { amount: amt, mode: isDeduct ? 'deduct' : 'add', note: note || '' },
+            });
             return res.status(200).json({ ok: true });
         }
 

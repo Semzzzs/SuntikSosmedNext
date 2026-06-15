@@ -17,20 +17,25 @@ const adminFetch = async (url, opts = {}) => {
 };
 
 // ✅ Single query untuk semua user sekaligus — bukan N query terpisah
+// ✅ Hitung saldo per-email via admin-api (service role) — bukan anon supabase
+//    yang bisa ketolak RLS. Sertakan kolom status agar filter benar.
 async function getAllBalances(emails) {
     if (!emails.length) return {};
-    const { data } = await supabase
-        .from('transactions')
-        .select('email, type, amount')
-        .in('email', emails);
-    if (!data) return {};
     const map = {};
     for (const email of emails) map[email] = 0;
-    for (const t of data) {
-        if (!t.email || t.status !== 'success') continue;
-        const masuk = ['deposit', 'bonus', 'refund'].includes(t.type) ? (t.amount || 0) : 0;
-        const keluar = t.type === 'order' ? (t.amount || 0) : 0;
-        map[t.email] = (map[t.email] || 0) + masuk - keluar;
+    try {
+        const res = await adminFetch('/api/admin-api?action=get_transactions_all');
+        const json = await res.json();
+        const list = json.transactions || [];
+        const wanted = new Set(emails);
+        for (const t of list) {
+            if (!t.email || !wanted.has(t.email) || t.status !== 'success') continue;
+            const masuk = ['deposit', 'bonus', 'refund'].includes(t.type) ? (t.amount || 0) : 0;
+            const keluar = ['order', 'purchase'].includes(t.type) ? (t.amount || 0) : 0;
+            map[t.email] = (map[t.email] || 0) + masuk - keluar;
+        }
+    } catch (e) {
+        // biarkan map default 0 kalau gagal
     }
     // clamp ke 0
     for (const k of Object.keys(map)) map[k] = Math.max(0, map[k]);
@@ -132,25 +137,30 @@ export default function AdminUsers() {
         // Optimistic update UI
         setUsers(prev => prev.map(u => u.email === email ? { ...u, blocked: newBlocked } : u));
 
-        // ✅ Baca state terbaru dari Supabase dulu — hindari race condition
-        const { data: fresh } = await supabase.from('settings').select('value').eq('key', 'blocked_emails').maybeSingle();
-        const currentBlocked = fresh?.value ? JSON.parse(fresh.value) : [];
-        const updatedBlocked = newBlocked
-            ? [...new Set([...currentBlocked, email])]
-            : currentBlocked.filter(e => e !== email);
+        // ✅ Hitung daftar blokir terbaru dari state, lalu kirim via admin-api (service role)
+        const blocked_emails = users
+            .map(u => u.email === email ? { ...u, blocked: newBlocked } : u)
+            .filter(u => u.blocked)
+            .map(u => u.email);
 
-        await supabase.from('settings').upsert({
-            key: 'blocked_emails',
-            value: JSON.stringify(updatedBlocked),
-            updated_at: new Date().toISOString()
-        });
+        try {
+            const res = await adminFetch('/api/admin-api?action=toggle_block', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, blocked_emails }),
+            });
+            if (!res.ok) throw new Error('toggle_block failed');
+        } catch (e) {
+            // Rollback kalau gagal
+            setUsers(prev => prev.map(u => u.email === email ? { ...u, blocked: !newBlocked } : u));
+        }
     };
 
     const handleSaldo = async () => {
         const val = parseInt(amount);
         // ✅ Validasi lebih ketat
         if (!val || val <= 0 || !isFinite(val)) return;
-        if (val > 100_000_000) { setMsg('❌ Maksimal top up Rp 100.000.000 per transaksi'); return; }
+        if (val > 100_000_000) { setMsg('❌ Maksimal Rp 100.000.000 per transaksi'); return; }
 
         setLoading(true);
         const curBalance = balances[modal.email] || 0;
@@ -159,25 +169,34 @@ export default function AdminUsers() {
             setLoading(false);
             return;
         }
-        const tx = {
-            email: modal.email,
-            type: modal.type === 'add' ? 'deposit' : 'order',
-            amount: val,
-            description: modal.type === 'add' ? 'Top up manual oleh Admin' : 'Pengurangan manual oleh Admin',
-            status: 'success',
-        };
-        const { error } = await supabase.from('transactions').insert(tx);
-        if (error) {
-            setMsg(`❌ Gagal: ${error.message}`);
-        } else {
-            setMsg(modal.type === 'add'
-                ? `✅ +Rp ${val.toLocaleString('id-ID')} berhasil ditambahkan`
-                : `✅ -Rp ${val.toLocaleString('id-ID')} berhasil dikurangi`
-            );
-            // ✅ Refresh balance user ini saja
-            const updated = await getAllBalances([modal.email]);
-            setBalances(prev => ({ ...prev, ...updated }));
+
+        try {
+            // ✅ Lewat admin-api (service role) — bukan direct Supabase (ditolak RLS)
+            const res = await adminFetch('/api/admin-api?action=manual_deposit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    email: modal.email,
+                    amount: val,
+                    mode: modal.type === 'add' ? 'add' : 'deduct',
+                }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || data.error) {
+                setMsg(`❌ Gagal: ${data.error || `HTTP ${res.status}`}`);
+            } else {
+                setMsg(modal.type === 'add'
+                    ? `✅ +Rp ${val.toLocaleString('id-ID')} berhasil ditambahkan`
+                    : `✅ -Rp ${val.toLocaleString('id-ID')} berhasil dikurangi`
+                );
+                // ✅ Refresh balance user ini saja
+                const updated = await getAllBalances([modal.email]);
+                setBalances(prev => ({ ...prev, ...updated }));
+            }
+        } catch (e) {
+            setMsg(`❌ Gagal: ${e.message}`);
         }
+
         setAmount('');
         setLoading(false);
         setTimeout(() => { setModal(null); setMsg(''); }, 2000);

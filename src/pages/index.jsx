@@ -8,6 +8,7 @@ import {
   Menu, X, Home, LayoutGrid, HelpCircle
 } from 'lucide-react';
 import { useTheme } from '@/context/ThemeContext';
+import { supabase } from '@/lib/supabase';
 
 // ── Easing curves ──────────────────────────────────────────────
 const EASE = {
@@ -285,6 +286,18 @@ function FaqItem({ q, a, dark }) {
 export default function Landing() {
   const router = useRouter();
   const { dark, toggle } = useTheme();
+
+  // ✅ Kalau user udah login dan buka root (/), lempar ke /dashboard.
+  //    Landing TETAP di-render (aman buat SSR/SEO) — redirect jalan di useEffect.
+  //    User login cuma lihat landing sekejap sebelum ke-redirect (getSession instan).
+  useEffect(() => {
+    let alive = true;
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (alive && session?.user) router.replace('/dashboard');
+    }).catch(() => { });
+    return () => { alive = false; };
+  }, [router]);
+
   const navScrolled = useNavbarScroll();
   const [serviceQuery, setServiceQuery] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
@@ -340,6 +353,8 @@ export default function Landing() {
         {/* Extra light mode accent blob */}
         {!dark && <div style={{ position: 'absolute', top: '40%', left: '20%', width: 300, height: 300, borderRadius: '50%', background: 'radial-gradient(circle, rgba(37,99,235,.1) 0%, transparent 70%)', animation: 'blobFloat 18s ease-in-out 3s infinite' }} />}
         <div className="hero-grid" />
+        {/* ── Subtle noise/grain texture — bikin background terasa premium, bukan flat ── */}
+        <div className="hero-noise" />
       </div>
 
       {/* ── NAVBAR ── */}
@@ -507,9 +522,9 @@ export default function Landing() {
               whiteSpace: 'nowrap', flexShrink: 0,
             }}>
               <span className="badge-dot" aria-hidden />
-              Update Terbaru!
+              Termurah!
             </span>
-            <span style={{ color: dark ? '#93C5FD' : 'var(--blue)' }}>SuntikSosmed Sudah Hadir!</span>
+            <span style={{ color: dark ? '#93C5FD' : 'var(--blue)' }}>Panel SMM Terpercaya</span>
             <ArrowRight className="badge-chevron" size={13} style={{ color: dark ? '#93C5FD' : 'var(--blue)', flexShrink: 0 }} />
           </div>
 
@@ -521,10 +536,10 @@ export default function Landing() {
           </p>
 
           <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginBottom: 36, flexWrap: 'wrap' }}>
-            <button onClick={() => router.push('/register')} className="hero-cta" style={{ background: 'var(--blue)', border: 'none', borderRadius: 50, padding: '13px 26px', fontSize: 14.5, fontWeight: 800, color: '#fff', cursor: 'pointer', fontFamily: "'Outfit','Plus Jakarta Sans',sans-serif", display: 'inline-flex', alignItems: 'center', gap: 8, boxShadow: '0 8px 30px rgba(37,99,235,.5), 0 0 0 1px rgba(59,130,246,.3)', transition: 'transform .2s, box-shadow .2s', width: 'fit-content' }}>
+            <button onClick={() => router.push('/register')} className="hero-cta hero-cta-main" style={{ background: 'var(--blue)', border: 'none', borderRadius: 50, padding: '13px 26px', fontSize: 14.5, fontWeight: 800, color: '#fff', cursor: 'pointer', fontFamily: "'Outfit','Plus Jakarta Sans',sans-serif", display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, boxShadow: '0 8px 30px rgba(37,99,235,.5), 0 0 0 1px rgba(59,130,246,.3)', transition: 'transform .2s, box-shadow .2s', width: 'fit-content' }}>
               Daftar Sekarang Gratis! <UserPlus size={15} />
             </button>
-            <button onClick={() => router.push('/login')} style={{ background: 'var(--white)', border: '1.5px solid var(--border)', borderRadius: 50, padding: '13px 26px', fontSize: 14.5, fontWeight: 700, cursor: 'pointer', color: 'var(--text)', fontFamily: "'Outfit','Plus Jakarta Sans',sans-serif", boxShadow: 'var(--shadow)', width: 'fit-content', display: 'inline-flex', alignItems: 'center' }}>
+            <button onClick={() => router.push('/login')} className="hero-cta-sub" style={{ background: 'var(--white)', border: '1.5px solid var(--border)', borderRadius: 50, padding: '13px 26px', fontSize: 14.5, fontWeight: 700, cursor: 'pointer', color: 'var(--text)', fontFamily: "'Outfit','Plus Jakarta Sans',sans-serif", boxShadow: 'var(--shadow)', width: 'fit-content', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
               Masuk
             </button>
           </div>
@@ -825,6 +840,22 @@ export default function Landing() {
               linear-gradient(to bottom, rgba(96,165,250,.08) 1px, transparent 1px);
           }
 
+          /* ── Noise/grain overlay — SVG turbulence (tanpa file gambar, sangat ringan) ── */
+          .hero-noise {
+            position: absolute; inset: 0; pointer-events: none; z-index: 2;
+            opacity: .08;
+            mix-blend-mode: multiply;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+            background-size: 140px 140px;
+          }
+          .root.dark .hero-noise {
+            opacity: .14;
+            mix-blend-mode: screen;
+          }
+          @media (prefers-reduced-motion: no-preference) {
+            .hero-noise { will-change: auto; }
+          }
+
           /* ── Hero announcement badge ── */
           .hero-badge {
             position: relative; overflow: hidden;
@@ -866,6 +897,22 @@ export default function Landing() {
           @media (max-width: 420px) {
             .hero-badge { font-size: 11px !important; gap: 7px !important; padding-right: 11px !important; }
             .hero-badge .badge-chevron { display: none; }
+          }
+          /* ── Tombol CTA hero — rapi & proporsional di mobile ── */
+          @media (max-width: 600px) {
+            .hero-cta-main, .hero-cta-sub {
+              flex: 1 1 0 !important;
+              min-width: 0 !important;
+              width: auto !important;
+              padding: 9px 12px !important;
+              font-size: 12.5px !important;
+              font-weight: 700 !important;
+              white-space: nowrap !important;
+              box-shadow: 0 4px 16px rgba(37,99,235,.35) !important;
+            }
+            .hero-cta-sub { box-shadow: none !important; }
+            .hero-cta-main { flex-grow: 1.5 !important; gap: 6px !important; }
+            .hero-cta-main svg, .hero-cta-sub svg { width: 13px !important; height: 13px !important; }
           }
           @media (prefers-reduced-motion: reduce) {
             .hero-badge .badge-shine, .badge-dot::before, .badge-dot::after { animation: none; }
