@@ -239,7 +239,7 @@ const TikTokIcon = ({ size = 16 }) => (
 
 // ── Akun sosial media ──
 const SOCIALS = [
-  { id: 'ig', label: 'Instagram', url: 'https://instagram.com/suntiksosmed.store' },
+  { id: 'ig', label: 'Instagram', url: 'https://instagram.com/suntiksosmed.storee' },
   { id: 'wa', label: 'WhatsApp', url: 'https://wa.me/6283843306230' },
   { id: 'tt', label: 'TikTok', url: 'https://tiktok.com/@suntiksosmedstore' },
 ];
@@ -332,6 +332,23 @@ export default function Landing() {
     return () => obs.disconnect();
   }, []);
 
+  // ── Spotlight: update posisi glow mengikuti kursor (desktop only) ──
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (window.matchMedia('(hover: none)').matches) return; // skip di touch device
+    let raf = null;
+    const onMove = (e) => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        document.documentElement.style.setProperty('--spot-x', e.clientX + 'px');
+        document.documentElement.style.setProperty('--spot-y', e.clientY + 'px');
+        raf = null;
+      });
+    };
+    window.addEventListener('mousemove', onMove, { passive: true });
+    return () => { window.removeEventListener('mousemove', onMove); if (raf) cancelAnimationFrame(raf); };
+  }, []);
+
   const filteredServices = SERVICES.filter(sv => {
     const q = serviceQuery.trim().toLowerCase();
     if (!q) return true;
@@ -355,6 +372,8 @@ export default function Landing() {
         <div className="hero-grid" />
         {/* ── Subtle noise/grain texture — bikin background terasa premium, bukan flat ── */}
         <div className="hero-noise" />
+        {/* ── Spotlight mengikuti kursor (desktop) — efek glow halus di belakang konten ── */}
+        <div className="hero-spotlight" />
       </div>
 
       {/* ── NAVBAR ── */}
@@ -589,16 +608,22 @@ export default function Landing() {
 
           {/* Platform logos greyscale */}
           <p style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--text3)', letterSpacing: '.07em', textTransform: 'uppercase', marginBottom: 16 }}>Tersedia untuk platform terbaik</p>
-          <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center', gap: '12px 24px', opacity: 0.35, filter: 'grayscale(1)', marginBottom: 48 }}>
-            {[
-              { icon: <Youtube size={20} />, label: 'YouTube' },
-              { icon: <Twitter size={20} />, label: 'Twitter' },
-              { icon: <Instagram size={20} />, label: 'Instagram' },
-              { icon: <Play size={20} fill="currentColor" />, label: 'TikTok' },
-              { icon: <Facebook size={20} />, label: 'Facebook' },
-            ].map(p => (
-              <div key={p.label} style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 800, fontSize: 14 }}>{p.icon} {p.label}</div>
-            ))}
+          <div className="logo-marquee-wrap" style={{ marginBottom: 48 }}>
+            <div className="logo-marquee" style={{ filter: 'grayscale(1)', opacity: 0.4 }}>
+              {[...Array(2)].map((_, dup) => (
+                <div key={dup} className="logo-marquee-track" aria-hidden={dup === 1}>
+                  {[
+                    { icon: <Youtube size={20} />, label: 'YouTube' },
+                    { icon: <Twitter size={20} />, label: 'Twitter' },
+                    { icon: <Instagram size={20} />, label: 'Instagram' },
+                    { icon: <Play size={20} fill="currentColor" />, label: 'TikTok' },
+                    { icon: <Facebook size={20} />, label: 'Facebook' },
+                  ].map(p => (
+                    <div key={p.label} style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 800, fontSize: 14, whiteSpace: 'nowrap', flexShrink: 0 }}>{p.icon} {p.label}</div>
+                  ))}
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </div>
@@ -779,6 +804,21 @@ export default function Landing() {
           @keyframes scrollUp42 { 0% { transform: translateY(0); } 100% { transform: translateY(-50%); } }
           @keyframes scrollLeftTesti { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
           .testi-marquee:hover, .testi-marquee:active { animation-play-state: paused; }
+
+          /* ── Logo platform marquee — scroll infinite dengan fade di tepi ── */
+          .logo-marquee-wrap {
+            overflow: hidden; width: 100%;
+            -webkit-mask-image: linear-gradient(to right, transparent, #000 12%, #000 88%, transparent);
+            mask-image: linear-gradient(to right, transparent, #000 12%, #000 88%, transparent);
+          }
+          .logo-marquee { display: flex; width: max-content; animation: scrollLeftLogo 22s linear infinite; }
+          .logo-marquee-track { display: flex; align-items: center; gap: 40px; padding-right: 40px; flex-shrink: 0; }
+          @keyframes scrollLeftLogo { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
+          .logo-marquee:hover { animation-play-state: paused; }
+          @media (prefers-reduced-motion: reduce) {
+            .logo-marquee { animation: none; }
+            .logo-marquee-wrap { -webkit-mask-image: none; mask-image: none; }
+          }
           @keyframes blobFloat {
             0%, 100% { transform: translateY(0) scale(1); }
             33% { transform: translateY(-18px) scale(1.03); }
@@ -844,14 +884,33 @@ export default function Landing() {
           /* ── Noise/grain overlay — SVG turbulence (tanpa file gambar, sangat ringan) ── */
           .hero-noise {
             position: absolute; inset: 0; pointer-events: none; z-index: 2;
-            opacity: .08;
+            opacity: .035;
             mix-blend-mode: multiply;
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-            background-size: 140px 140px;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.95' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+            background-size: 200px 200px;
           }
           .root.dark .hero-noise {
-            opacity: .14;
-            mix-blend-mode: screen;
+            opacity: .04;
+            mix-blend-mode: overlay;
+          }
+
+          /* ── Spotlight kursor — glow halus yang mengikuti mouse (desktop) ── */
+          .hero-spotlight {
+            position: fixed; inset: 0; pointer-events: none; z-index: 1;
+            background: radial-gradient(
+              340px circle at var(--spot-x, 50%) var(--spot-y, 18%),
+              rgba(59,130,246,.10), transparent 70%
+            );
+            transition: background .12s ease-out;
+          }
+          .root.dark .hero-spotlight {
+            background: radial-gradient(
+              360px circle at var(--spot-x, 50%) var(--spot-y, 18%),
+              rgba(96,165,250,.14), transparent 68%
+            );
+          }
+          @media (hover: none) {
+            .hero-spotlight { display: none; }
           }
           @media (prefers-reduced-motion: no-preference) {
             .hero-noise { will-change: auto; }
@@ -938,9 +997,24 @@ export default function Landing() {
           .feature-card { 
             background: var(--white); border: 1px solid var(--border); border-radius: 20px; padding: 28px 24px;
             transition: transform 0.3s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.3s ease, border-color 0.3s ease;
+            position: relative;
           }
+          /* Gradient border yang berputar saat hover — pakai pseudo-element + mask */
+          .feature-card::before {
+            content: ''; position: absolute; inset: 0; border-radius: 20px; padding: 1.5px;
+            background: conic-gradient(from var(--angle, 0deg), transparent 60%, rgba(59,130,246,.9), rgba(96,165,250,.6), transparent 85%);
+            -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+            -webkit-mask-composite: xor; mask-composite: exclude;
+            opacity: 0; transition: opacity .35s ease; pointer-events: none;
+          }
+          .feature-card:hover::before { opacity: 1; animation: cardBorderSpin 4s linear infinite; }
+          @property --angle { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
+          @keyframes cardBorderSpin { to { --angle: 360deg; } }
           .root.dark .feature-card { background: var(--bg2); border-color: var(--border2); }
-          .feature-card:hover { transform: translateY(-6px) scale(1.01); box-shadow: 0 20px 48px rgba(37,99,235,.12); border-color: rgba(37,99,235,.2); }
+          .feature-card:hover { transform: translateY(-6px) scale(1.01); box-shadow: 0 20px 48px rgba(37,99,235,.12); border-color: transparent; }
+          @media (prefers-reduced-motion: reduce) {
+            .feature-card:hover::before { animation: none; }
+          }
           @media (max-width: 600px) {
             .svc-table th, .svc-table td { padding-left: 10px !important; padding-right: 10px !important; padding-top: 12px !important; padding-bottom: 12px !important; }
             .svc-table td > div { font-size: 12px !important; gap: 8px !important; }
