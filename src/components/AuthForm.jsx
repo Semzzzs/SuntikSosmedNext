@@ -19,15 +19,16 @@ export default function AuthForm({ type }) {
   const [showBlocked, setShowBlocked] = useState(false);
 
   useEffect(() => {
-    if (window.location.search.includes('registered=1')) {
+    if (!router.isReady) return;
+    if (router.query.registered === '1') {
       setRegisterSuccess(true);
     }
-    if (window.location.search.includes('blocked=1')) {
+    if (router.query.blocked === '1') {
       setShowBlocked(true);
       // Bersihkan query agar modal tidak muncul lagi saat refresh
-      window.history.replaceState(null, '', window.location.pathname);
+      router.replace('/login', undefined, { shallow: true });
     }
-  }, []);
+  }, [router.isReady, router.query.blocked, router.query.registered]);
 
   const set = (k) => (e) => setForm(f => ({ ...f, [k]: e.target.value }));
 
@@ -119,7 +120,12 @@ export default function AuthForm({ type }) {
 
         if (!loginRes.ok) {
           setLoading(false);
-          return setError(loginData.error || 'Email atau password salah.');
+          const msg = loginData.error || '';
+          // Kalau ditolak karena akun diblokir → tampilkan modal, bukan pesan merah
+          if (loginRes.status === 403 || /blokir|blocked|dinonaktifkan/i.test(msg)) {
+            return setShowBlocked(true);
+          }
+          return setError(msg || 'Email atau password salah.');
         }
 
         // Set Supabase session dari token yang dikembalikan server

@@ -271,8 +271,10 @@ export default function DashboardPage() {
         if (cancelled) return;
         if (json.blocked) {
           await supabase.auth.signOut();
-          sessionStorage.clear();
-          router.replace('/login?blocked=1');
+          try { sessionStorage.clear(); } catch { }
+          // Hard redirect (bukan router.replace) — pastikan halaman login fresh
+          // dengan query ?blocked=1 terbaca, tidak terganggu auth-state listener.
+          window.location.href = '/login?blocked=1';
           return;
         }
       } catch (e) {
@@ -283,8 +285,8 @@ export default function DashboardPage() {
     const userData = {
       // ✅ Jangan simpan id di sessionStorage — cukup untuk display
       email: authUser.email,
-      name: authUser.user_metadata?.full_name || authUser.email?.split('@')[0] || 'User',
-      initials: ((authUser.user_metadata?.full_name || authUser.email || 'U').charAt(0)).toUpperCase(),
+      name: authUser.user_metadata?.full_name || authUser.user_metadata?.name || authUser.email?.split('@')[0] || 'User',
+      initials: ((authUser.user_metadata?.full_name || authUser.user_metadata?.name || authUser.email || 'U').charAt(0)).toUpperCase(),
     };
     setUser(userData);
     // ✅ Simpan minimal — tidak ada id/sensitive data
