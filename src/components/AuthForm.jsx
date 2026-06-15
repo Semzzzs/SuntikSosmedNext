@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
-import { Moon, Sun, Mail, Lock, ArrowRight, Eye, EyeOff, User, Zap, Shield, TrendingUp, CheckCircle } from 'lucide-react';
+import { Moon, Sun, Mail, Lock, ArrowRight, Eye, EyeOff, User, Zap, Shield, TrendingUp, CheckCircle, Ban, MessageCircle, AlertCircle } from 'lucide-react';
 import { useTheme } from '@/context/ThemeContext';
 import { supabase } from '@/lib/supabase';
 
@@ -16,10 +16,16 @@ export default function AuthForm({ type }) {
   const [resetEmail, setResetEmail] = useState('');
   const [resetLoading, setResetLoading] = useState(false);
   const [resetSent, setResetSent] = useState(false);
+  const [showBlocked, setShowBlocked] = useState(false);
 
   useEffect(() => {
     if (window.location.search.includes('registered=1')) {
       setRegisterSuccess(true);
+    }
+    if (window.location.search.includes('blocked=1')) {
+      setShowBlocked(true);
+      // Bersihkan query agar modal tidak muncul lagi saat refresh
+      window.history.replaceState(null, '', window.location.pathname);
     }
   }, []);
 
@@ -280,6 +286,38 @@ export default function AuthForm({ type }) {
           </p>
 
           {/* Reset Password Modal */}
+          {showBlocked && (
+            <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)', zIndex: 210, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)', padding: 16 }}
+              onClick={() => setShowBlocked(false)}>
+              <div style={{ background: 'var(--white)', border: '1px solid rgba(239,68,68,.25)', borderRadius: 18, width: 380, maxWidth: '100%', boxShadow: '0 24px 60px rgba(0,0,0,.35)', overflow: 'hidden' }}
+                onClick={e => e.stopPropagation()}>
+                {/* Header */}
+                <div style={{ padding: '28px 24px 22px', textAlign: 'center', borderBottom: '1px solid var(--border)' }}>
+                  <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'var(--red-l)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+                    <Ban size={32} style={{ color: 'var(--red)' }} />
+                  </div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text)', marginBottom: 6 }}>Akun Kamu Diblokir</div>
+                  <div style={{ fontSize: 13.5, color: 'var(--text3)', lineHeight: 1.6 }}>Akses ke akun ini telah dinonaktifkan oleh admin.</div>
+                </div>
+                {/* Body */}
+                <div style={{ padding: '20px 24px 24px' }}>
+                  <div style={{ background: 'var(--red-l)', border: '1px solid rgba(239,68,68,.2)', borderRadius: 12, padding: '13px 15px', display: 'flex', gap: 11, alignItems: 'flex-start', marginBottom: 18 }}>
+                    <AlertCircle size={17} style={{ color: 'var(--red)', flexShrink: 0, marginTop: 1 }} />
+                    <div style={{ fontSize: 12.5, color: 'var(--text2)', lineHeight: 1.55 }}>Jika kamu merasa ini keliru, hubungi admin untuk peninjauan ulang akun.</div>
+                  </div>
+                  <a href="https://wa.me/6283843306230" target="_blank" rel="noreferrer"
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', background: 'var(--blue)', color: '#fff', border: 'none', borderRadius: 50, padding: '12px', fontSize: 13.5, fontWeight: 700, textDecoration: 'none', marginBottom: 10, fontFamily: "'Plus Jakarta Sans',sans-serif", boxSizing: 'border-box' }}>
+                    <MessageCircle size={17} /> Hubungi Admin
+                  </a>
+                  <button onClick={() => setShowBlocked(false)}
+                    style={{ width: '100%', background: 'transparent', color: 'var(--text2)', border: '1.5px solid var(--border)', borderRadius: 50, padding: '11px', fontSize: 13.5, fontWeight: 700, cursor: 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif" }}>
+                    Kembali ke Login
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {showReset && (
             <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)' }}
               onClick={() => setShowReset(false)}>

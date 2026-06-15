@@ -254,6 +254,32 @@ export default function DashboardPage() {
       return;
     }
 
+    let cancelled = false;
+
+    // ✅ Cek apakah akun diblokir admin. Kalau ya: sign out + tendang ke /login.
+    //    Penegakan ada juga di /api/smm (saat order), ini lapisan UX agar user
+    //    diblokir tidak bisa masuk dashboard sama sekali.
+    (async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token;
+        if (!token) return;
+        const res = await fetch('/api/check-blocked', {
+          headers: { 'Authorization': `Bearer ${token}` },
+        });
+        const json = await res.json().catch(() => ({}));
+        if (cancelled) return;
+        if (json.blocked) {
+          await supabase.auth.signOut();
+          sessionStorage.clear();
+          router.replace('/login?blocked=1');
+          return;
+        }
+      } catch (e) {
+        // FAIL-OPEN: jangan kunci user kalau cek gagal — order tetap dijaga server.
+      }
+    })();
+
     const userData = {
       // ✅ Jangan simpan id di sessionStorage — cukup untuk display
       email: authUser.email,
@@ -264,6 +290,8 @@ export default function DashboardPage() {
     // ✅ Simpan minimal — tidak ada id/sensitive data
     // sessionStorage hanya untuk data UI — email/id selalu dari supabase.auth.getSession()
     sessionStorage.setItem('user', JSON.stringify({ name: userData.name, initials: userData.initials }));
+
+    return () => { cancelled = true; };
   }, [authUser, authLoading]);
 
   useEffect(() => {

@@ -422,6 +422,7 @@ export default function Landing() {
           boxShadow: '-16px 0 48px rgba(0,0,0,.28)',
           paddingTop: 'calc(16px + env(safe-area-inset-top))',
           paddingBottom: 'calc(16px + env(safe-area-inset-bottom))',
+          fontFamily: "'Outfit', sans-serif",
         }}>
           {/* Header */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 6px 14px', borderBottom: '1px solid var(--border)' }}>
@@ -484,12 +485,12 @@ export default function Landing() {
           {/* CTA bawah */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingTop: 14, marginTop: 14, borderTop: '1px solid var(--border)' }}>
             <button onClick={() => { setMenuOpen(false); router.push('/login'); }}
-              style={{ width: '100%', background: 'var(--bg2)', border: '1.5px solid var(--border)', borderRadius: 12, padding: '12px', fontSize: 14, fontWeight: 700, color: 'var(--text)', cursor: 'pointer', fontFamily: "'Outfit','Plus Jakarta Sans',sans-serif" }}>
+              style={{ width: '100%', background: 'var(--bg2)', border: '1.5px solid var(--border)', borderRadius: 50, padding: '11px', fontSize: 13.5, fontWeight: 700, color: 'var(--text)', cursor: 'pointer', fontFamily: "'Outfit', sans-serif" }}>
               Masuk
             </button>
             <button onClick={() => { setMenuOpen(false); router.push('/register'); }}
-              style={{ width: '100%', background: 'var(--blue)', border: 'none', borderRadius: 12, padding: '12px', fontSize: 14, fontWeight: 800, color: '#fff', cursor: 'pointer', fontFamily: "'Outfit','Plus Jakarta Sans',sans-serif", display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, boxShadow: '0 8px 24px rgba(37,99,235,.4)' }}>
-              <UserPlus size={15} /> Daftar Sekarang Gratis
+              style={{ width: '100%', background: 'var(--blue)', border: 'none', borderRadius: 50, padding: '11px', fontSize: 13.5, fontWeight: 800, color: '#fff', cursor: 'pointer', fontFamily: "'Outfit', sans-serif", display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, boxShadow: '0 4px 16px rgba(37,99,235,.35)' }}>
+              <UserPlus size={14} /> Daftar Sekarang Gratis
             </button>
           </div>
         </div>

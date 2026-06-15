@@ -84,6 +84,27 @@ export default async function handler(req, res) {
         if (error || !user) {
             return res.status(401).json({ error: 'Sesi tidak valid. Silakan login ulang.' });
         }
+
+        // ✅ Cek apakah user diblokir admin. Pakai service role agar lolos RLS
+        //    saat baca settings.blocked_emails. User yang diblokir tidak boleh
+        //    melakukan action apapun (order, status, dll).
+        try {
+            const supaSvc = createClient(
+                process.env.NEXT_PUBLIC_SUPABASE_URL,
+                process.env.SUPABASE_SERVICE_ROLE_KEY
+            );
+            const { data: blk } = await supaSvc.from('settings').select('value').eq('key', 'blocked_emails').maybeSingle();
+            const blockedEmails = blk?.value ? JSON.parse(blk.value) : [];
+            if (user.email && blockedEmails.includes(user.email)) {
+                return res.status(403).json({ error: 'Akun kamu telah diblokir. Hubungi admin untuk informasi lebih lanjut.' });
+            }
+        } catch (e) {
+            console.error('[smm] gagal cek blocked_emails:', e.message);
+            // FAIL-CLOSED untuk action yang menyentuh saldo, FAIL-OPEN untuk read biasa.
+            if (req.query.action === 'add') {
+                return res.status(503).json({ error: 'Gagal memverifikasi status akun. Coba lagi.' });
+            }
+        }
     }
 
     // ✅ Tanpa NEXT_PUBLIC_ — key tidak masuk ke browser bundle
