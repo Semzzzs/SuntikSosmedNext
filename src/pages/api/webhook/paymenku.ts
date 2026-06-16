@@ -72,7 +72,15 @@ export default async function handler(req: any, res: any) {
 
     if (payload.event === 'payment.status_updated' && payload.status === 'paid') {
         const { trx_id, reference_id, amount_received } = payload;
-        const amount = parseFloat(amount_received || payload.amount || 0);
+        // 📌 Pemetaan field Paymenku (mode customer menanggung fee):
+        //    - payload.amount         = GROSS (nominal deposit + fee yang dibayar customer)
+        //    - payload.total_fee      = fee
+        //    - payload.amount_received = NET diterima merchant = NOMINAL DEPOSIT ASLI user.
+        //    Jadi yang dikreditkan = amount_received (net), BUKAN gross.
+        //    CATATAN: sumber kebenaran terbaik tetap qr_amount dari baris qris_pending
+        //    (nominal yang user pilih saat bikin QRIS) — dipakai lebih dulu di bawah.
+        const netAmount = parseFloat(amount_received || 0);
+        const amount = netAmount || parseFloat(payload.amount || 0) || 0;
 
         // ✅ Validasi amount
         if (!amount || amount <= 0) {
@@ -100,7 +108,8 @@ export default async function handler(req: any, res: any) {
         const { data: pendingRows } = await supabaseAdmin
             .from('transactions')
             .select('id, email, user_id, amount, qr_amount')
-            .or(`qr_trx_id.eq.${trx_id},description.eq.QRIS_PENDING_${trx_id}`)
+            .or(`qr_trx_id.eq.${trx_id},description.ilike.%QRIS_PENDING_${trx_id}%,description.ilike.%${reference_id}%`)
+            .eq('status', 'qris_pending')
             .order('created_at', { ascending: false })
             .limit(1);
         const pendingRow = (pendingRows || [])[0];
@@ -167,12 +176,18 @@ export default async function handler(req: any, res: any) {
         }
 
         // JANGAN buang email — simpan apa adanya. Kalau tak terverifikasi -> pending_webhook (review manual)
-        const status = verifiedEmail ? 'success' : 'pending_webhook';
         const emailToSave = verifiedEmail || email || '';
 
         // ✅ Bonus hanya diberikan kalau deposit terverifikasi (status success).
         // Kalau pending_webhook (butuh review manual admin), jangan tambah bonus dulu.
+        //
+        // 📌 NOMINAL DEPOSIT = amount_received (net). Di mode "customer menanggung fee",
+        //    net inilah nominal yang user pilih. (gross = net + fee.) Fallback ini hanya
+        //    terpakai kalau baris qris_pending tak ketemu; idealnya jarang terjadi karena
+        //    server kini selalu menyimpan qris_pending saat QRIS dibuat.
         const baseAmt = Math.round(amount);
+        const status = verifiedEmail ? 'success' : 'pending_webhook';
+
         const { bonus: fbBonus, percent: fbPercent } =
             status === 'success' ? await getBonusAmount(baseAmt) : { bonus: 0, percent: 0 };
         const fbCredit = baseAmt + fbBonus;

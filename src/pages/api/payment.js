@@ -70,6 +70,45 @@ export default async function handler(req, res) {
                     const data = JSON.parse(rawText);
                     // Sertakan reference_id server agar client bisa simpan ke baris qris_pending (sinkron dgn webhook)
                     if (data && typeof data === 'object' && !data.reference_id) data.reference_id = serverRefId;
+
+                    // ✅ SERVER yang menyimpan baris qris_pending — JANGAN andalkan client.
+                    //    Kalau client gagal insert (tutup tab, koneksi putus, beda device),
+                    //    webhook tak menemukan nominal asli → jatuh ke fallback yang memakai
+                    //    amount_received (NET setelah fee) → user dikredit kurang. Dengan
+                    //    server yang insert, webhook SELALU menemukan nominal deposit asli.
+                    if (resp.ok && data && typeof data === 'object') {
+                        try {
+                            const supaSvc = createClient(
+                                process.env.NEXT_PUBLIC_SUPABASE_URL,
+                                process.env.SUPABASE_SERVICE_ROLE_KEY
+                            );
+                            // trx_id Paymenku bisa ada di beberapa lokasi tergantung bentuk respons.
+                            const trxId =
+                                data.trx_id || data.transaction_id || data.id ||
+                                data?.data?.trx_id || data?.data?.transaction_id || data?.data?.id || null;
+
+                            await supaSvc.from('transactions').insert({
+                                user_id: user.id,
+                                email: user.email,
+                                type: 'deposit',
+                                status: 'qris_pending',
+                                // qr_amount = NOMINAL DEPOSIT ASLI (sumber kebenaran untuk webhook).
+                                qr_amount: amount,
+                                amount: amount,
+                                qr_trx_id: trxId ? String(trxId) : null,
+                                // description menyertakan reference_id + trx_id agar webhook bisa
+                                // mencocokkan lewat banyak jalur (qr_trx_id, atau QRIS_PENDING_<trx>).
+                                description: trxId
+                                    ? `QRIS_PENDING_${trxId} - Ref: ${serverRefId}`
+                                    : `QRIS_PENDING - Ref: ${serverRefId}`,
+                            });
+                        } catch (e) {
+                            // Insert pending gagal bukan alasan menggagalkan pembuatan QRIS —
+                            // webhook masih punya fallback. Tapi log supaya bisa dipantau.
+                            console.error('[payment] gagal simpan qris_pending:', e.message);
+                        }
+                    }
+
                     return res.status(resp.ok ? 200 : 400).json(data);
                 } catch {
                     return res.status(500).json({ error: 'Response Paymenku bukan JSON', raw: rawText.slice(0, 200) });

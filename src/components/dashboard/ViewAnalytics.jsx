@@ -4,6 +4,15 @@ import { supabase } from '@/lib/supabase';
 
 const rp = (n) => `Rp ${Number(n || 0).toLocaleString('id-ID')}`;
 
+// Tipe transaksi yang menambah saldo (credit) vs mengurangi (debit).
+// Termasuk manual_deposit (top-up admin) & deduction (potong admin) supaya
+// ringkasan TOTAL konsisten dengan yang tampil di daftar transaksi.
+const CREDIT_TYPES = ['deposit', 'bonus', 'refund', 'manual_deposit'];
+const DEBIT_TYPES = ['order', 'purchase', 'deduction'];
+// Dianggap settled kalau success atau tanpa status (mis. penyesuaian manual).
+// pending/pending_webhook/failed otomatis TIDAK keitung.
+const isSettled = (t) => t?.status === 'success' || t?.status == null;
+
 export default function ViewAnalytics({ user }) {
   const [orders, setOrders] = useState([]);
   const [transactions, setTransactions] = useState([]);
@@ -45,8 +54,8 @@ export default function ViewAnalytics({ user }) {
   }, [user?.email]);
 
   const tx = Array.isArray(transactions) ? transactions : [];
-  const totalDeposit = tx.filter(t => ['deposit', 'bonus', 'refund'].includes(t?.type) && t?.status === 'success').reduce((s, t) => s + (t.amount || 0), 0);
-  const totalSpent = tx.filter(t => ['order', 'purchase'].includes(t?.type) && t?.status === 'success').reduce((s, t) => s + (t.amount || 0), 0);
+  const totalDeposit = tx.filter(t => CREDIT_TYPES.includes(t?.type) && isSettled(t)).reduce((s, t) => s + (t.amount || 0), 0);
+  const totalSpent = tx.filter(t => DEBIT_TYPES.includes(t?.type) && isSettled(t)).reduce((s, t) => s + (t.amount || 0), 0);
   const balance = totalDeposit - totalSpent;
 
   // Chart data - transaksi per hari 7 hari terakhir
@@ -56,8 +65,8 @@ export default function ViewAnalytics({ user }) {
     d.setHours(0, 0, 0, 0);
     const dateKey = d.toISOString().slice(0, 10);
     const dayTx = tx.filter(t => t?.created_at?.slice(0, 10) === dateKey);
-    const deposit = dayTx.filter(t => ['deposit', 'bonus', 'refund'].includes(t?.type) && t?.status === 'success').reduce((s, t) => s + (t.amount || 0), 0);
-    const spent = dayTx.filter(t => ['order', 'purchase'].includes(t?.type) && t?.status === 'success').reduce((s, t) => s + (t.amount || 0), 0);
+    const deposit = dayTx.filter(t => CREDIT_TYPES.includes(t?.type) && isSettled(t)).reduce((s, t) => s + (t.amount || 0), 0);
+    const spent = dayTx.filter(t => DEBIT_TYPES.includes(t?.type) && isSettled(t)).reduce((s, t) => s + (t.amount || 0), 0);
     return { label: d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }), deposit, spent };
   });
 

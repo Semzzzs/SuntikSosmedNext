@@ -81,6 +81,11 @@ async function logAudit(supabase, req, { action, target = null, detail = null })
 }
 
 // ──────────────────────────────────────────────────────────────────────────
+// Bulk disable (mis. matikan semua SMMSOC ~30rb id) bisa kirim body besar.
+export const config = {
+    api: { bodyParser: { sizeLimit: '8mb' } },
+};
+
 export default async function handler(req, res) {
     // ✅ Semua request wajib punya JWT admin yang valid
     const adminPayload = verifyAdminToken(req);
@@ -321,6 +326,41 @@ export default async function handler(req, res) {
             }, { onConflict: 'key' });
             if (error) return res.status(500).json({ error: error.message });
             await logAudit(supabase, req, { action: 'toggle_service', target: serviceId, detail: { enabled: !!enabled } });
+            return res.status(200).json({ ok: true, disabled: next });
+        }
+
+        // ── Matikan/aktifkan SEMUA layanan satu provider sekaligus ──
+        //   enabled=true  -> aktifkan: buang semua id milik provider dari daftar
+        //                    disabled (cukup parse prefix "provider:", tak perlu kirim id).
+        //   enabled=false -> matikan: tambahkan semua id provider (dikirim client
+        //                    lewat service_ids) ke daftar disabled.
+        if (action === 'bulk_toggle_provider') {
+            const provider = String(body.provider || '').trim();
+            const enabled = body.enabled;
+            const serviceIds = Array.isArray(body.service_ids) ? body.service_ids.map(String) : [];
+            if (!provider) return res.status(400).json({ error: 'provider wajib diisi.' });
+
+            const { data: cur } = await supabase.from('settings').select('value').eq('key', 'disabled_services').maybeSingle();
+            let disabled = [];
+            try { disabled = cur?.value ? JSON.parse(cur.value) : []; } catch { disabled = []; }
+            if (!Array.isArray(disabled)) disabled = [];
+            const set = new Set(disabled.map(String));
+            const prefix = `${provider}:`;
+
+            if (enabled) {
+                for (const id of [...set]) if (String(id).startsWith(prefix)) set.delete(id);
+            } else {
+                for (const id of serviceIds) if (id.startsWith(prefix)) set.add(id);
+            }
+
+            const next = Array.from(set);
+            const { error } = await supabase.from('settings').upsert({
+                key: 'disabled_services',
+                value: JSON.stringify(next),
+                updated_at: new Date().toISOString()
+            }, { onConflict: 'key' });
+            if (error) return res.status(500).json({ error: error.message });
+            await logAudit(supabase, req, { action: 'bulk_toggle_provider', target: provider, detail: { enabled: !!enabled, count: enabled ? 0 : serviceIds.length } });
             return res.status(200).json({ ok: true, disabled: next });
         }
 

@@ -27,7 +27,7 @@ export function ApiProvider({ children }) {
 }
 
 // ── Whitelist params yang diizinkan ke /api/smm ────────────────────────────
-const ALLOWED_PARAMS = new Set(['action', 'service', 'link', 'quantity', 'order', 'orders', 'comments']);
+const ALLOWED_PARAMS = new Set(['action', 'service', 'link', 'quantity', 'order', 'orders', 'comments', 'provider']);
 
 /* ── SMM API HELPER — lewat proxy /api/smm dengan auth token ── */
 export async function smmRequest(params) {
@@ -50,13 +50,33 @@ export async function smmRequest(params) {
 
   if (!token) throw new Error('Silakan login terlebih dahulu.');
 
-  const query = new URLSearchParams(safeParams);
-  const res = await fetch(`/api/smm?${query.toString()}`, {
-    method: 'GET',
-    headers: {
-      'Authorization': `Bearer ${token}`,
-    },
-  });
+  // ✅ Order dengan custom comments dikirim via POST (body JSON) — comments bisa
+  //    ratusan baris, kalau lewat query string URL-nya kepanjangan & bisa kena
+  //    limit Nginx/browser (~8KB) -> request gagal. `action` tetap di query
+  //    karena handler membaca req.query.action sebelum tahu method.
+  //    Sisanya (services/status/balance) tetap GET seperti semula.
+  const usePost = safeParams.action === 'add' && safeParams.comments != null;
+
+  let res;
+  if (usePost) {
+    const { action, ...bodyParams } = safeParams;
+    res = await fetch(`/api/smm?action=${encodeURIComponent(action)}`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(bodyParams),
+    });
+  } else {
+    const query = new URLSearchParams(safeParams);
+    res = await fetch(`/api/smm?${query.toString()}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+  }
 
   if (res.status === 401) throw new Error('Sesi habis. Silakan login ulang.');
 
@@ -97,7 +117,54 @@ export function useSmmApi() {
     getBalance: () => smmRequest({ action: 'balance' }),
     addOrder: (service, link, quantity, opts = {}) =>
       smmRequest({ action: 'add', service, link, quantity, ...(opts.comments ? { comments: opts.comments } : {}) }),
-    getStatus: (order) => smmRequest({ action: 'status', order }),
-    getMultiStatus: (orders) => smmRequest({ action: 'status', orders: orders.join(',') }),
+
+    // Status / refill / cancel satu order. `provider` opsional: kalau pemanggil
+    // sudah tahu provider order ini (dari row transactions.provider), kirim biar
+    // server tak perlu lookup DB. Kalau tidak, server resolve sendiri dari order_id.
+    getStatus: (order, provider) =>
+      smmRequest({ action: 'status', order, ...(provider ? { provider } : {}) }),
+    refillOrder: (order, provider) =>
+      smmRequest({ action: 'refill', order, ...(provider ? { provider } : {}) }),
+    cancelOrder: (order, provider) =>
+      smmRequest({ action: 'cancel', order, ...(provider ? { provider } : {}) }),
+
+    // Multi-status, provider-aware.
+    //   Terima:
+    //     - array string  -> ["1","2"]            (cara lama; diasumsikan smmsoc)
+    //     - array objek    -> [{order, provider}]  (multi-provider, disarankan)
+    //   Order dikelompokkan per provider, satu request multistatus per provider,
+    //   lalu hasilnya digabung jadi { [orderId]: statusObj }.
+    getMultiStatus: async (items) => {
+      if (!Array.isArray(items) || items.length === 0) return {};
+
+      // Normalisasi ke { order, provider }.
+      const norm = items.map((it) =>
+        typeof it === 'object' && it !== null
+          ? { order: String(it.order), provider: it.provider || 'smmsoc' }
+          : { order: String(it), provider: 'smmsoc' }
+      );
+
+      // Kelompokkan per provider.
+      const byProvider = norm.reduce((acc, { order, provider }) => {
+        (acc[provider] ||= []).push(order);
+        return acc;
+      }, {});
+
+      // Satu request per provider (paralel), lalu merge.
+      const merged = {};
+      await Promise.all(
+        Object.entries(byProvider).map(async ([provider, orders]) => {
+          try {
+            const data = await smmRequest({ action: 'status', orders: orders.join(','), provider });
+            // Provider Perfect Panel mengembalikan objek { orderId: {...} } untuk multistatus.
+            if (data && typeof data === 'object') Object.assign(merged, data);
+          } catch (e) {
+            // Satu provider gagal tak boleh menggagalkan semua. Tandai error per order.
+            for (const o of orders) merged[o] = { error: e.message };
+          }
+        })
+      );
+      return merged;
+    },
   };
 }

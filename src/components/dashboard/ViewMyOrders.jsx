@@ -84,9 +84,9 @@ export default function ViewMyOrders() {
         .eq('type', 'order')
         .order('created_at', { ascending: false });
 
-      // Filter hanya order SMM asli (punya order_id numerik atau deskripsi "Order #...")
+      // Filter hanya order SMM asli (punya order_id atau deskripsi "Order #...")
       const txData = txRaw?.filter(t =>
-        (t.order_id && /^\d+$/.test(String(t.order_id))) ||
+        (t.order_id != null && String(t.order_id).trim() !== '') ||
         (t.description && t.description.startsWith('Order #'))
       );
 
@@ -94,28 +94,57 @@ export default function ViewMyOrders() {
       const { meta } = getOrderData();
 
       if (!txError && txData && txData.length > 0) {
-        // Kumpulkan order_id numerik untuk fetch live status ke SMMSOC.
-        // ✅ Hanya order yang BELUM final (status final tak akan berubah lagi → hemat call).
+        // Kumpulkan order non-final + provider-nya untuk fetch live status.
+        // ✅ Hanya order yang BELUM final (status final tak berubah lagi → hemat call).
+        // ✅ Kelompokkan per provider: tiap provider hanya kenal order ID-nya sendiri,
+        //    jadi order BuzzerPanel ditanyakan ke BuzzerPanel, SMMSOC ke SMMSOC.
         const FINAL = new Set(['Completed', 'Canceled', 'Refunded']);
-        const orderIds = txData
-          .filter(t => t.order_id && /^\d+$/.test(String(t.order_id)) && !FINAL.has(normalizeStatus(t.status)))
-          .map(t => String(t.order_id));
+        const pending = txData.filter(t =>
+          t.order_id != null && String(t.order_id).trim() !== '' &&
+          !FINAL.has(normalizeStatus(t.status))
+        );
+
+        // { providerKey: [orderId, ...] } — provider dari kolom transaksi, default smmsoc.
+        const byProvider = pending.reduce((acc, t) => {
+          const pk = t.provider || 'smmsoc';
+          (acc[pk] ||= []).push(String(t.order_id));
+          return acc;
+        }, {});
 
         let liveStatus = {};
-        // Fetch live status dari SMM API kalau ada order_id
-        if (orderIds.length > 0) {
+        const providerKeys = Object.keys(byProvider);
+        if (providerKeys.length > 0) {
           try {
             const { data: { session } } = await supabase.auth.getSession();
-            const res = await fetch(`/api/smm?action=status&orders=${orderIds.slice(0, 100).join(',')}`, {
-              headers: { 'Authorization': `Bearer ${session?.access_token || ''}` }
-            });
-            const data = await res.json();
-            if (!data.error) liveStatus = data;
-          } catch { /* pakai status Pending */ }
+            const token = session?.access_token || '';
+            // Satu request per provider, paralel, lalu gabung hasilnya.
+            await Promise.all(providerKeys.map(async (pk) => {
+              const ids = byProvider[pk].slice(0, 100);
+              try {
+                const res = await fetch(`/api/smm?action=status&orders=${ids.join(',')}&provider=${encodeURIComponent(pk)}`, {
+                  headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await res.json();
+                // ✅ Namespace key dengan provider — order_id TIDAK unik antar provider
+                //    (SMMSOC & BuzzerPanel bisa sama-sama punya #1234). Tanpa prefix,
+                //    Object.assign akan menimpa status order provider lain → order
+                //    bisa nampilin status yang salah. Cocokkan key dengan pembacaan
+                //    di bawah: `${provider}:${order_id}`.
+                if (data && !data.error && typeof data === 'object') {
+                  for (const [oid, info] of Object.entries(data)) {
+                    liveStatus[`${pk}:${oid}`] = info;
+                  }
+                }
+              } catch { /* provider ini gagal → order-nya pakai status tersimpan */ }
+            }));
+          } catch { /* tanpa session → semua pakai status tersimpan */ }
         }
 
         const parsed = txData.map(t => {
-          const live = (t.order_id && liveStatus[t.order_id]) ? liveStatus[t.order_id] : null;
+          // ✅ Baca dengan key ber-namespace provider (lihat merge di atas) agar
+          //    order tidak salah ambil status milik provider lain ber-order_id sama.
+          const pk = t.provider || 'smmsoc';
+          const live = (t.order_id && liveStatus[`${pk}:${t.order_id}`]) ? liveStatus[`${pk}:${t.order_id}`] : null;
           const localMeta = meta[t.order_id] || {};
           // ✅ Kalau live status ada → pakai itu. Kalau gagal/tidak ada → fallback ke status tersimpan
           //    di Supabase (jangan paksa jadi 'Pending' — itu bikin order Completed tampil Menunggu).

@@ -2,6 +2,11 @@ import { useState, useEffect } from 'react';
 import { ArrowLeftRight, ArrowUpRight, ArrowDownLeft } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
+// Konsisten dengan ViewAnalytics: tipe yang menambah vs mengurangi saldo.
+const CREDIT_TYPES = ['deposit', 'bonus', 'refund', 'manual_deposit'];
+const DEBIT_TYPES = ['order', 'purchase', 'deduction'];
+const isSettled = (t) => t?.status === 'success' || t?.status == null;
+
 export default function ViewTransactions({ user }) {
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -38,6 +43,7 @@ export default function ViewTransactions({ user }) {
 
   const TYPE_CONFIG = {
     deposit: { label: 'Deposit', icon: <ArrowDownLeft size={16} />, color: 'var(--green)', bg: 'var(--green-l)', sign: '+' },
+    manual_deposit: { label: 'Top-up Manual', icon: <ArrowDownLeft size={16} />, color: 'var(--green)', bg: 'var(--green-l)', sign: '+' },
     order: { label: 'Order', icon: <ArrowUpRight size={16} />, color: 'var(--red)', bg: 'var(--red-l)', sign: '-' },
     purchase: { label: 'Order', icon: <ArrowUpRight size={16} />, color: 'var(--red)', bg: 'var(--red-l)', sign: '-' },
     refund: { label: 'Refund', icon: <ArrowDownLeft size={16} />, color: 'var(--blue)', bg: 'var(--blue-l)', sign: '+' },
@@ -45,8 +51,8 @@ export default function ViewTransactions({ user }) {
     deduction: { label: 'Pengurangan', icon: <ArrowUpRight size={16} />, color: 'var(--red)', bg: 'var(--red-l)', sign: '-' },
   };
 
-  const totalDeposit = transactions.filter(t => ['deposit', 'bonus', 'refund'].includes(t.type) && t.status === 'success').reduce((s, t) => s + (t.amount || 0), 0);
-  const totalOrder = transactions.filter(t => ['order', 'purchase'].includes(t.type) && t.status === 'success').reduce((s, t) => s + (t.amount || 0), 0);
+  const totalDeposit = transactions.filter(t => CREDIT_TYPES.includes(t.type) && isSettled(t)).reduce((s, t) => s + (t.amount || 0), 0);
+  const totalOrder = transactions.filter(t => DEBIT_TYPES.includes(t.type) && isSettled(t)).reduce((s, t) => s + (t.amount || 0), 0);
 
 
   const STATUS_CONFIG_TRX = {

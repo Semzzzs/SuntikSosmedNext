@@ -1,58 +1,9 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { ShoppingCart, AlertCircle, CheckCircle, Search, ChevronDown, X, ArrowRight, CreditCard, Package, Activity } from 'lucide-react';
 import { useApi, useSmmApi } from '@/context/ApiContext';
 import { supabase } from '@/lib/supabase';
 import { useTheme } from '@/context/ThemeContext';
-
-// Strip emojis, brackets [ID], pipes, special chars from service/category names
-const cleanName = (name = '') => name
-  .replace(/\[.*?\]/g, '')
-  .replace(/[\u{1F300}-\u{1FFFF}]/gu, '')
-  .replace(/[⚡🔥💎✅❌⚠️🎯🌍🌎🌏📌🔑💰🎁🏆⭐🚀💫🌟✨🎉]/g, '')
-  .replace(/\s+/g, ' ')
-  .trim();
-
-// Clean category name — take first meaningful segment before |
-const cleanCategory = (name = '') => {
-  const parts = name.split('|').map(p => p.trim()).filter(Boolean);
-  // If all parts are very short (like platform names), join first 2
-  if (parts.length <= 1) return cleanName(name);
-  // Find the most descriptive part (longest, not just a platform name)
-  const platforms = ['instagram', 'tiktok', 'youtube', 'twitter', 'facebook', 'telegram', 'whatsapp', 'spotify', 'linkedin'];
-  const meaningful = parts.find(p => p.length > 8 && !platforms.includes(p.toLowerCase()));
-  return cleanName(meaningful || parts[0]);
-};
-
-
-// Platform SVG icons
-const PlatformIcons = {
-  all: <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2"><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" /></svg>,
-  instagram: <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="2" width="20" height="20" rx="5" /><circle cx="12" cy="12" r="4.5" /><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none" /></svg>,
-  facebook: <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z" /></svg>,
-  telegram: <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M22 2L11 13M22 2L15 22l-4-9-9-4 20-7z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" /></svg>,
-  tiktok: <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-2.88 2.5 2.89 2.89 0 0 1-2.89-2.89 2.89 2.89 0 0 1 2.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 0 0-.79-.05 6.34 6.34 0 0 0-6.34 6.34 6.34 6.34 0 0 0 6.34 6.34 6.34 6.34 0 0 0 6.33-6.34V8.69a8.18 8.18 0 0 0 4.78 1.52V6.73a4.85 4.85 0 0 1-1.01-.04z" /></svg>,
-  twitter: <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" /></svg>,
-  youtube: <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M22.54 6.42a2.78 2.78 0 0 0-1.95-1.96C18.88 4 12 4 12 4s-6.88 0-8.59.46a2.78 2.78 0 0 0-1.95 1.96A29 29 0 0 0 1 12a29 29 0 0 0 .46 5.58A2.78 2.78 0 0 0 3.41 19.6C5.12 20 12 20 12 20s6.88 0 8.59-.46a2.78 2.78 0 0 0 1.95-1.95A29 29 0 0 0 23 12a29 29 0 0 0-.46-5.58z" /><polygon points="9.75 15.02 15.5 12 9.75 8.98 9.75 15.02" fill="white" /></svg>,
-  whatsapp: <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z" /><path d="M11.999 1.999C6.478 1.999 2 6.478 2 12c0 1.818.483 3.522 1.329 4.997L2 22l5.145-1.311A9.956 9.956 0 0 0 12 22c5.522 0 10-4.478 10-10.001C22 6.478 17.522 1.999 11.999 1.999z" /></svg>,
-  spotify: <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><circle cx="12" cy="12" r="10" /><path d="M8 13.5c2.5-1 5.5-.8 7.5.5" stroke="white" strokeWidth="1.5" strokeLinecap="round" fill="none" /><path d="M7 10.5c3-1.3 6.5-1 9 .8" stroke="white" strokeWidth="1.5" strokeLinecap="round" fill="none" /><path d="M6.5 7.5c3.5-1.5 7.5-1.2 10.5 1" stroke="white" strokeWidth="1.5" strokeLinecap="round" fill="none" /></svg>,
-  linkedin: <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z" /><rect x="2" y="9" width="4" height="12" /><circle cx="4" cy="4" r="2" /></svg>,
-  other: <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="16" /><line x1="8" y1="12" x2="16" y2="12" /></svg>,
-};
-
-// Platform filter
-const PLATFORMS = [
-  { id: '', label: 'All', icon: 'all', color: '#64748B', bg: '#F1F5F9', darkBg: '#27272A' },
-  { id: 'instagram', label: 'Instagram', icon: 'instagram', color: '#E1306C', bg: '#FDF2F8', darkBg: '#3B1520' },
-  { id: 'facebook', label: 'Facebook', icon: 'facebook', color: '#1877F2', bg: '#EFF6FF', darkBg: '#1E2D4A' },
-  { id: 'telegram', label: 'Telegram', icon: 'telegram', color: '#229ED9', bg: '#E0F7FF', darkBg: '#0E2A38' },
-  { id: 'tiktok', label: 'TikTok', icon: 'tiktok', color: '#69C9D0', bg: '#F0FFFE', darkBg: '#0A2A2E' },
-  { id: 'twitter', label: 'Twitter', icon: 'twitter', color: '#000000', bg: '#F8FAFC', darkBg: '#1A1A1A' },
-  { id: 'youtube', label: 'YouTube', icon: 'youtube', color: '#FF0000', bg: '#FFF0F0', darkBg: '#3B0A0A' },
-  { id: 'whatsapp', label: 'WhatsApp', icon: 'whatsapp', color: '#25D366', bg: '#F0FFF4', darkBg: '#0A2E1A' },
-  { id: 'spotify', label: 'Spotify', icon: 'spotify', color: '#1DB954', bg: '#F0FFF4', darkBg: '#0A2E1A' },
-  { id: 'linkedin', label: 'LinkedIn', icon: 'linkedin', color: '#0A66C2', bg: '#EFF6FF', darkBg: '#0A1F3B' },
-  { id: 'other', label: 'Other', icon: 'other', color: '#64748B', bg: '#F8FAFC', darkBg: '#1E1E1E' },
-];
+import { cleanName, cleanCategory, detectPlatform, PlatformIcons, visiblePlatforms, serviceCode, resolveServiceInput, isCustomCommentsSvc } from '@/lib/platforms';
 
 // Custom searchable dropdown
 function SearchSelect({ options, value, onChange, placeholder, disabled }) {
@@ -271,9 +222,7 @@ export default function ViewNewOrder({ user, setMenu }) {
     if (!selectedService) { setError('Pilih layanan dulu.'); return; }
 
     // Deteksi layanan Custom Comments (butuh daftar komentar, bukan quantity)
-    const ccType = String(selectedService.type || '').toLowerCase();
-    const ccName = String(selectedService.name || '').toLowerCase();
-    const isCustomComments = ccType.includes('custom comment') || ccName.includes('custom comment');
+    const isCustomComments = isCustomCommentsSvc(selectedService);
 
     // Daftar komentar (1 per baris). Quantity untuk custom comments = jumlah baris.
     const commentList = comments.split('\n').map(s => s.trim()).filter(Boolean);
@@ -296,7 +245,7 @@ export default function ViewNewOrder({ user, setMenu }) {
     }
 
     // Validasi saldo sebelum order
-    const totalIDRCheck = Math.round(effectiveQty * parseFloat(selectedService.rate || 0) / 1000 * (rate || 17687) * resolveMarkup(selectedService));
+    const totalIDRCheck = Math.round(effectiveQty * parseFloat(selectedService.rate || 0) / 1000 * fxFor(selectedService) * resolveMarkup(selectedService));
     if (balance !== null && totalIDRCheck > balance) {
       setError(`Saldo tidak cukup. Saldo kamu Rp ${Math.round(balance).toLocaleString('id-ID')}, dibutuhkan Rp ${totalIDRCheck.toLocaleString('id-ID')}.`);
       return;
@@ -354,8 +303,22 @@ export default function ViewNewOrder({ user, setMenu }) {
         results.push({ line, status: 'error', msg: 'Format salah (harus: service_id|link|quantity)' });
         continue;
       }
+
+      // Resolve input ke id internal. Terima kode alias ("B519"), id mentah
+      // ("519"), atau id internal. Pesan ambigu pakai kode alias (bukan nama provider).
+      const resolved = resolveServiceInput(serviceId, services);
+      if (resolved.ambiguous) {
+        results.push({ line, status: 'error', msg: `Kode ${serviceId} cocok ke beberapa layanan. Pakai salah satu: ${resolved.ambiguous.join(', ')}` });
+        continue;
+      }
+      if (!resolved.id) {
+        results.push({ line, status: 'error', msg: `Service ${serviceId} tidak ditemukan.` });
+        continue;
+      }
+      const resolvedId = resolved.id;
+
       try {
-        const res = await api.addOrder(serviceId, orderLink, orderQty);
+        const res = await api.addOrder(resolvedId, orderLink, orderQty);
         if (typeof window !== 'undefined' && res.order) {
           const existing = JSON.parse(sessionStorage.getItem('smm_order_ids') || '[]');
           if (!existing.includes(String(res.order))) {
@@ -375,20 +338,44 @@ export default function ViewNewOrder({ user, setMenu }) {
     setBulkLoading(false);
   };
 
-  const platformFilteredServices = selectedPlatform
-    ? services.filter(s => {
-      const name = (s.name + ' ' + s.category).toLowerCase();
-      return name.includes(selectedPlatform);
-    })
-    : services;
+  // Pra-hitung sekali per perubahan `services`: kategori bersih + platform per service.
+  // Memoized supaya 30rb+ service nggak diproses ulang tiap render (tiap ketik qty/link).
+  const enriched = useMemo(() => services.map(s => {
+    const cleanCat = cleanCategory(s.category) || 'Lainnya';
+    return { svc: s, cleanCat, platform: detectPlatform(cleanCat, s.name) };
+  }), [services]);
 
-  const filteredServices = platformFilteredServices.filter(s => {
-    const matchCat = !selectedCategory || s.category === selectedCategory;
-    const matchSearch = !searchQuery ||
-      s.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      String(s.service).includes(searchQuery);
-    return matchCat && matchSearch;
-  });
+  // Filter platform: cocokkan platform yang TERDETEKSI per service (bukan substring kasar).
+  const platformFilteredEnriched = useMemo(
+    () => !selectedPlatform ? enriched : enriched.filter(e => e.platform === selectedPlatform),
+    [enriched, selectedPlatform]
+  );
+  const platformFilteredServices = useMemo(
+    () => platformFilteredEnriched.map(e => e.svc),
+    [platformFilteredEnriched]
+  );
+
+  // Pencarian tab Search: cari ke SELURUH service (semua provider), LEPAS dari
+  // filter platform/kategori tab New Order. Match nama / id prefixed / id mentah /
+  // kategori / provider. Di-cap 200 biar query luas nggak render ribuan baris.
+  const searchResults = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return [];
+    const out = [];
+    for (const s of services) {
+      if (
+        (s.name || '').toLowerCase().includes(q) ||
+        String(s.service).toLowerCase().includes(q) ||
+        String(s._rawId ?? '').includes(q) ||
+        (s.category || '').toLowerCase().includes(q) ||
+        serviceCode(s).toLowerCase().includes(q)
+      ) {
+        out.push(s);
+        if (out.length >= 200) break;
+      }
+    }
+    return out;
+  }, [services, searchQuery]);
 
   const price = selectedService ? (parseFloat(selectedService.rate || 0) / 1000) : 0;
   const toIDR = (usd) => Math.round(usd * rate);
@@ -401,11 +388,36 @@ export default function ViewNewOrder({ user, setMenu }) {
     if (svc.category && markupRules.categories && markupRules.categories[svc.category] != null) return parseFloat(markupRules.categories[svc.category]);
     return markup;
   };
+
+  // ⚡ Faktor konversi harga ke IDR berdasar currency provider.
+  //   - Service USD (mis. SMMSOC): rate-nya per 1000 dalam USD -> kali kurs USD->IDR.
+  //   - Service IDR (mis. BuzzerPanel): rate sudah Rupiah -> faktor 1 (JANGAN dikali kurs).
+  //   Field `currency` dikirim server dari providers.js. Default 'USD' untuk
+  //   data lama tanpa field (kompatibilitas service SMMSOC sebelum multi-provider).
+  const fxFor = (svc) => {
+    const cur = String(svc?.currency || 'USD').toUpperCase();
+    return cur === 'IDR' ? 1 : (rate || 17687);
+  };
   const formatIDR = (usd) => {
     const val = toIDR(usd);
     return val > 0 ? `Rp ${val.toLocaleString('id-ID')}` : 'Rp 0';
   };
-  const categories = [...new Set(platformFilteredServices.map(s => s.category))].filter(Boolean);
+  // Kategori untuk dropdown: kunci = kategori bersih (cleanCategory) dari service
+  // yang lolos filter platform → near-duplicate nyatu, di-sort A–Z biar rapih.
+  const categories = useMemo(
+    () => [...new Set(platformFilteredEnriched.map(e => e.cleanCat))]
+      .filter(Boolean)
+      .sort((a, b) => a.localeCompare(b, 'id')),
+    [platformFilteredEnriched]
+  );
+
+  // Hitung jumlah service per platform → tombol platform yang kosong disembunyiin.
+  const platformCounts = useMemo(() => {
+    const m = {};
+    for (const e of enriched) m[e.platform] = (m[e.platform] || 0) + 1;
+    return m;
+  }, [enriched]);
+  const shownPlatforms = useMemo(() => visiblePlatforms(platformCounts), [platformCounts]);
 
   const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
@@ -418,6 +430,10 @@ export default function ViewNewOrder({ user, setMenu }) {
   // Shimmer bar kecil untuk angka yang masih loading (ganti "...")
   const Shimmer = ({ w = 60, h = 22 }) => (
     <span style={{ display: 'inline-block', width: w, height: h, borderRadius: 6, background: 'var(--bg2)', animation: 'pulse 1.4s ease-in-out infinite', verticalAlign: 'middle' }} />
+  );
+  // Blok skeleton (bar abu-abu ber-pulse). w angka = px, default 100%.
+  const Sk = ({ w = '100%', h = 14, r = 10, mb = 0, delay = 0 }) => (
+    <div style={{ width: w, height: h, borderRadius: r, marginBottom: mb, background: 'var(--bg2)', animation: 'pulse 1.4s ease-in-out infinite', animationDelay: `${delay}s` }} />
   );
 
   return (
@@ -481,10 +497,25 @@ export default function ViewNewOrder({ user, setMenu }) {
         </div>
 
         {tab === 'New Order' && loadingServices && services.length === 0 && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 14 }}>
-            {[1, 2, 3].map(i => (
-              <div key={i} style={{ height: 52, borderRadius: 10, background: 'var(--bg2)', animation: 'pulse 1.4s ease-in-out infinite', animationDelay: `${i * 0.15}s` }} />
-            ))}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 18, marginBottom: 14 }}>
+            {/* Platform */}
+            <div>
+              <Sk w={70} h={13} mb={10} />
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {[64, 96, 86, 72, 80, 90, 70, 88].map((w, i) => <Sk key={i} w={w} h={40} r={12} delay={i * 0.06} />)}
+              </div>
+            </div>
+            {/* Choose Category */}
+            <div><Sk w={120} h={13} mb={8} /><Sk h={46} r={12} delay={0.1} /></div>
+            {/* Choose Service */}
+            <div><Sk w={110} h={13} mb={8} /><Sk h={46} r={12} delay={0.15} /></div>
+            {/* Link */}
+            <div><Sk w={46} h={13} mb={8} /><Sk h={46} r={12} delay={0.2} /></div>
+            {/* Quantity */}
+            <div><Sk w={78} h={13} mb={8} /><Sk h={46} r={12} delay={0.25} /></div>
+            {/* Total + tombol */}
+            <Sk h={58} r={12} delay={0.3} />
+            <Sk h={50} r={12} delay={0.35} />
           </div>
         )}
         {tab === 'New Order' && !(loadingServices && services.length === 0) && (
@@ -493,20 +524,19 @@ export default function ViewNewOrder({ user, setMenu }) {
             <div>
               <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: 'var(--text)', marginBottom: 10 }}>Platform</label>
               <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(4, 1fr)' : 'repeat(auto-fill, minmax(110px, 1fr))', gap: 8 }}>
-                {PLATFORMS.map(p => {
+                {shownPlatforms.map(p => {
                   const isActive = selectedPlatform === p.id;
                   return (
                     <button key={p.id} onClick={() => {
                       setSelectedPlatform(p.id);
                       setSelectedService(null);
-                      // Auto-select kategori pertama yang cocok dengan platform
+                      // Auto-select kategori pertama (alfabetis) milik platform ini,
+                      // pakai deteksi platform yang sama dgn daftar kategori → konsisten.
                       if (p.id) {
-                        const matched = services.filter(s => {
-                          const name = (s.name + ' ' + s.category).toLowerCase();
-                          return name.includes(p.id);
-                        });
-                        const firstCat = matched.length > 0 ? matched[0].category : '';
-                        setSelectedCategory(firstCat);
+                        const cats = [...new Set(
+                          enriched.filter(e => e.platform === p.id).map(e => e.cleanCat)
+                        )].sort((a, b) => a.localeCompare(b, 'id'));
+                        setSelectedCategory(cats[0] || '');
                       } else {
                         setSelectedCategory('');
                       }
@@ -533,7 +563,7 @@ export default function ViewNewOrder({ user, setMenu }) {
             <div>
               <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: 'var(--text)', marginBottom: 7 }}>Choose Category</label>
               <SearchSelect
-                options={[{ value: '', label: 'Semua Kategori' }, ...categories.map(c => ({ value: c, label: cleanCategory(c) || c }))]}
+                options={[{ value: '', label: 'Semua Kategori' }, ...categories.map(c => ({ value: c, label: c }))]}
                 value={selectedCategory}
                 onChange={v => { setSelectedCategory(v); setSelectedService(null); }}
                 placeholder="— Pilih Kategori —"
@@ -543,7 +573,12 @@ export default function ViewNewOrder({ user, setMenu }) {
             <div>
               <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: 'var(--text)', marginBottom: 7 }}>Choose Service</label>
               <SearchSelect
-                options={(selectedCategory ? services.filter(s => s.category === selectedCategory) : services).map(s => ({ value: String(s.service), label: s.name || cleanName(s.name), sub: `#${s.service}` }))}
+                options={(selectedCategory
+                  ? platformFilteredEnriched.filter(e => e.cleanCat === selectedCategory)
+                  : platformFilteredEnriched)
+                  .slice()
+                  .sort((a, b) => (a.svc.name || '').localeCompare(b.svc.name || '', 'id'))
+                  .map(e => ({ value: String(e.svc.service), label: cleanName(e.svc.name) || e.svc.name || `#${e.svc._rawId || e.svc.service}`, sub: `#${e.svc._rawId || e.svc.service}` }))}
                 value={selectedService ? String(selectedService.service) : ''}
                 onChange={v => { const svc = services.find(s => String(s.service) === v) || null; setSelectedService(svc); setComments(''); if (svc) setQty(String(svc.min)); }}
                 placeholder="— Pilih Service —"
@@ -557,7 +592,7 @@ export default function ViewNewOrder({ user, setMenu }) {
                   <div>
                     <div style={{ fontSize: 11, color: 'var(--text3)', fontWeight: 600, marginBottom: 2 }}>Harga layanan</div>
                     <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--blue)' }}>
-                      Rp {Math.round(parseFloat(selectedService.rate || 0) * (rate || 17687) * resolveMarkup(selectedService)).toLocaleString('id-ID')}
+                      Rp {Math.round(parseFloat(selectedService.rate || 0) * fxFor(selectedService) * resolveMarkup(selectedService)).toLocaleString('id-ID')}
                       <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text3)', marginLeft: 4 }}>/ 1.000</span>
                     </div>
                   </div>
@@ -652,9 +687,16 @@ export default function ViewNewOrder({ user, setMenu }) {
 
                       {/* ── Catatan KHUSUS followers Instagram: matikan "Laporkan untuk ditinjau" ── */}
                       {(() => {
-                        const hay = `${n} ${selectedService.category || ''} ${selectedPlatform || ''}`.toLowerCase();
-                        const isIgFollowers = hay.includes('instagram') &&
-                          (hay.includes('follower') || hay.includes('followers'));
+                        // Deteksi IG Followers yang andal lintas provider:
+                        //  - platform terdeteksi 'instagram', ATAU teks ada "instagram"/"ig"
+                        //    (IG = abbreviation umum di provider lokal/Buzzer).
+                        //  - followers / pengikut / subscriber / fans.
+                        const rawText = `${selectedService.name || ''} ${selectedService.category || ''}`.toLowerCase();
+                        const isInsta = selectedPlatform === 'instagram'
+                          || detectPlatform(cleanCategory(selectedService.category), selectedService.name) === 'instagram'
+                          || /\binstagram\b/.test(rawText) || /\big\b/.test(rawText);
+                        const isFollowers = /follower|pengikut|subscriber|fans/.test(rawText);
+                        const isIgFollowers = isInsta && isFollowers;
                         if (!isIgFollowers) return null;
                         return (
                           <div style={{ marginTop: 10, padding: '12px 14px', background: 'var(--red-l, rgba(239,68,68,.08))', border: '1px solid var(--red, #EF4444)', borderRadius: 10 }}>
@@ -739,9 +781,7 @@ export default function ViewNewOrder({ user, setMenu }) {
               })()}
             </div>
             {(() => {
-              const t = String(selectedService?.type || '').toLowerCase();
-              const nm = String(selectedService?.name || '').toLowerCase();
-              const isCC = !!selectedService && (t.includes('custom comment') || nm.includes('custom comment'));
+              const isCC = isCustomCommentsSvc(selectedService);
               const ccLines = comments.split('\n').map(s => s.trim()).filter(Boolean);
 
               if (isCC) {
@@ -785,12 +825,10 @@ export default function ViewNewOrder({ user, setMenu }) {
               <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text2)' }}>Total Pembayaran</span>
               <span style={{ fontSize: 18, fontWeight: 800, color: 'var(--blue)' }}>
                 {(() => {
-                  const t = String(selectedService?.type || '').toLowerCase();
-                  const nm = String(selectedService?.name || '').toLowerCase();
-                  const isCC = !!selectedService && (t.includes('custom comment') || nm.includes('custom comment'));
+                  const isCC = isCustomCommentsSvc(selectedService);
                   const q = isCC ? comments.split('\n').map(s => s.trim()).filter(Boolean).length : (parseInt(qty) || 0);
                   const p = selectedService ? parseFloat(selectedService.rate || 0) / 1000 : 0;
-                  const r = rate || 17687;
+                  const r = fxFor(selectedService);
                   const total = Math.round(q * p * r * resolveMarkup(selectedService));
                   return q > 0 && p > 0 ? `Rp ${total.toLocaleString('id-ID')}` : 'Rp 0';
                 })()}
@@ -809,19 +847,19 @@ export default function ViewNewOrder({ user, setMenu }) {
             </div>
             {searchQuery && (
               <div style={{ fontSize: 12, color: 'var(--text3)', fontWeight: 600 }}>
-                {filteredServices.length} result{filteredServices.length !== 1 ? 's' : ''} found
+                {searchResults.length}{searchResults.length >= 200 ? '+' : ''} result{searchResults.length !== 1 ? 's' : ''} found
               </div>
             )}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 320, overflowY: 'auto' }} className="ns">
-              {(searchQuery ? filteredServices : services.slice(0, 10)).map(s => (
+              {(searchQuery ? searchResults : services.slice(0, 10)).map(s => (
                 <div key={s.service}
                   onClick={() => { setSelectedService(s); setTab('New Order'); setSearchQuery(''); }}
                   style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 10, padding: '11px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', transition: 'all .15s' }}
                   onMouseEnter={e => { e.currentTarget.style.background = 'var(--blue-l)'; e.currentTarget.style.borderColor = 'var(--blue)'; }}
                   onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg2)'; e.currentTarget.style.borderColor = 'var(--border)'; }}>
                   <div>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', marginBottom: 2 }}>{s.name}</div>
-                    <div style={{ fontSize: 11.5, color: 'var(--text3)' }}>ID: {s.service} · Rp {Math.round(parseFloat(s.rate || 0) * rate * resolveMarkup(s) / 1000).toLocaleString('id-ID')}/1K · Min: {s.min} | Max: {s.max}</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', marginBottom: 2 }}>{cleanName(s.name) || s.name}</div>
+                    <div style={{ fontSize: 11.5, color: 'var(--text3)' }}>ID: <span style={{ fontFamily: "'JetBrains Mono',monospace", color: 'var(--text2)', fontWeight: 700 }}>{serviceCode(s)}</span> · Rp {Math.round(parseFloat(s.rate || 0) * fxFor(s) * resolveMarkup(s) / 1000).toLocaleString('id-ID')}/1K · Min: {s.min} | Max: {s.max}</div>
                   </div>
                   <ArrowRight size={14} style={{ color: 'var(--text3)', flexShrink: 0 }} />
                 </div>
@@ -841,7 +879,7 @@ export default function ViewNewOrder({ user, setMenu }) {
               <div style={{ fontWeight: 800, fontSize: 13.5, color: 'var(--text)', marginBottom: 12 }}>📋 Cara Pakai Bulk Order</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {[
-                  { step: '1', title: 'Cari ID Service', desc: 'Buka tab Search → cari layanan yang kamu mau → catat angka ID-nya (contoh: 2771)', color: 'var(--blue)' },
+                  { step: '1', title: 'Cari Kode Service', desc: 'Buka tab Search → cari layanan → salin KODE-nya (mis. B519). Tiap layanan punya kode unik, jadi nggak akan ketuker walau angkanya kebetulan sama.', color: 'var(--blue)' },
                   { step: '2', title: 'Tulis di kolom bawah', desc: 'Isi dengan format: ID|link|jumlah — satu order per baris', color: 'var(--green)' },
                   { step: '3', title: 'Submit sekaligus', desc: 'Klik Submit Bulk Order — semua order diproses sekaligus dalam satu klik', color: 'var(--yellow)' },
                 ].map(s => (
@@ -863,7 +901,7 @@ export default function ViewNewOrder({ user, setMenu }) {
                 service_id|link|quantity
               </code>
               <div style={{ fontSize: 12, color: 'var(--text3)', lineHeight: 1.8 }}>
-                <span style={{ color: 'var(--blue)', fontWeight: 700 }}>service_id</span> = ID angka dari tab Search &nbsp;·&nbsp;
+                <span style={{ color: 'var(--blue)', fontWeight: 700 }}>service_id</span> = kode dari tab Search (mis. B519 / A123) &nbsp;·&nbsp;
                 <span style={{ color: 'var(--green)', fontWeight: 700 }}>link</span> = URL profil/post target &nbsp;·&nbsp;
                 <span style={{ color: 'var(--yellow)', fontWeight: 700 }}>quantity</span> = jumlah order
               </div>

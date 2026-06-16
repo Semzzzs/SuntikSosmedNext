@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useRouter } from 'next/router';
 import {
     Target, LogOut, Moon, Sun, BarChart2, Settings,
@@ -6,7 +6,7 @@ import {
     Layers, AlertCircle, CheckCircle, X, Search,
     ShoppingCart, TrendingUp, Zap, ArrowUpRight,
     Percent, Save, Trash2, MessageSquare, Megaphone,
-    RefreshCw, Eye, Ban, RotateCw, ChevronDown, Check, Download, FileText
+    RefreshCw, Eye, Ban, RotateCw, ChevronDown, Check, Download, FileText, Power, PowerOff
 } from 'lucide-react';
 import { useTheme } from '@/context/ThemeContext';
 import { useApi } from '@/context/ApiContext';
@@ -15,6 +15,7 @@ import AdminTickets from '@/components/admin/AdminTickets';
 import AdminUsers from '@/components/admin/AdminUsers';
 import AdminDeposits from '@/components/admin/AdminDeposits';
 import AdminAnnouncement from '@/components/admin/AdminAnnouncement';
+import { serviceCode, PROVIDER_ALIAS } from '@/lib/platforms';
 
 // ── Dropdown custom — pengganti <select> native agar match tema dark & tidak numpuk ──
 function Dropdown({ value, options, onChange, width = 180, placeholder = 'Pilih...', maxHeight = 320 }) {
@@ -148,6 +149,7 @@ export default function AdminPanel() {
     const [sideOpen, setSideOpen] = useState(true);
 
     const [balance, setBalance] = useState(null);
+    const [providerBalances, setProviderBalances] = useState([]); // [{key,label,currency,balance,error}]
     const [rate, setRate] = useState(17687);
     const [services, setServices] = useState([]);
     const [orders, setOrders] = useState([]);
@@ -155,7 +157,7 @@ export default function AdminPanel() {
     const [loadingOrders, setLoadingOrders] = useState(false);
     const [loadingBalance, setLoadingBalance] = useState(false);
     const [serviceSearch, setServiceSearch] = useState('');
-    const [serviceFilter, setServiceFilter] = useState('All');
+    const [serviceProviderFilter, setServiceProviderFilter] = useState('All'); // 'All' | 'smmsoc' | 'buzzer' | ...
     const [overviewError, setOverviewError] = useState('');
 
     const [markup, setMarkup] = useState(2.5);
@@ -167,6 +169,7 @@ export default function AdminPanel() {
     const [dbOrders, setDbOrders] = useState([]); // orders dari Supabase (akurat, semua user)
     const [servicePage, setServicePage] = useState(0); // pagination services
     const [disabledServices, setDisabledServices] = useState([]); // service id yang dimatikan admin
+    const [bulkBusy, setBulkBusy] = useState(false); // sedang proses on/off massal per provider
     const SERVICES_PER_PAGE = 100;
 
     // ── Orders: search / filter / pagination / aksi ──
@@ -241,9 +244,14 @@ export default function AdminPanel() {
                 return new Date(o.created_at).toISOString().slice(0, 10) === dateKey;
             });
             const dayRevenue = dayOrders.reduce((s, o) => {
-                if (o.charge && parseFloat(o.charge) > 0) {
-                    return s + Math.round(parseFloat(o.charge) * rate * markup);
-                }
+                // Modal IDR: prioritaskan charge_idr (akurat historis), fallback charge × rate.
+                const ci = parseFloat(o.charge_idr);
+                const costIDR = (Number.isFinite(ci) && ci > 0)
+                    ? Math.round(ci)
+                    : (o.charge && parseFloat(o.charge) > 0
+                        ? Math.round(parseFloat(o.charge) * fxForOrder(o))
+                        : null);
+                if (costIDR != null) return s + Math.round(costIDR * markup);
                 return s + Math.round(parseFloat(o.amount || 0));
             }, 0);
 
@@ -360,28 +368,33 @@ export default function AdminPanel() {
     };
 
     const fetchBalance = useCallback(async () => {
-        // ✅ Fix: hapus guard apiUrl — admin pakai /api/smm yang baca SMM_API_URL dari env server-side
-        // Tidak perlu nunggu apiUrl dari ApiContext yang load async dari Supabase
         setLoadingBalance(true);
         try {
-            const res = await fetch('/api/smm?action=balance', {
+            // Ambil saldo SEMUA provider terkonfigurasi sekaligus (endpoint admin-only).
+            const res = await fetch('/api/smm?action=provider_balances', {
                 headers: { 'Authorization': `Bearer ${sessionStorage.getItem('admin_token') || ''}` }
             });
             if (res.status === 401) { logout(); return; }
             const data = await res.json();
-            if (data.balance !== undefined) {
-                setBalance(parseFloat(data.balance));
+            const list = Array.isArray(data?.providers) ? data.providers : [];
+            setProviderBalances(list);
+            // Backward-compat + status badge: SMMSOC (USD) dipakai sebagai 'balance' utama.
+            const smm = list.find(p => p.key === 'smmsoc');
+            if (smm && smm.balance != null) setBalance(parseFloat(smm.balance));
+            const anyOk = list.some(p => p.balance != null);
+            if (list.length && anyOk) {
                 setApiStatus('ok');
             } else {
                 setApiStatus('error');
-                setOverviewError(prev => data.error || prev || 'Gagal mengambil balance dari provider.');
+                const firstErr = list.find(p => p.error)?.error;
+                setOverviewError(prev => firstErr || data?.error || prev || 'Gagal mengambil balance dari provider.');
             }
         } catch (e) {
             setOverviewError(e.message);
             setApiStatus('error');
         }
         setLoadingBalance(false);
-    }, [apiUrl]);
+    }, []);
 
     const fetchServices = useCallback(async () => {
         // ✅ Fix: hapus guard apiUrl — /api/smm sudah baca SMM_API_KEY dari env server-side
@@ -428,6 +441,34 @@ export default function AdminPanel() {
         }
     };
 
+    // Matikan / aktifkan SEMUA layanan satu provider sekaligus.
+    // matikan: kirim daftar id provider (dari services yg sudah dimuat) ke server.
+    // aktifkan: server cukup buang berdasarkan prefix, jadi service_ids boleh kosong.
+    const bulkToggleProvider = async (providerKey, enabled) => {
+        const lbl = providerKey === 'smmsoc' ? 'SMMSOC' : providerKey === 'buzzer' ? 'BuzzerPanel' : providerKey;
+        const ok = await askConfirm(`${enabled ? 'AKTIFKAN' : 'MATIKAN'} SEMUA layanan ${lbl}? Ini langsung mempengaruhi yang tampil ke user.`);
+        if (!ok) return;
+        setBulkBusy(true);
+        try {
+            const service_ids = enabled ? [] : services.filter(s => (s._provider || 'smmsoc') === providerKey).map(s => String(s.service));
+            const res = await adminFetch('/api/admin-api?action=bulk_toggle_provider', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ provider: providerKey, enabled, service_ids }),
+            });
+            if (res.status === 401) { logout(); return; }
+            const data = await res.json();
+            if (data?.error) showToast(`Gagal: ${data.error}`, 'error');
+            else {
+                if (Array.isArray(data.disabled)) setDisabledServices(data.disabled.map(String));
+                showToast(`${enabled ? 'Diaktifkan' : 'Dimatikan'}: semua layanan ${lbl}.`, 'success');
+            }
+        } catch (e) {
+            showToast(`Error: ${e.message}`, 'error');
+        }
+        setBulkBusy(false);
+    };
+
     const fetchOrders = useCallback(async () => {
         setLoadingOrders(true);
         try {
@@ -451,33 +492,45 @@ export default function AdminPanel() {
                 return;
             }
 
-            // Fetch live status dari SMMSOC
-            const orderIds = txData
-                .filter(t => t.order_id && /^\d+$/.test(String(t.order_id)))
-                .map(t => String(t.order_id));
+            // Status live per provider — JANGAN campur provider dalam 1 request
+            // (ID antar provider beda; server butuh tahu provider yang benar).
+            // Key liveStatus pakai "provider:order_id" supaya ID yang kebetulan
+            // sama antar provider tidak saling timpa.
+            const byProvider = {};
+            for (const t of txData) {
+                if (t.order_id && /^\d+$/.test(String(t.order_id))) {
+                    const p = t.provider || 'smmsoc';
+                    (byProvider[p] ||= []).push(String(t.order_id));
+                }
+            }
 
             let liveStatus = {};
-            if (orderIds.length > 0) {
-                try {
-                    // Batch per 100 supaya order ke-101+ juga dapat status live
-                    for (let i = 0; i < orderIds.length; i += 100) {
-                        const chunk = orderIds.slice(i, i + 100);
-                        const statusRes = await fetch(`/api/smm?action=status&orders=${chunk.join(',')}`, {
+            for (const [prov, ids] of Object.entries(byProvider)) {
+                for (let i = 0; i < ids.length; i += 100) {
+                    const chunk = ids.slice(i, i + 100);
+                    try {
+                        const statusRes = await fetch(`/api/smm?action=status&orders=${chunk.join(',')}&provider=${prov}`, {
                             headers: { 'Authorization': `Bearer ${sessionStorage.getItem('admin_token') || ''}` }
                         });
                         if (statusRes.status === 401) { logout(); return; }
                         const statusData = await statusRes.json();
-                        if (!statusData.error) liveStatus = { ...liveStatus, ...statusData };
-                    }
-                } catch { /* pakai status dari Supabase */ }
+                        if (!statusData.error) {
+                            for (const [oid, st] of Object.entries(statusData)) liveStatus[`${prov}:${oid}`] = st;
+                        }
+                    } catch { /* fallback ke status Supabase */ }
+                }
             }
 
             setOrders(txData.map(t => {
-                const live = t.order_id ? liveStatus[t.order_id] : null;
+                const live = t.order_id ? liveStatus[`${t.provider || 'smmsoc'}:${t.order_id}`] : null;
                 return {
                     id: t.order_id || t.id,
+                    provider: t.provider || 'smmsoc',
                     status: live?.status || t.status || 'Pending',
                     charge: t.charge || (t.amount ? t.amount / ((t._rate || 17687) * (t._markup || 1)) : 0),
+                    // Modal provider yang SUDAH dinormalisasi ke IDR saat order dibuat (dari smm.js).
+                    // Ini sumber kebenaran modal historis — tak terpengaruh perubahan rate USD.
+                    charge_idr: t.charge_idr ?? null,
                     amount_idr: t.amount || 0,
                     start_count: live?.start_count || t.start_count,
                     remains: live?.remains || t.remains,
@@ -505,11 +558,11 @@ export default function AdminPanel() {
     };
 
     // Refresh status 1 order dari provider (pakai endpoint status yang sudah ada)
-    const refreshOrderStatus = async (orderId) => {
+    const refreshOrderStatus = async (orderId, provider) => {
         if (!orderId || !/^\d+$/.test(String(orderId))) return;
         setRefreshingOrder(orderId);
         try {
-            const res = await smmFetch(`action=status&orders=${orderId}`);
+            const res = await smmFetch(`action=status&orders=${orderId}${provider ? `&provider=${provider}` : ''}`);
             const data = await res.json();
             const live = data && !data.error ? data[orderId] : null;
             if (live) {
@@ -531,16 +584,16 @@ export default function AdminPanel() {
     };
 
     // Minta pembatalan order ke provider (butuh /api/smm meneruskan action=cancel)
-    const cancelOrder = async (orderId) => {
+    const cancelOrder = async (orderId, provider) => {
         if (!orderId || !/^\d+$/.test(String(orderId))) return;
         const ok = await askConfirm(`Minta pembatalan order #${orderId} ke provider? Sebagian provider hanya mengizinkan cancel saat status belum diproses.`);
         if (!ok) return;
         setActioningOrder(orderId);
         try {
-            const res = await smmFetch(`action=cancel&orders=${orderId}`);
+            const res = await smmFetch(`action=cancel&orders=${orderId}${provider ? `&provider=${provider}` : ''}`);
             const data = await res.json();
             if (data?.error) showToast(`Gagal cancel: ${data.error}`, 'error');
-            else { showToast('Permintaan cancel terkirim.', 'success'); refreshOrderStatus(orderId); }
+            else { showToast('Permintaan cancel terkirim.', 'success'); refreshOrderStatus(orderId, provider); }
         } catch (e) {
             if (e.message !== 'SESSION_EXPIRED') showToast(`Error: ${e.message}`, 'error');
         }
@@ -548,13 +601,13 @@ export default function AdminPanel() {
     };
 
     // Minta refill/garansi (butuh /api/smm meneruskan action=refill)
-    const refillOrder = async (orderId) => {
+    const refillOrder = async (orderId, provider) => {
         if (!orderId || !/^\d+$/.test(String(orderId))) return;
         const ok = await askConfirm(`Minta refill (garansi) untuk order #${orderId}?`);
         if (!ok) return;
         setActioningOrder(orderId);
         try {
-            const res = await smmFetch(`action=refill&order=${orderId}`);
+            const res = await smmFetch(`action=refill&order=${orderId}${provider ? `&provider=${provider}` : ''}`);
             const data = await res.json();
             if (data?.error) showToast(`Gagal refill: ${data.error}`, 'error');
             else showToast('Permintaan refill terkirim.', 'success');
@@ -780,7 +833,27 @@ export default function AdminPanel() {
     };
 
     const fIDR = (usd) => `Rp ${Math.round((usd || 0) * rate).toLocaleString('id-ID')}`;
-    const fIDRMarkup = (usd) => `Rp ${Math.round((usd || 0) * rate * markup).toLocaleString('id-ID')}`;
+
+    // Kartu saldo PER PROVIDER (currency-aware): SMMSOC=USD ($, + perkiraan IDR),
+    // BuzzerPanel=IDR (Rp). Provider lain yang terkonfigurasi otomatis ikut tampil.
+    const providerBalanceCards = (providerBalances.length
+        ? providerBalances
+        : [{ key: 'smmsoc', label: 'SMMSOC', currency: 'USD', balance: null, error: null }]
+    ).map(pb => {
+        const isIDR = String(pb.currency || 'USD').toUpperCase() === 'IDR';
+        const hasVal = pb.balance != null && !pb.error;
+        const value = loadingBalance ? '...'
+            : hasVal ? (isIDR ? `Rp ${Math.round(Number(pb.balance)).toLocaleString('id-ID')}` : `$${Number(pb.balance).toFixed(2)}`)
+                : '—';
+        const sub = loadingBalance ? 'Memuat...'
+            : hasVal ? (isIDR ? pb.label : `≈ ${fIDR(pb.balance)}`)
+                : (pb.error || 'Gagal memuat');
+        return {
+            label: `Saldo ${pb.label}`, value, sub,
+            icon: <DollarSign size={20} />, iconBg: 'var(--blue-l)', iconColor: 'var(--blue)',
+            badge: loadingBalance ? '...' : hasVal ? 'Live' : 'Error',
+        };
+    });
 
     // Resolusi markup efektif untuk sebuah service: service → kategori → global
     const resolveMarkup = (svc) => {
@@ -790,6 +863,24 @@ export default function AdminPanel() {
         if (svc.category && markupRules.categories && markupRules.categories[svc.category] != null) return markupRules.categories[svc.category];
         return markup;
     };
+
+    // ⚡ Faktor konversi harga ke IDR.
+    //   Service: kalau currency-nya IDR (BuzzerPanel) → faktor 1; selain itu (USD) → kurs.
+    const fxFor = (svc) => String(svc?.currency || 'USD').toUpperCase() === 'IDR' ? 1 : rate;
+
+    // Map provider → currency dari data yang dimuat server (provider_balances).
+    // Future-proof: provider IDR baru otomatis dikenali tanpa ubah kode. Fallback ke
+    // konstanta untuk provider yang sudah dikenal bila daftar balance belum dimuat.
+    const KNOWN_PROVIDER_CURRENCY = { smmsoc: 'USD', buzzer: 'IDR' };
+    const providerCurrency = (providerKey) => {
+        const k = String(providerKey || 'smmsoc').toLowerCase();
+        const fromList = providerBalances.find(p => String(p.key).toLowerCase() === k)?.currency;
+        const cur = fromList || KNOWN_PROVIDER_CURRENCY[k] || 'USD';
+        return String(cur).toUpperCase();
+    };
+    //   Order: tentukan faktor dari CURRENCY provider order (bukan nama). Order ber-currency
+    //   IDR → faktor 1; USD → kurs. Order lama tanpa provider dianggap smmsoc (USD).
+    const fxForOrder = (o) => providerCurrency(o?.provider) === 'IDR' ? 1 : rate;
 
     const saveMarkupRules = async () => {
         setSavingRules(true);
@@ -861,9 +952,22 @@ export default function AdminPanel() {
         return () => clearInterval(iv);
     }, [authed]);
 
-    const totalSpentUSD = orders.reduce((s, o) => s + parseFloat(o.charge || 0), 0);
-    const totalRevenueIDR = Math.round(totalSpentUSD * rate * markup);
-    const profitIDR = totalRevenueIDR - Math.round(totalSpentUSD * rate);
+    // Charge campur satuan (USD untuk smmsoc, IDR untuk buzzer) → konversi PER ORDER
+    // ke IDR dulu, baru dijumlah. Menjumlah charge mentah lalu × rate akan salah.
+    //
+    // Prioritas modal:
+    //   1. charge_idr — modal sudah dinormalisasi ke IDR SAAT order dibuat (akurat
+    //      historis; tak bergeser saat rate USD berubah). Ini yang benar.
+    //   2. Fallback charge × fxForOrder(rate sekarang) — hanya untuk order lama yang
+    //      belum punya charge_idr (dibuat sebelum kolom itu ada).
+    const orderCostIDR = (o) => {
+        const ci = parseFloat(o.charge_idr);
+        if (Number.isFinite(ci) && ci > 0) return Math.round(ci);
+        return Math.round(parseFloat(o.charge || 0) * fxForOrder(o));
+    };
+    const totalCostIDR = orders.reduce((s, o) => s + orderCostIDR(o), 0);
+    const totalRevenueIDR = Math.round(totalCostIDR * markup);
+    const profitIDR = totalRevenueIDR - totalCostIDR;
 
     // ── Helper periode waktu ──
     const periodStartDate = (period) => {
@@ -882,21 +986,65 @@ export default function AdminPanel() {
 
     // Stats berdasarkan statsPeriod (dipakai di Overview & Revenue)
     const statsOrders = orders.filter(o => inPeriod(o.created_at, statsPeriod));
-    const statsSpentUSD = statsOrders.reduce((s, o) => s + parseFloat(o.charge || 0), 0);
-    const statsRevenueIDR = Math.round(statsSpentUSD * rate * markup);
-    const statsProfitIDR = statsRevenueIDR - Math.round(statsSpentUSD * rate);
+    const statsCostIDR = statsOrders.reduce((s, o) => s + orderCostIDR(o), 0);
+    const statsRevenueIDR = Math.round(statsCostIDR * markup);
+    const statsProfitIDR = statsRevenueIDR - statsCostIDR;
+    // Catatan: modal kini ditampilkan dalam IDR (charge campur USD/IDR antar provider,
+    // jadi total dalam USD tidak lagi bermakna). statsCostIDR sudah benar per-order.
 
     // Stats "hari ini"
     const ordersToday = orders.filter(o => inPeriod(o.created_at, 'today'));
-    const revenueTodayIDR = ordersToday.reduce((s, o) => s + (o.amount_idr || Math.round(parseFloat(o.charge || 0) * rate * markup)), 0);
+    const revenueTodayIDR = ordersToday.reduce((s, o) => s + (o.amount_idr || Math.round(orderCostIDR(o) * markup)), 0);
     const newUsersToday = users.filter(u => inPeriod(u.createdAt, 'today')).length;
 
-    const cats = ['All', ...new Set(services.map(s => s.category))].filter(Boolean);
-    const filteredSvc = services.filter(s => {
-        const matchCat = serviceFilter === 'All' || s.category === serviceFilter;
-        const matchQ = !serviceSearch || s.name?.toLowerCase().includes(serviceSearch.toLowerCase()) || String(s.service).includes(serviceSearch);
-        return matchCat && matchQ;
-    });
+    // Set untuk lookup O(1) (jauh lebih cepat dari array .includes saat disabled banyak)
+    const disabledSet = useMemo(() => new Set(disabledServices.map(String)), [disabledServices]);
+
+    const cats = useMemo(() => ['All', ...new Set(services.map(s => s.category))].filter(Boolean), [services]);
+
+    // Daftar provider yang ADA di data (untuk tombol tab). Urut sesuai huruf alias (A,B,...).
+    const serviceProviders = useMemo(() => {
+        const set = new Set(services.map(s => s._provider || 'smmsoc'));
+        return [...set].sort((a, b) =>
+            (PROVIDER_ALIAS[a] || 'Z').localeCompare(PROVIDER_ALIAS[b] || 'Z'));
+    }, [services]);
+
+    const filteredSvc = useMemo(() => {
+        const q = serviceSearch.toLowerCase();
+        const out = services.filter(s => {
+            const prov = s._provider || 'smmsoc';
+            const matchProvider = serviceProviderFilter === 'All' || prov === serviceProviderFilter;
+            const matchQ = !q || s.name?.toLowerCase().includes(q) || String(s.service).toLowerCase().includes(q) || String(s._rawId ?? '').toLowerCase().includes(q) || serviceCode(s).toLowerCase().includes(q);
+            return matchProvider && matchQ;
+        });
+        // Urut: provider dulu (A=smmsoc, lalu B=buzzer, dst sesuai huruf alias),
+        // di dalam provider urut by _rawId numerik biar rapi.
+        return out.sort((a, b) => {
+            const pa = PROVIDER_ALIAS[a._provider || 'smmsoc'] || 'Z';
+            const pb = PROVIDER_ALIAS[b._provider || 'smmsoc'] || 'Z';
+            if (pa !== pb) return pa.localeCompare(pb);
+            const na = parseInt(a._rawId, 10), nb = parseInt(b._rawId, 10);
+            if (Number.isFinite(na) && Number.isFinite(nb) && na !== nb) return na - nb;
+            return String(a._rawId ?? a.service).localeCompare(String(b._rawId ?? b.service));
+        });
+    }, [services, serviceProviderFilter, serviceSearch]);
+
+    // Clamp service page agar tak pernah out-of-bound (mis. data berubah saat di page tinggi).
+    const servicePageCount = Math.max(1, Math.ceil(filteredSvc.length / SERVICES_PER_PAGE));
+    const safeServicePage = Math.min(servicePage, servicePageCount - 1);
+
+    // Statistik per provider untuk tombol on/off massal — dihitung sekali, bukan
+    // tiap render. off-count pakai disabledSet (O(1)).
+    const providerStats = useMemo(() => {
+        const m = {};
+        for (const s of services) {
+            const p = s._provider || 'smmsoc';
+            if (!m[p]) m[p] = { total: 0, off: 0 };
+            m[p].total++;
+            if (disabledSet.has(String(s.service))) m[p].off++;
+        }
+        return Object.entries(m).map(([key, v]) => ({ key, ...v })).sort((a, b) => a.key.localeCompare(b.key));
+    }, [services, disabledSet]);
 
     // ── Orders terfilter + paginated ──
     const filteredOrders = orders.filter(o => {
@@ -1062,7 +1210,7 @@ export default function AdminPanel() {
                         <div style={{ fontSize: 14, fontWeight: 800, color: '#fff' }}>Full Access</div>
                         <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 5 }}>
                             <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#4ADE80' }} />
-                            <span style={{ fontSize: 11, color: 'rgba(255,255,255,.7)', fontWeight: 600 }}>{apiUrl ? new URL(apiUrl).hostname : 'smmsoc.com'}</span>
+                            <span style={{ fontSize: 11, color: 'rgba(255,255,255,.7)', fontWeight: 600 }}>{apiUrl ? new URL(apiUrl).hostname : 'Multi-provider'}</span>
                         </div>
                     </div>
                 </div>
@@ -1132,7 +1280,7 @@ export default function AdminPanel() {
                         <div>
                             <div style={{ marginBottom: 22 }}>
                                 <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text)', marginBottom: 3 }}>Overview</h1>
-                                <p style={{ fontSize: 13.5, color: 'var(--text2)' }}>Data real-time dari smmsoc.com API.</p>
+                                <p style={{ fontSize: 13.5, color: 'var(--text2)' }}>Data real-time dari API provider.</p>
                             </div>
 
                             {/* ✅ Error banner */}
@@ -1161,7 +1309,7 @@ export default function AdminPanel() {
                             </div>
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 20 }}>
                                 {[
-                                    { label: 'Provider Balance', value: loadingBalance ? '...' : balance !== null ? `$${balance?.toFixed(2)}` : '—', sub: loadingBalance ? 'Memuat...' : balance !== null ? fIDR(balance) : 'Gagal memuat', icon: <DollarSign size={20} />, iconBg: 'var(--blue-l)', iconColor: 'var(--blue)', badge: apiStatus === 'ok' ? 'Live' : apiStatus === 'error' ? 'Error' : '...' },
+                                    ...providerBalanceCards,
                                     { label: 'Total Services', value: services.length || '...', sub: `${[...new Set(services.map(s => s.category))].length} kategori`, icon: <Layers size={20} />, iconBg: 'var(--green-l)', iconColor: 'var(--green)', badge: `${services.length} layanan` },
                                     { label: 'Total Orders', value: orders.length, sub: `${orders.filter(o => o.status?.toLowerCase() === 'completed').length} completed`, icon: <ShoppingCart size={20} />, iconBg: 'var(--yellow-l)', iconColor: 'var(--yellow)', badge: `${orders.filter(o => o.status?.toLowerCase() === 'processing').length} aktif` },
                                     { label: 'Markup Aktif', value: `${markup}x`, sub: `+${Math.round((markup - 1) * 100)}% keuntungan`, icon: <Percent size={20} />, iconBg: 'rgba(233,30,99,.1)', iconColor: '#E91E63', badge: 'Persistent' },
@@ -1186,7 +1334,7 @@ export default function AdminPanel() {
                                 </div>
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }}>
                                     {[
-                                        { l: 'Modal (Harga Provider)', v: `$${statsSpentUSD.toFixed(4)}`, v2: fIDR(statsSpentUSD), c: 'var(--red)' },
+                                        { l: 'Modal (Harga Provider)', v: `Rp ${statsCostIDR.toLocaleString('id-ID')}`, v2: `${statsOrders.length} order`, c: 'var(--red)' },
                                         { l: 'Revenue (Harga User)', v: `Rp ${statsRevenueIDR.toLocaleString('id-ID')}`, v2: `${markup}x markup`, c: 'var(--blue)' },
                                         { l: 'Estimasi Profit', v: `Rp ${statsProfitIDR.toLocaleString('id-ID')}`, v2: `${Math.round((markup - 1) * 100)}% margin`, c: 'var(--green)' },
                                     ].map(r => (
@@ -1256,10 +1404,11 @@ export default function AdminPanel() {
                                             order_id: o.id,
                                             email: o.email || '—',
                                             status: o.status || 'pending',
+                                            provider: o.provider || 'smmsoc',
                                             start_count: o.start_count || '',
                                             remains: o.remains || '',
-                                            charge_usd: parseFloat(o.charge || 0).toFixed(4),
-                                            harga_user_idr: Math.round(parseFloat(o.charge || 0) * rate * markup),
+                                            charge: parseFloat(o.charge || 0).toFixed(4),
+                                            harga_user_idr: o.amount_idr || Math.round(orderCostIDR(o) * markup),
                                             created_at: o.created_at || '',
                                         })), `orders_${new Date().toISOString().slice(0, 10)}.csv`)} style={{ height: 30, padding: '0 10px', borderRadius: 7, fontSize: 12 }}>
                                             <ArrowUpRight size={12} /> CSV
@@ -1334,7 +1483,7 @@ export default function AdminPanel() {
                                                                 })()}
                                                             </td>
                                                             <td style={{ padding: '11px 14px', fontWeight: 700, color: 'var(--green)', whiteSpace: 'nowrap' }}>
-                                                                {o.amount_idr ? `Rp ${o.amount_idr.toLocaleString('id-ID')}` : fIDRMarkup(parseFloat(o.charge || 0))}
+                                                                {o.amount_idr ? `Rp ${o.amount_idr.toLocaleString('id-ID')}` : `Rp ${Math.round(orderCostIDR(o) * markup).toLocaleString('id-ID')}`}
                                                             </td>
                                                             <td style={{ padding: '11px 14px', color: 'var(--text3)', fontSize: 12, whiteSpace: 'nowrap' }}>
                                                                 {o.created_at ? new Date(o.created_at).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}
@@ -1345,17 +1494,17 @@ export default function AdminPanel() {
                                                                         <Eye size={14} />
                                                                     </button>
                                                                     {isNumeric && (
-                                                                        <button title="Refresh status" disabled={refreshingOrder === o.id || busy} onClick={() => refreshOrderStatus(o.id)} style={iconBtn('var(--white)', 'var(--blue)')}>
+                                                                        <button title="Refresh status" disabled={refreshingOrder === o.id || busy} onClick={() => refreshOrderStatus(o.id, o.provider)} style={iconBtn('var(--white)', 'var(--blue)')}>
                                                                             <RefreshCw size={14} style={{ animation: refreshingOrder === o.id ? 'spin 1s linear infinite' : 'none' }} />
                                                                         </button>
                                                                     )}
                                                                     {isNumeric && canCancel(o.status) && (
-                                                                        <button title="Minta cancel" disabled={busy} onClick={() => cancelOrder(o.id)} style={iconBtn('var(--red-l)', 'var(--red)')}>
+                                                                        <button title="Minta cancel" disabled={busy} onClick={() => cancelOrder(o.id, o.provider)} style={iconBtn('var(--red-l)', 'var(--red)')}>
                                                                             <Ban size={14} />
                                                                         </button>
                                                                     )}
                                                                     {isNumeric && canRefill(o.status) && (
-                                                                        <button title="Minta refill" disabled={busy} onClick={() => refillOrder(o.id)} style={iconBtn('var(--green-l)', 'var(--green)')}>
+                                                                        <button title="Minta refill" disabled={busy} onClick={() => refillOrder(o.id, o.provider)} style={iconBtn('var(--green-l)', 'var(--green)')}>
                                                                             <RotateCw size={14} />
                                                                         </button>
                                                                     )}
@@ -1424,8 +1573,9 @@ export default function AdminPanel() {
                                                 { l: 'Qty', v: orderDetail.qty != null ? String(orderDetail.qty) : '—' },
                                                 { l: 'Start Count', v: orderDetail.start_count != null ? String(orderDetail.start_count) : '—' },
                                                 { l: 'Sisa (Remains)', v: orderDetail.remains != null ? String(orderDetail.remains) : '—' },
-                                                { l: 'Modal (USD)', v: `$${parseFloat(orderDetail.charge || 0).toFixed(4)}` },
-                                                { l: 'Harga User', v: orderDetail.amount_idr ? `Rp ${orderDetail.amount_idr.toLocaleString('id-ID')}` : fIDRMarkup(parseFloat(orderDetail.charge || 0)) },
+                                                { l: 'Provider', v: orderDetail.provider || 'smmsoc' },
+                                                { l: 'Modal', v: `Rp ${orderCostIDR(orderDetail).toLocaleString('id-ID')}` },
+                                                { l: 'Harga User', v: orderDetail.amount_idr ? `Rp ${orderDetail.amount_idr.toLocaleString('id-ID')}` : `Rp ${Math.round(orderCostIDR(orderDetail) * markup).toLocaleString('id-ID')}` },
                                                 { l: 'Tanggal', v: orderDetail.created_at ? new Date(orderDetail.created_at).toLocaleString('id-ID') : '—' },
                                             ].map(r => (
                                                 <div key={r.l} style={{ display: 'flex', gap: 12, padding: '9px 0', borderBottom: '1px solid var(--border)', fontSize: 13, alignItems: 'flex-start' }}>
@@ -1439,17 +1589,17 @@ export default function AdminPanel() {
                                             ))}
                                             <div style={{ display: 'flex', gap: 8, marginTop: 16, flexWrap: 'wrap' }}>
                                                 {/^\d+$/.test(String(orderDetail.id)) && (
-                                                    <button className="btn btn-outline" onClick={() => refreshOrderStatus(orderDetail.id)} style={{ flex: 1, minWidth: 120, padding: 10, borderRadius: 9, fontSize: 13 }}>
+                                                    <button className="btn btn-outline" onClick={() => refreshOrderStatus(orderDetail.id, orderDetail.provider)} style={{ flex: 1, minWidth: 120, padding: 10, borderRadius: 9, fontSize: 13 }}>
                                                         <RefreshCw size={14} /> Refresh Status
                                                     </button>
                                                 )}
                                                 {/^\d+$/.test(String(orderDetail.id)) && canCancel(orderDetail.status) && (
-                                                    <button className="btn" onClick={() => cancelOrder(orderDetail.id)} style={{ flex: 1, minWidth: 120, padding: 10, borderRadius: 9, fontSize: 13, background: 'var(--red)', color: '#fff', border: 'none' }}>
+                                                    <button className="btn" onClick={() => cancelOrder(orderDetail.id, orderDetail.provider)} style={{ flex: 1, minWidth: 120, padding: 10, borderRadius: 9, fontSize: 13, background: 'var(--red)', color: '#fff', border: 'none' }}>
                                                         <Ban size={14} /> Minta Cancel
                                                     </button>
                                                 )}
                                                 {/^\d+$/.test(String(orderDetail.id)) && canRefill(orderDetail.status) && (
-                                                    <button className="btn" onClick={() => refillOrder(orderDetail.id)} style={{ flex: 1, minWidth: 120, padding: 10, borderRadius: 9, fontSize: 13, background: 'var(--green)', color: '#fff', border: 'none' }}>
+                                                    <button className="btn" onClick={() => refillOrder(orderDetail.id, orderDetail.provider)} style={{ flex: 1, minWidth: 120, padding: 10, borderRadius: 9, fontSize: 13, background: 'var(--green)', color: '#fff', border: 'none' }}>
                                                         <RotateCw size={14} /> Minta Refill
                                                     </button>
                                                 )}
@@ -1477,11 +1627,12 @@ export default function AdminPanel() {
                                 <div style={{ display: 'flex', gap: 8 }}>
                                     {services.length > 0 && (
                                         <button className="btn btn-outline" onClick={() => exportCSV(services.map(s => ({
-                                            id: s.service,
+                                            id: s._rawId || s.service,
+                                            provider: s._provider || 'smmsoc',
                                             nama: s.name,
                                             kategori: s.category,
-                                            harga_modal_idr: Math.round(parseFloat(s.rate || 0) * rate),
-                                            harga_user_idr: Math.round(parseFloat(s.rate || 0) * rate * resolveMarkup(s)),
+                                            harga_modal_idr: Math.round(parseFloat(s.rate || 0) * fxFor(s)),
+                                            harga_user_idr: Math.round(parseFloat(s.rate || 0) * fxFor(s) * resolveMarkup(s)),
                                             markup_x: resolveMarkup(s),
                                             min: s.min,
                                             max: s.max,
@@ -1496,10 +1647,75 @@ export default function AdminPanel() {
                                     <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text3)' }} />
                                     <input className="inp" style={{ paddingLeft: 36 }} placeholder="Cari service..." value={serviceSearch} onChange={e => { setServiceSearch(e.target.value); setServicePage(0); }} />
                                 </div>
-                                <Dropdown width={220} value={serviceFilter}
-                                    options={cats.map(c => ({ value: c, label: c === 'All' ? 'Semua Kategori' : c }))}
-                                    onChange={v => { setServiceFilter(v); setServicePage(0); }} />
+                                <Dropdown width={220} value={serviceProviderFilter}
+                                    options={[{ value: 'All', label: 'Semua Provider' }, ...serviceProviders.map(p => ({
+                                        value: p,
+                                        label: `Provider ${p === 'smmsoc' ? 'SMMSOC' : p === 'buzzer' ? 'BuzzerPanel' : p}`,
+                                    }))]}
+                                    onChange={v => { setServiceProviderFilter(v); setServicePage(0); }} />
                             </div>
+                            {providerStats.length > 0 && (
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 16, alignItems: 'stretch' }}>
+                                    {providerStats.map(({ key: p, total, off }) => {
+                                        const lbl = p === 'smmsoc' ? 'SMMSOC' : p === 'buzzer' ? 'BuzzerPanel' : p;
+                                        const code = PROVIDER_ALIAS[p] || '?';
+                                        const on = total - off;
+                                        return (
+                                            <div key={p} style={{
+                                                display: 'flex', alignItems: 'center', gap: 12,
+                                                border: '1px solid var(--border)', borderRadius: 12,
+                                                padding: '10px 12px', background: 'var(--bg2)',
+                                            }}>
+                                                {/* Identitas provider */}
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
+                                                    <div style={{
+                                                        width: 28, height: 28, borderRadius: 8, flexShrink: 0,
+                                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                        background: 'var(--blue)', color: '#fff',
+                                                        fontFamily: "'JetBrains Mono',monospace", fontWeight: 800, fontSize: 13,
+                                                    }}>{code}</div>
+                                                    <div style={{ minWidth: 0 }}>
+                                                        <div style={{ fontSize: 12.5, fontWeight: 800, color: 'var(--text)', lineHeight: 1.2 }}>{lbl}</div>
+                                                        <div style={{ fontSize: 10.5, color: 'var(--text3)', display: 'flex', alignItems: 'center', gap: 5, marginTop: 1 }}>
+                                                            <span style={{ width: 6, height: 6, borderRadius: '50%', background: on > 0 ? 'var(--green)' : 'var(--text3)', display: 'inline-block' }} />
+                                                            {on.toLocaleString('id-ID')} aktif · {off.toLocaleString('id-ID')} mati
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                {/* Tombol aksi */}
+                                                <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                                                    <button disabled={bulkBusy} onClick={() => bulkToggleProvider(p, true)}
+                                                        title={`Aktifkan semua layanan ${lbl}`}
+                                                        style={{
+                                                            display: 'inline-flex', alignItems: 'center', gap: 5,
+                                                            fontSize: 11.5, fontWeight: 700, padding: '6px 11px', borderRadius: 8,
+                                                            border: '1px solid var(--green)', cursor: bulkBusy ? 'wait' : 'pointer',
+                                                            background: 'transparent', color: 'var(--green)', opacity: bulkBusy ? 0.5 : 1,
+                                                            transition: 'background .15s',
+                                                        }}
+                                                        onMouseEnter={e => { if (!bulkBusy) e.currentTarget.style.background = 'var(--green-l)'; }}
+                                                        onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
+                                                        <Power size={13} /> Aktifkan
+                                                    </button>
+                                                    <button disabled={bulkBusy} onClick={() => bulkToggleProvider(p, false)}
+                                                        title={`Matikan semua layanan ${lbl}`}
+                                                        style={{
+                                                            display: 'inline-flex', alignItems: 'center', gap: 5,
+                                                            fontSize: 11.5, fontWeight: 700, padding: '6px 11px', borderRadius: 8,
+                                                            border: '1px solid var(--red)', cursor: bulkBusy ? 'wait' : 'pointer',
+                                                            background: 'transparent', color: 'var(--red)', opacity: bulkBusy ? 0.5 : 1,
+                                                            transition: 'background .15s',
+                                                        }}
+                                                        onMouseEnter={e => { if (!bulkBusy) e.currentTarget.style.background = 'var(--red-l)'; }}
+                                                        onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
+                                                        <PowerOff size={13} /> Matikan
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
                             {loadingServices && services.length === 0 ? (
                                 <TableSkeleton cols={7} rows={8} headers={['ID', 'Nama', 'Harga Modal /1K', 'Harga User /1K', 'Min', 'Max', 'Status']} />
                             ) : (
@@ -1514,14 +1730,17 @@ export default function AdminPanel() {
                                         </thead>
                                         <tbody>
                                             {/* ✅ Real pagination */}
-                                            {filteredSvc.slice(servicePage * SERVICES_PER_PAGE, (servicePage + 1) * SERVICES_PER_PAGE).map((s, i) => {
+                                            {filteredSvc.slice(safeServicePage * SERVICES_PER_PAGE, (safeServicePage + 1) * SERVICES_PER_PAGE).map((s, i) => {
                                                 const eff = resolveMarkup(s);
-                                                const modalIDR = Math.round(parseFloat(s.rate || 0) * rate);
-                                                const userIDR = Math.round(parseFloat(s.rate || 0) * rate * eff);
+                                                const modalIDR = Math.round(parseFloat(s.rate || 0) * fxFor(s));
+                                                const userIDR = Math.round(parseFloat(s.rate || 0) * fxFor(s) * eff);
                                                 const overridden = eff !== markup;
                                                 return (
                                                     <tr key={s.service} style={{ borderBottom: '1px solid var(--border)' }}>
-                                                        <td style={{ padding: '9px 12px', fontFamily: "'JetBrains Mono',monospace", color: 'var(--text3)', fontWeight: 600, fontSize: 11.5 }}>{s.service}</td>
+                                                        <td style={{ padding: '9px 12px', fontFamily: "'JetBrains Mono',monospace" }}>
+                                                            <div style={{ color: 'var(--text)', fontWeight: 700, fontSize: 12 }}>{serviceCode(s)}</div>
+                                                            <div style={{ color: 'var(--text3)', fontWeight: 500, fontSize: 10, marginTop: 1 }}>{s.service}</div>
+                                                        </td>
                                                         <td style={{ padding: '9px 12px', color: 'var(--text)', maxWidth: 280 }}>
                                                             <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12.5 }}>{s.name}</div>
                                                             <div style={{ fontSize: 10.5, color: 'var(--text3)', marginTop: 2 }}>{s.category}</div>
@@ -1535,7 +1754,7 @@ export default function AdminPanel() {
                                                         <td style={{ padding: '9px 12px', color: 'var(--text3)' }}>{Number(s.max).toLocaleString()}</td>
                                                         <td style={{ padding: '9px 12px' }}>
                                                             {(() => {
-                                                                const isOff = disabledServices.includes(String(s.service));
+                                                                const isOff = disabledSet.has(String(s.service));
                                                                 return (
                                                                     <button onClick={() => toggleService(s.service, isOff)}
                                                                         title={isOff ? 'Layanan dimatikan — klik untuk aktifkan' : 'Layanan aktif — klik untuk matikan'}
@@ -1555,24 +1774,24 @@ export default function AdminPanel() {
                                     {filteredSvc.length > SERVICES_PER_PAGE && (
                                         <div style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid var(--border)' }}>
                                             <span style={{ fontSize: 12, color: 'var(--text3)' }}>
-                                                Menampilkan {servicePage * SERVICES_PER_PAGE + 1}–{Math.min((servicePage + 1) * SERVICES_PER_PAGE, filteredSvc.length)} dari {filteredSvc.length} service
+                                                Menampilkan {safeServicePage * SERVICES_PER_PAGE + 1}–{Math.min((safeServicePage + 1) * SERVICES_PER_PAGE, filteredSvc.length)} dari {filteredSvc.length} service
                                             </span>
                                             <div style={{ display: 'flex', gap: 6 }}>
-                                                <button onClick={() => setServicePage(p => Math.max(0, p - 1))} disabled={servicePage === 0}
-                                                    style={{ padding: '5px 12px', borderRadius: 7, border: '1px solid var(--border)', background: servicePage === 0 ? 'var(--bg2)' : 'var(--white)', color: servicePage === 0 ? 'var(--text3)' : 'var(--text)', cursor: servicePage === 0 ? 'not-allowed' : 'pointer', fontSize: 12, fontWeight: 600, fontFamily: "'Plus Jakarta Sans',sans-serif" }}>
+                                                <button onClick={() => setServicePage(p => Math.max(0, p - 1))} disabled={safeServicePage === 0}
+                                                    style={{ padding: '5px 12px', borderRadius: 7, border: '1px solid var(--border)', background: safeServicePage === 0 ? 'var(--bg2)' : 'var(--white)', color: safeServicePage === 0 ? 'var(--text3)' : 'var(--text)', cursor: safeServicePage === 0 ? 'not-allowed' : 'pointer', fontSize: 12, fontWeight: 600, fontFamily: "'Plus Jakarta Sans',sans-serif" }}>
                                                     ← Prev
                                                 </button>
                                                 {Array.from({ length: Math.ceil(filteredSvc.length / SERVICES_PER_PAGE) }, (_, idx) => idx)
-                                                    .filter(idx => Math.abs(idx - servicePage) <= 2)
+                                                    .filter(idx => Math.abs(idx - safeServicePage) <= 2)
                                                     .map(idx => (
                                                         <button key={idx} onClick={() => setServicePage(idx)}
-                                                            style={{ padding: '5px 10px', borderRadius: 7, border: `1px solid ${idx === servicePage ? 'var(--blue)' : 'var(--border)'}`, background: idx === servicePage ? 'var(--blue)' : 'var(--white)', color: idx === servicePage ? '#fff' : 'var(--text)', cursor: 'pointer', fontSize: 12, fontWeight: 700, fontFamily: "'Plus Jakarta Sans',sans-serif" }}>
+                                                            style={{ padding: '5px 10px', borderRadius: 7, border: `1px solid ${idx === safeServicePage ? 'var(--blue)' : 'var(--border)'}`, background: idx === safeServicePage ? 'var(--blue)' : 'var(--white)', color: idx === safeServicePage ? '#fff' : 'var(--text)', cursor: 'pointer', fontSize: 12, fontWeight: 700, fontFamily: "'Plus Jakarta Sans',sans-serif" }}>
                                                             {idx + 1}
                                                         </button>
                                                     ))
                                                 }
-                                                <button onClick={() => setServicePage(p => Math.min(Math.ceil(filteredSvc.length / SERVICES_PER_PAGE) - 1, p + 1))} disabled={servicePage >= Math.ceil(filteredSvc.length / SERVICES_PER_PAGE) - 1}
-                                                    style={{ padding: '5px 12px', borderRadius: 7, border: '1px solid var(--border)', background: servicePage >= Math.ceil(filteredSvc.length / SERVICES_PER_PAGE) - 1 ? 'var(--bg2)' : 'var(--white)', color: servicePage >= Math.ceil(filteredSvc.length / SERVICES_PER_PAGE) - 1 ? 'var(--text3)' : 'var(--text)', cursor: servicePage >= Math.ceil(filteredSvc.length / SERVICES_PER_PAGE) - 1 ? 'not-allowed' : 'pointer', fontSize: 12, fontWeight: 600, fontFamily: "'Plus Jakarta Sans',sans-serif" }}>
+                                                <button onClick={() => setServicePage(p => Math.min(servicePageCount - 1, p + 1))} disabled={safeServicePage >= servicePageCount - 1}
+                                                    style={{ padding: '5px 12px', borderRadius: 7, border: '1px solid var(--border)', background: safeServicePage >= servicePageCount - 1 ? 'var(--bg2)' : 'var(--white)', color: safeServicePage >= servicePageCount - 1 ? 'var(--text3)' : 'var(--text)', cursor: safeServicePage >= servicePageCount - 1 ? 'not-allowed' : 'pointer', fontSize: 12, fontWeight: 600, fontFamily: "'Plus Jakarta Sans',sans-serif" }}>
                                                     Next →
                                                 </button>
                                             </div>
@@ -1605,7 +1824,7 @@ export default function AdminPanel() {
                                 {/* Stat cards (ringkasan sesuai periode) */}
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16, marginBottom: 20 }}>
                                     {[
-                                        { l: 'Total Modal', v: `$${statsSpentUSD.toFixed(4)}`, v2: fIDR(statsSpentUSD), c: 'var(--red)', iconBg: 'var(--red-l)', icon: <DollarSign size={20} /> },
+                                        { l: 'Total Modal', v: `Rp ${statsCostIDR.toLocaleString('id-ID')}`, v2: `${statsOrders.length} order`, c: 'var(--red)', iconBg: 'var(--red-l)', icon: <DollarSign size={20} /> },
                                         { l: 'Total Revenue', v: `Rp ${statsRevenueIDR.toLocaleString('id-ID')}`, v2: `Markup ${markup}x`, c: 'var(--blue)', iconBg: 'var(--blue-l)', icon: <TrendingUp size={20} /> },
                                         { l: 'Estimasi Profit', v: `Rp ${statsProfitIDR.toLocaleString('id-ID')}`, v2: `Margin ${Math.round((markup - 1) * 100)}%`, c: 'var(--green)', iconBg: 'var(--green-l)', icon: <Zap size={20} /> },
                                     ].map(s => (
@@ -1674,9 +1893,9 @@ export default function AdminPanel() {
                                 <div className="card" style={{ padding: 22 }}>
                                     <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text)', marginBottom: 16 }}>Simulasi Markup</div>
                                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 12 }}>
-                                        {[1.5, 2, 2.5, 3].map(m => {
-                                            const rev = Math.round(totalSpentUSD * rate * m);
-                                            const mod = Math.round(totalSpentUSD * rate);
+                                        {[1.2, 1.3, 1.5, 2].map(m => {
+                                            const rev = Math.round(totalCostIDR * m);
+                                            const mod = totalCostIDR;
                                             return (
                                                 <div key={m} style={{ background: m === markup ? 'var(--blue-l)' : 'var(--bg2)', border: `1.5px solid ${m === markup ? 'var(--blue)' : 'var(--border)'}`, borderRadius: 12, padding: 16, textAlign: 'center' }}>
                                                     <div style={{ fontSize: 20, fontWeight: 800, color: m === markup ? 'var(--blue)' : 'var(--text)', marginBottom: 4 }}>{m}x</div>
@@ -1712,7 +1931,7 @@ export default function AdminPanel() {
                                     <label style={{ display: 'block', fontSize: 11.5, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: 10 }}>Multiplier (2 = 2× harga modal)</label>
                                     <input className="inp" type="number" step="0.1" min="1" style={{ fontSize: 30, fontWeight: 800, textAlign: 'center', padding: '18px 14px', marginBottom: 18 }} value={markupInput} onChange={e => setMarkupInput(e.target.value)} />
                                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 9, marginBottom: 24 }}>
-                                        {[1.5, 2, 2.5, 3, 4, 5].map(m => (
+                                        {[1.1, 1.15, 1.2, 1.3, 1.5, 2].map(m => (
                                             <button key={m} onClick={() => setMarkupInput(String(m))}
                                                 style={{ padding: '11px 0', borderRadius: 11, border: `1.5px solid ${markupInput === String(m) ? 'var(--blue)' : 'var(--border)'}`, background: markupInput === String(m) ? 'var(--blue)' : 'transparent', color: markupInput === String(m) ? '#fff' : 'var(--text2)', fontWeight: 700, fontSize: 14, cursor: 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif", transition: 'all .15s' }}>
                                                 {m}×
@@ -1808,11 +2027,11 @@ export default function AdminPanel() {
                                     <div style={{ border: '1px solid var(--border)', borderRadius: 12, maxHeight: 200, overflowY: 'auto', marginBottom: 16 }}>
                                         {services.filter(s => {
                                             const q = svcOverrideSearch.toLowerCase();
-                                            return (s.name?.toLowerCase().includes(q) || String(s.service).includes(svcOverrideSearch)) && rulesDraft.services[String(s.service)] == null;
+                                            return (s.name?.toLowerCase().includes(q) || String(s.service).toLowerCase().includes(q) || serviceCode(s).toLowerCase().includes(q)) && rulesDraft.services[String(s.service)] == null;
                                         }).slice(0, 20).map(s => (
                                             <button key={s.service} onClick={() => { setRulesDraft(d => ({ ...d, services: { ...d.services, [String(s.service)]: resolveMarkup(s) } })); setSvcOverrideSearch(''); }}
                                                 style={{ display: 'flex', width: '100%', alignItems: 'center', gap: 10, padding: '11px 14px', border: 'none', borderBottom: '1px solid var(--border)', background: 'transparent', cursor: 'pointer', textAlign: 'left', fontFamily: "'Plus Jakarta Sans',sans-serif" }}>
-                                                <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 11, color: 'var(--text3)', flexShrink: 0 }}>{s.service}</span>
+                                                <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 11, color: 'var(--text3)', flexShrink: 0 }} title={s.service}>{serviceCode(s)}</span>
                                                 <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</span>
                                                 <span style={{ fontSize: 11, color: 'var(--blue)', fontWeight: 700, flexShrink: 0 }}>+ override</span>
                                             </button>
@@ -1965,7 +2184,7 @@ export default function AdminPanel() {
                                 <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text)', marginBottom: 14 }}>Informasi Sistem</div>
                                 {[
                                     { l: 'Framework', v: 'Next.js 14 (Pages Router)' },
-                                    { l: 'Provider', v: apiUrl || 'smmsoc.com' },
+                                    { l: 'Provider', v: providerBalances.length ? providerBalances.map(p => p.label || p.key).join(', ') : 'SMMSOC' },
                                     { l: 'API Proxy', v: '/api/smm (server-side)' },
                                     { l: 'Kurs USD/IDR', v: `Rp ${rate.toLocaleString('id-ID')} (real-time)` },
                                     { l: 'Markup Aktif', v: `${markup}x (${Math.round((markup - 1) * 100)}% profit)` },
