@@ -261,12 +261,17 @@ export default function DashboardPage() {
     //    diblokir tidak bisa masuk dashboard sama sekali.
     (async () => {
       try {
+        // Pastikan session masih valid & token tidak kedaluwarsa.
+        // getUser() memicu refresh token bila perlu → hindari 401 dari token basi.
+        const { data: { user: u }, error: uErr } = await supabase.auth.getUser();
+        if (uErr || !u) return; // belum login / sesi invalid → jangan panggil endpoint
         const { data: { session } } = await supabase.auth.getSession();
         const token = session?.access_token;
         if (!token) return;
         const res = await fetch('/api/check-blocked', {
           headers: { 'Authorization': `Bearer ${token}` },
         });
+        if (!res.ok) return; // 401/5xx → fail-open, jangan kunci user
         const json = await res.json().catch(() => ({}));
         if (cancelled) return;
         if (json.blocked) {

@@ -443,7 +443,7 @@ export default function ViewNewOrder({ user, setMenu }) {
   );
 
   return (
-    <div className="fu">
+    <div className="fu" style={{ maxWidth: '100%', overflowX: 'hidden' }}>
       {/* Banner API hanya untuk admin — dihapus dari tampilan user */}
 
       {/* Welcome banner — gradient biru soft ala smmspot */}
@@ -457,8 +457,8 @@ export default function ViewNewOrder({ user, setMenu }) {
       </div>
 
       {/* Stat cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4, 1fr)', gap: 12, marginBottom: 18 }} className="ns-stat-grid">
-        {/* breakpoint diatur via CSS .ns-stat-grid di bawah — nama unik biar gak bentrok aturan lama */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 18 }} className="ns-stat-grid">
+        {/* mobile-first: default 2 kolom; 4 kolom di desktop diatur via CSS .ns-stat-grid */}
         {[
           { icon: <CreditCard size={20} />, iconBg: 'var(--blue-l)', iconColor: 'var(--blue)', label: 'Saldo Akun', value: balance !== null ? `Rp ${(typeof balance === 'number' ? balance : Math.round(parseFloat(balance || 0) * rate)).toLocaleString('id-ID')}` : <Shimmer w={110} />, action: 'Tambah Saldo', actionColor: 'var(--blue)', actionBg: 'var(--blue-l)', target: 'Add Funds' },
           { icon: <Package size={20} />, iconBg: 'var(--green-l)', iconColor: 'var(--green)', label: 'Total Layanan', value: services.length > 0 ? services.length : (loadingServices ? <Shimmer w={44} /> : '—'), action: 'Buat Order', actionColor: 'var(--green)', actionBg: 'var(--green-l)', target: 'New Order' },
@@ -496,7 +496,7 @@ export default function ViewNewOrder({ user, setMenu }) {
       )}
 
       {/* Layout 2 kolom: form kiri + panel info kanan */}
-      <div className="ns-order-grid" style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'minmax(0,1fr) 320px', gap: 16, alignItems: 'start' }}>
+      <div className="ns-order-grid" style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 16, alignItems: 'start' }}>
 
         {/* Order form */}
         <div className="card" style={{ padding: '16px 18px' }}>
@@ -1067,16 +1067,29 @@ export default function ViewNewOrder({ user, setMenu }) {
         }
         .ns-stat-card {
           transition: transform var(--ease), box-shadow var(--ease);
+          isolation: isolate;
+          -webkit-transform: translateZ(0);
+          transform: translateZ(0);
+          -webkit-mask-image: -webkit-radial-gradient(white, black);
         }
         .ns-stat-card:hover {
           transform: translateY(-3px);
           box-shadow: var(--shadow2);
         }
-        .ns-stat-btn { transition: filter var(--ease); }
+        .ns-stat-btn {
+          transition: filter var(--ease);
+          display: flex;
+          width: 100%;
+          margin: 0;
+          background-clip: padding-box;
+          -webkit-background-clip: padding-box;
+        }
         .ns-stat-btn:hover { filter: brightness(.97); }
-        @media (max-width: 980px) {
-          .ns-order-grid { grid-template-columns: 1fr !important; }
-          .ns-stat-grid { grid-template-columns: 1fr 1fr !important; }
+        .ns-order-grid { max-width: 100%; }
+        .ns-order-grid > * { min-width: 0; }
+        @media (min-width: 981px) {
+          .ns-order-grid { grid-template-columns: minmax(0,1fr) 320px !important; }
+          .ns-stat-grid { grid-template-columns: repeat(4, 1fr) !important; }
         }
         @media (max-width: 600px) {
           .ns-stat-top { padding: 13px 13px 11px !important; gap: 10px !important; }
