@@ -473,7 +473,7 @@ export default function ViewNewOrder({ user, setMenu }) {
                 <div className="ns-stat-val" style={{ fontSize: 22, fontWeight: 800, color: 'var(--text)', letterSpacing: '-.02em', lineHeight: 1.05 }}>{s.value}</div>
               </div>
             </div>
-            <button onClick={() => setMenu(s.target)} className="ns-stat-btn" style={{ width: '100%', marginTop: 'auto', padding: '11px 18px', background: s.actionBg, border: 'none', borderTop: '1px solid var(--border)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, fontFamily: "'Outfit',sans-serif", fontWeight: 700, fontSize: 13, color: s.actionColor }}>
+            <button onClick={() => setMenu(s.target)} className="ns-stat-btn" style={{ width: '100%', marginTop: 'auto', padding: '11px 18px', background: s.actionBg, border: 'none', borderTop: '1px solid var(--border)', borderRadius: '0 0 17px 17px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, fontFamily: "'Outfit',sans-serif", fontWeight: 700, fontSize: 13, color: s.actionColor }}>
               <span style={{ minWidth: 0 }}>{s.action}</span> <ArrowRight size={15} style={{ flexShrink: 0 }} />
             </button>
           </div>
@@ -1067,10 +1067,6 @@ export default function ViewNewOrder({ user, setMenu }) {
         }
         .ns-stat-card {
           transition: transform var(--ease), box-shadow var(--ease);
-          isolation: isolate;
-          -webkit-transform: translateZ(0);
-          transform: translateZ(0);
-          -webkit-mask-image: -webkit-radial-gradient(white, black);
         }
         .ns-stat-card:hover {
           transform: translateY(-3px);
@@ -1081,8 +1077,6 @@ export default function ViewNewOrder({ user, setMenu }) {
           display: flex;
           width: 100%;
           margin: 0;
-          background-clip: padding-box;
-          -webkit-background-clip: padding-box;
         }
         .ns-stat-btn:hover { filter: brightness(.97); }
         .ns-order-grid { max-width: 100%; }

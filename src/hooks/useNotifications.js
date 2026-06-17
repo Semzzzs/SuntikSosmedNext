@@ -28,7 +28,7 @@ export function useNotifications(user) {
 
         const { data: tickets } = await supabase
             .from('tickets')
-            .select('id, subject, replies, updated_at')
+            .select('id, subject, replies, updated_at, status')
             .eq('email', authEmail)
             .order('updated_at', { ascending: false });
 
@@ -39,6 +39,12 @@ export function useNotifications(user) {
 
         const newNotifs = [];
         for (const ticket of tickets) {
+            // Lewati tiket yang sudah selesai (Closed) — balasan lama tidak perlu
+            // muncul sebagai notif lagi. Cek case-insensitive & beberapa nama field
+            // (status/state) biar aman walau skema sedikit beda.
+            const rawStatus = String(ticket.status ?? ticket.state ?? '').trim().toLowerCase();
+            if (rawStatus === 'closed' || rawStatus === 'selesai' || rawStatus === 'resolved') continue;
+
             const adminReplies = (ticket.replies || []).filter(r => r.from === 'admin');
             for (const reply of adminReplies) {
                 const notifId = `${ticket.id}_${reply.at}`;
