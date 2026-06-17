@@ -41,7 +41,7 @@ export default function ViewServices() {
   const [services, setServices] = useState([]);
   const [rate, setRate] = useState(17687);
   const [markup, setMarkup] = useState(1);
-  const [rules, setRules] = useState({ categories: {}, services: {} });
+  const [rules, setRules] = useState({ categories: {}, services: {}, providers: {} });
   const [stats, setStats] = useState({}); // { [service_id]: { avg_seconds, sample_count } }
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -78,7 +78,7 @@ export default function ViewServices() {
         if (!on) return;
         setServices(Array.isArray(svcData) ? svcData : []);
         if (mk?.markup) setMarkup(parseFloat(mk.markup) || 1);
-        if (mk?.rules) setRules({ categories: mk.rules.categories || {}, services: mk.rules.services || {} });
+        if (mk?.rules) setRules({ categories: mk.rules.categories || {}, services: mk.rules.services || {}, providers: mk.rules.providers || {} });
         if (rt?.rate) setRate(rt.rate);
         if (st && typeof st === 'object') setStats(st);
       } catch (e) {
@@ -92,7 +92,7 @@ export default function ViewServices() {
 
   // Markup efektif: service-specific > kategori > global (sama seperti smm.js)
   const priceIDR = useCallback((svc) => {
-    const eff = rules.services?.[String(svc.service)] ?? rules.categories?.[svc.category] ?? markup;
+    const eff = rules.services?.[String(svc.service)] ?? rules.categories?.[svc.category] ?? rules.providers?.[svc._provider || String(svc.service).split(':')[0]] ?? markup;
     // ⚡ Faktor konversi: service USD (SMMSOC) -> kali kurs USD->IDR.
     //    Service IDR (BuzzerPanel) -> faktor 1 (harga sudah Rupiah).
     const fx = String(svc.currency || 'USD').toUpperCase() === 'IDR' ? 1 : rate;

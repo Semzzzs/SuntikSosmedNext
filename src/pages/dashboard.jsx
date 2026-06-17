@@ -378,19 +378,19 @@ export default function DashboardPage() {
   };
 
   const navItems = [
-    { id: 'New Order', icon: <ShoppingCart size={17} /> },
-    { id: 'Services', icon: <List size={17} /> },
-    { id: 'My Orders', icon: <Package size={17} /> },
-    { id: 'Add Funds', icon: <CreditCard size={17} /> },
-    { id: 'Transactions', icon: <ArrowLeftRight size={17} /> },
-    { id: 'Analytics', icon: <BarChart2 size={17} /> },
-    { id: 'Pengumuman', icon: <Newspaper size={17} /> },
-    { id: 'Tickets', icon: <Ticket size={17} /> },
-    { id: 'Contact', icon: <Phone size={17} /> },
-    { id: 'FAQ', icon: <HelpCircle size={17} /> },
+    { id: 'New Order', icon: <ShoppingCart size={19} /> },
+    { id: 'Services', icon: <List size={19} /> },
+    { id: 'My Orders', icon: <Package size={19} /> },
+    { id: 'Add Funds', icon: <CreditCard size={19} /> },
+    { id: 'Transactions', icon: <ArrowLeftRight size={19} /> },
+    { id: 'Analytics', icon: <BarChart2 size={19} /> },
+    { id: 'Pengumuman', icon: <Newspaper size={19} /> },
+    { id: 'Tickets', icon: <Ticket size={19} /> },
+    { id: 'Contact', icon: <Phone size={19} /> },
+    { id: 'FAQ', icon: <HelpCircle size={19} /> },
   ];
   const navBottom = [
-    { id: 'Settings', icon: <Settings size={17} /> },
+    { id: 'Settings', icon: <Settings size={19} /> },
   ];
 
   // ✅ useMemo — views tidak re-create tiap render
@@ -408,16 +408,19 @@ export default function DashboardPage() {
     'Settings': <ViewSettings user={user} onLogout={logout} />,
   }), [user, balance]);
 
-  const SideLink = ({ item }) => (
-    <button onClick={() => { setMenuAndSave(item.id); if (typeof window !== 'undefined' && window.innerWidth < 1024) setSideOpen(false); }}
-      style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', borderRadius: 10, border: 'none', cursor: 'pointer', fontFamily: "'Outfit',sans-serif", fontWeight: 600, fontSize: 13.5, transition: 'all .18s', background: menu === item.id ? 'var(--blue)' : 'transparent', color: menu === item.id ? '#fff' : 'var(--text2)' }}
-      onMouseEnter={e => { if (menu !== item.id) e.currentTarget.style.background = 'var(--bg2)'; }}
-      onMouseLeave={e => { if (menu !== item.id) e.currentTarget.style.background = 'transparent'; }}>
-      <span style={{ color: menu === item.id ? '#fff' : 'var(--text3)' }}>{item.icon}</span>
-      {item.id}
-      {menu === item.id && <ChevronRight size={14} style={{ marginLeft: 'auto', color: 'rgba(255,255,255,.6)' }} />}
-    </button>
-  );
+  const SideLink = ({ item }) => {
+    const active = menu === item.id;
+    return (
+      <button onClick={() => { setMenuAndSave(item.id); if (typeof window !== 'undefined' && window.innerWidth < 1024) setSideOpen(false); }}
+        style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '11px 14px', borderRadius: 12, border: 'none', cursor: 'pointer', fontFamily: "'Outfit',sans-serif", fontWeight: active ? 700 : 600, fontSize: 14, transition: 'all .18s', background: active ? 'var(--blue)' : 'transparent', color: active ? '#fff' : 'var(--text2)', boxShadow: active ? '0 6px 16px rgba(37,99,235,.30)' : 'none' }}
+        onMouseEnter={e => { if (!active) e.currentTarget.style.background = 'var(--bg2)'; }}
+        onMouseLeave={e => { if (!active) e.currentTarget.style.background = 'transparent'; }}>
+        <span style={{ display: 'flex', color: active ? '#fff' : 'var(--text3)', flexShrink: 0 }}>{item.icon}</span>
+        {item.id}
+        {active && <ChevronRight size={15} style={{ marginLeft: 'auto', color: 'rgba(255,255,255,.85)' }} />}
+      </button>
+    );
+  };
 
   if (authLoading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: 'var(--bg)', fontFamily: "'Outfit',sans-serif", fontSize: 14, color: 'var(--text3)' }}>
@@ -468,18 +471,18 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <nav className="ns" style={{ flex: 1, overflowY: 'auto', padding: '0 10px' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <nav className="ns" style={{ flex: 1, overflowY: 'auto', padding: '4px 12px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             {navItems.map(item => <SideLink key={item.id} item={item} />)}
           </div>
         </nav>
 
-        <div style={{ padding: isMobile ? '10px 10px 90px' : '10px 10px 16px', borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <div style={{ padding: isMobile ? '10px 12px 90px' : '10px 12px 16px', borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 4 }}>
           {navBottom.map(item => <SideLink key={item.id} item={item} />)}
-          <button onClick={logout} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', borderRadius: 10, border: 'none', cursor: 'pointer', fontFamily: "'Outfit',sans-serif", fontWeight: 600, fontSize: 13.5, color: 'var(--red)', background: 'transparent', transition: 'background .18s' }}
+          <button onClick={logout} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '11px 14px', borderRadius: 12, border: 'none', cursor: 'pointer', fontFamily: "'Outfit',sans-serif", fontWeight: 600, fontSize: 14, color: 'var(--red)', background: 'transparent', transition: 'background .18s' }}
             onMouseEnter={e => e.currentTarget.style.background = 'var(--red-l)'}
             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-            <LogOut size={17} /> Sign Out
+            <LogOut size={19} /> Sign Out
           </button>
         </div>
       </aside>

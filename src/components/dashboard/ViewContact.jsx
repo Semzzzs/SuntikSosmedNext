@@ -31,7 +31,7 @@ const FOLLOW_CHANNELS = [
         desc: 'Update layanan & promo terbaru.',
         icon: <Radio size={24} />,
         color: '#25D366',
-        link: 'https://whatsapp.com/channel/YOUR_CHANNEL',
+        link: 'https://whatsapp.com/channel/0029VbCeprREawdmVOXNoB03',
         btnLabel: 'Join Channel',
     },
     {
@@ -40,7 +40,7 @@ const FOLLOW_CHANNELS = [
         desc: 'Update layanan & promo terbaru.',
         icon: <Radio size={24} />,
         color: '#229ED9',
-        link: 'https://t.me/YOUR_CHANNEL',
+        link: 'https://t.me/suntiksosmedstore',
         btnLabel: 'Join Channel',
     },
 ];

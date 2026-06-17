@@ -219,8 +219,8 @@ export default function AdminPanel() {
     const [savingBonus, setSavingBonus] = useState(false);
 
     // ── Markup per-kategori / per-service ──
-    const [markupRules, setMarkupRules] = useState({ categories: {}, services: {} });
-    const [rulesDraft, setRulesDraft] = useState({ categories: {}, services: {} });
+    const [markupRules, setMarkupRules] = useState({ categories: {}, services: {}, providers: {} });
+    const [rulesDraft, setRulesDraft] = useState({ categories: {}, services: {}, providers: {} });
     const [savingRules, setSavingRules] = useState(false);
     const [svcOverrideSearch, setSvcOverrideSearch] = useState('');
 
@@ -855,12 +855,14 @@ export default function AdminPanel() {
         };
     });
 
-    // Resolusi markup efektif untuk sebuah service: service → kategori → global
+    // Resolusi markup efektif: service → kategori → provider → global
     const resolveMarkup = (svc) => {
         if (!svc) return markup;
         const sid = String(svc.service);
         if (markupRules.services && markupRules.services[sid] != null) return markupRules.services[sid];
         if (svc.category && markupRules.categories && markupRules.categories[svc.category] != null) return markupRules.categories[svc.category];
+        const prov = svc._provider || String(svc.service).split(':')[0];
+        if (prov && markupRules.providers && markupRules.providers[prov] != null) return markupRules.providers[prov];
         return markup;
     };
 
@@ -1981,7 +1983,7 @@ export default function AdminPanel() {
                                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 6, flexWrap: 'wrap', gap: 12 }}>
                                     <div>
                                         <div style={{ fontWeight: 800, fontSize: 15, color: 'var(--text)', marginBottom: 4 }}>Markup per Kategori / Service</div>
-                                        <p style={{ fontSize: 12.5, color: 'var(--text3)', maxWidth: 520 }}>Kosongkan untuk pakai markup global ({markup}×). Prioritas: <b style={{ color: 'var(--text2)' }}>service → kategori → global</b>.</p>
+                                        <p style={{ fontSize: 12.5, color: 'var(--text3)', maxWidth: 520 }}>Kosongkan untuk pakai markup global ({markup}×). Prioritas: <b style={{ color: 'var(--text2)' }}>service → kategori → provider → global</b>.</p>
                                     </div>
                                     <button className="btn btn-blue" onClick={saveMarkupRules} disabled={savingRules} style={{ padding: '10px 18px', borderRadius: 11, fontSize: 13.5, opacity: savingRules ? 0.6 : 1, flexShrink: 0 }}>
                                         <Save size={15} /> {savingRules ? 'Menyimpan...' : 'Simpan Rules'}
@@ -1990,6 +1992,28 @@ export default function AdminPanel() {
 
                                 <div style={{ height: 1, background: 'var(--border)', margin: '22px 0' }} />
 
+                                {providerStats.length > 0 && (<>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                                        <div style={{ fontWeight: 800, fontSize: 13, color: 'var(--text)' }}>Per Provider</div>
+                                        <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text3)', background: 'var(--bg2)', padding: '2px 9px', borderRadius: 20 }}>{providerStats.length}</span>
+                                        <span style={{ fontSize: 11.5, color: 'var(--text3)' }}>— 1 angka buat SEMUA layanan provider itu</span>
+                                    </div>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12, marginBottom: 28 }}>
+                                        {providerStats.map(({ key: p }) => {
+                                            const lbl = p === 'smmsoc' ? 'SMMSOC' : p === 'buzzer' ? 'BuzzerPanel' : p;
+                                            const on = rulesDraft.providers && rulesDraft.providers[p] != null;
+                                            return (
+                                                <div key={p} style={{ display: 'flex', alignItems: 'center', gap: 12, background: 'var(--bg2)', border: `1px solid ${on ? 'var(--blue)' : 'var(--border)'}`, borderRadius: 12, padding: '12px 14px' }}>
+                                                    <div style={{ flex: 1, minWidth: 0, fontSize: 13, color: 'var(--text)', fontWeight: 700 }}>{lbl}</div>
+                                                    <input className="inp" type="number" step="0.1" min="1" placeholder={`${markup}×`} value={(rulesDraft.providers && rulesDraft.providers[p]) ?? ''} onChange={e => {
+                                                        const v = e.target.value;
+                                                        setRulesDraft(d => { const providers = { ...(d.providers || {}) }; if (v === '') delete providers[p]; else providers[p] = parseFloat(v); return { ...d, providers }; });
+                                                    }} style={{ width: 76, height: 38, padding: '0 8px', textAlign: 'center', fontWeight: 800, flexShrink: 0 }} />
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </>)}
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
                                     <div style={{ fontWeight: 800, fontSize: 13, color: 'var(--text)' }}>Per Kategori</div>
                                     <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text3)', background: 'var(--bg2)', padding: '2px 9px', borderRadius: 20 }}>{cats.filter(c => c !== 'All').length}</span>

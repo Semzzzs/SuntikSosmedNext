@@ -59,8 +59,8 @@ export default async function handler(req, res) {
             const { data: rl } = await supa.from('settings').select('value').eq('key', 'markup_rules').maybeSingle();
             let markup = mk?.value ? parseFloat(mk.value) : 1;
             if (isNaN(markup) || markup < 1) markup = 1;
-            let rules = { categories: {}, services: {} };
-            try { if (rl?.value) { const p = JSON.parse(rl.value); rules = { categories: p.categories || {}, services: p.services || {} }; } } catch { }
+            let rules = { categories: {}, services: {}, providers: {} };
+            try { if (rl?.value) { const p = JSON.parse(rl.value); rules = { categories: p.categories || {}, services: p.services || {}, providers: p.providers || {} }; } } catch { }
             return res.status(200).json({ markup, rules });
         } catch (e) {
             return res.status(200).json({ markup: 1, rules: { categories: {}, services: {} } });
@@ -194,12 +194,12 @@ export default async function handler(req, res) {
                     }
                 } catch { }
 
-                let markup = 1, markupRules = { categories: {}, services: {} };
+                let markup = 1, markupRules = { categories: {}, services: {}, providers: {} };
                 try {
                     const { data: mkData } = await supabaseSvc.from('settings').select('value').eq('key', 'markup').maybeSingle();
                     if (mkData?.value) markup = parseFloat(mkData.value);
                     const { data: rulesData } = await supabaseSvc.from('settings').select('value').eq('key', 'markup_rules').maybeSingle();
-                    if (rulesData?.value) { const p = JSON.parse(rulesData.value); markupRules = { categories: p.categories || {}, services: p.services || {} }; }
+                    if (rulesData?.value) { const p = JSON.parse(rulesData.value); markupRules = { categories: p.categories || {}, services: p.services || {}, providers: p.providers || {} }; }
                 } catch { }
 
                 // Ambil service dari provider yang sesuai (sudah dinormalisasi + ada currency).
@@ -214,9 +214,11 @@ export default async function handler(req, res) {
                 if (qty <= 0) return res.status(400).json({ error: 'Jumlah order tidak valid.' });
 
                 // Markup rules pakai ID prefixed untuk per-service, category apa adanya.
+                const provKey = svc._provider || String(svc.service).split(':')[0];
                 const effMarkup =
                     markupRules.services?.[String(svc.service)] ??
                     markupRules.categories?.[svc.category] ??
+                    markupRules.providers?.[provKey] ??
                     markup;
 
                 // ⚡ INTI MULTI-CURRENCY:

@@ -535,9 +535,14 @@ export default function ViewAddFunds({ user, balance: balanceProp = null }) {
 
   return (
     <div className="fu">
-      <div style={{ marginBottom: 16 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text)', marginBottom: 3 }}>Tambah Saldo</h1>
-        <p style={{ fontSize: 13.5, color: 'var(--text2)' }}>Top up saldo kamu dengan aman dan instan.</p>
+      {/* Welcome banner — gradient biru soft, samain dengan dashboard */}
+      <div className="ns-welcome" style={{ position: 'relative', overflow: 'hidden', borderRadius: 20, padding: 'clamp(20px,5vw,28px) clamp(20px,5vw,32px)', marginBottom: 16 }}>
+        <div className="ns-welcome-blob ns-welcome-blob-a" />
+        <div className="ns-welcome-blob ns-welcome-blob-b" />
+        <div style={{ position: 'relative', zIndex: 1 }}>
+          <h1 style={{ fontSize: 'clamp(20px,5vw,26px)', fontWeight: 800, color: 'var(--text)', marginBottom: 5, letterSpacing: '-.02em' }}>Tambah Saldo 💳</h1>
+          <p style={{ fontSize: 13.5, color: 'var(--text2)', maxWidth: 460, lineHeight: 1.55 }}>Top up saldo kamu dengan aman dan instan — pilih metode, masukkan nominal, selesai.</p>
+        </div>
       </div>
 
       {/* Balance card — mobile only */}
@@ -687,26 +692,7 @@ export default function ViewAddFunds({ user, balance: balanceProp = null }) {
                     placeholder="0" />
                 </div>
 
-                {/* Info tier bonus — biar user tau "deposit segini dapet bonus segini" */}
-                {(method === 'qris' || method === 'crypto') && bonusTiers.length > 0 && (
-                  <div style={{ background: 'var(--green-l)', border: '1px solid rgba(16,185,129,.2)', borderRadius: 10, padding: '12px 14px', marginBottom: 14 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, fontWeight: 800, color: 'var(--green)', marginBottom: 8 }}>
-                      <Star size={13} /> Bonus Deposit Bertingkat
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                      {[...bonusTiers].sort((a, b) => a.min - b.min).map((t, i) => {
-                        const active = numIDR >= t.min &&
-                          (i === bonusTiers.length - 1 || numIDR < [...bonusTiers].sort((a, b) => a.min - b.min)[i + 1].min);
-                        return (
-                          <div key={t.min} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: active ? 800 : 600, color: active ? 'var(--green)' : 'var(--text2)' }}>
-                            <span>Deposit ≥ {formatIDR(t.min)}</span>
-                            <span>+{t.percent}% bonus{active ? '  ✓' : ''}</span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
+                {/* Info tier bonus dipindah ke sidebar kanan (dekat Info Deposit) */}
 
                 {/* Bonus deposit (tiered) */}
                 {bonusIDR > 0 && (
@@ -719,18 +705,30 @@ export default function ViewAddFunds({ user, balance: balanceProp = null }) {
                 )}
 
                 {numIDR > 0 && (
-                  <div style={{ background: 'var(--bg2)', borderRadius: 11, padding: '14px 16px', marginBottom: 16 }}>
-                    {[
-                      { l: 'Jumlah Top Up', v: formatIDR(numIDR) },
-                      ...(feeIDR > 0 ? [{ l: method === 'qris' ? 'Biaya QRIS (Rp 200 + 0.7%)' : 'Biaya Layanan (2.5%)', v: `+${formatIDR(Math.round(feeIDR))}`, c: 'var(--red)' }] : []),
-                      ...(bonusIDR > 0 ? [{ l: `Bonus Deposit (${bonusPercent}%)`, v: `+${formatIDR(bonusIDR)}`, c: 'var(--green)' }] : []),
-                      { l: 'Total Bayar', v: formatIDR(totalIDR), bold: true },
-                      { l: 'Saldo yang Diterima', v: formatIDR(receiveIDR), bold: true, c: 'var(--blue)' },
-                    ].map((r, i, arr) => (
-                      <div key={r.l} style={{ display: 'flex', justifyContent: 'space-between', padding: `${i > 0 ? 7 : 0}px 0 7px`, borderBottom: i < arr.length - 1 ? '1px solid var(--border)' : 'none', fontSize: r.bold ? 14 : 13, fontWeight: r.bold ? 800 : 600, color: r.c || (r.bold ? 'var(--text)' : 'var(--text2)') }}>
-                        <span>{r.l}</span><span>{r.v}</span>
+                  <div className="card" style={{ padding: 0, marginBottom: 16, overflow: 'hidden', boxShadow: 'none', border: '1px solid var(--border)' }}>
+                    <div style={{ padding: '13px 16px', borderBottom: '1px solid var(--border)', fontSize: 12, fontWeight: 800, color: 'var(--text3)', letterSpacing: '.04em', textTransform: 'uppercase' }}>
+                      Rincian Pembayaran
+                    </div>
+                    <div style={{ padding: '6px 16px' }}>
+                      {[
+                        { l: 'Jumlah Top Up', v: formatIDR(numIDR) },
+                        ...(feeIDR > 0 ? [{ l: method === 'qris' ? 'Biaya QRIS (Rp 200 + 0.7%)' : 'Biaya Layanan (2.5%)', v: `+${formatIDR(Math.round(feeIDR))}`, c: 'var(--red)' }] : []),
+                        ...(bonusIDR > 0 ? [{ l: `Bonus Deposit (${bonusPercent}%)`, v: `+${formatIDR(bonusIDR)}`, c: 'var(--green)' }] : []),
+                      ].map(r => (
+                        <div key={r.l} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '8px 0', fontSize: 13, fontWeight: 600 }}>
+                          <span style={{ color: 'var(--text2)' }}>{r.l}</span>
+                          <span style={{ color: r.c || 'var(--text)', fontWeight: 700, whiteSpace: 'nowrap' }}>{r.v}</span>
+                        </div>
+                      ))}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '11px 0', borderTop: '1px solid var(--border)', fontSize: 14 }}>
+                        <span style={{ color: 'var(--text)', fontWeight: 700 }}>Total Bayar</span>
+                        <span style={{ color: 'var(--text)', fontWeight: 800, whiteSpace: 'nowrap' }}>{formatIDR(totalIDR)}</span>
                       </div>
-                    ))}
+                    </div>
+                    <div style={{ background: 'var(--blue-l)', borderTop: '1px solid var(--border)', padding: '13px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--blue)' }}>Saldo yang Diterima</span>
+                      <span style={{ fontSize: 18, fontWeight: 800, color: 'var(--blue)', letterSpacing: '-.01em', whiteSpace: 'nowrap' }}>{formatIDR(receiveIDR)}</span>
+                    </div>
                   </div>
                 )}
 
@@ -852,6 +850,43 @@ export default function ViewAddFunds({ user, balance: balanceProp = null }) {
             ))}
           </div>
 
+          {/* Bonus Deposit Bertingkat — versi rapi */}
+          {(method === 'qris' || method === 'crypto') && bonusTiers.length > 0 && (
+            <div className="card" style={{ padding: 18, overflow: 'hidden' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                <div style={{ width: 30, height: 30, borderRadius: 9, background: 'var(--green-l)', color: 'var(--green)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <Star size={15} />
+                </div>
+                <div style={{ fontSize: 13.5, fontWeight: 800, color: 'var(--text)' }}>Bonus Deposit Bertingkat</div>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                {[...bonusTiers].sort((a, b) => a.min - b.min).map((t, i, arr) => {
+                  const active = numIDR >= t.min && (i === arr.length - 1 || numIDR < arr[i + 1].min);
+                  return (
+                    <div key={t.min} style={{
+                      display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10,
+                      padding: '9px 12px', borderRadius: 10,
+                      background: active ? 'var(--green-l)' : 'var(--bg2)',
+                      border: `1px solid ${active ? 'var(--green)' : 'var(--border)'}`,
+                      transition: 'all .2s',
+                    }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, fontWeight: active ? 700 : 600, color: active ? 'var(--green)' : 'var(--text2)' }}>
+                        {active && <CheckCircle size={13} style={{ flexShrink: 0 }} />}
+                        ≥ {formatIDR(t.min)}
+                      </span>
+                      <span style={{ fontSize: 11.5, fontWeight: 800, color: 'var(--green)', background: 'var(--green-l)', border: '1px solid rgba(16,185,129,.25)', padding: '3px 9px', borderRadius: 20, whiteSpace: 'nowrap', flexShrink: 0 }}>
+                        +{t.percent}%
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+              <div style={{ marginTop: 12, fontSize: 11, color: 'var(--text3)', lineHeight: 1.5 }}>
+                Bonus dihitung otomatis dari nominal top up kamu — makin besar deposit, makin besar bonusnya.
+              </div>
+            </div>
+          )}
+
           {/* Info */}
           <div className="card" style={{ padding: 16, background: 'var(--blue-l)', border: '1.5px solid var(--border2)' }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--blue)', marginBottom: 8 }}>Info Deposit</div>
@@ -892,6 +927,34 @@ export default function ViewAddFunds({ user, balance: balanceProp = null }) {
           </div>
         </div>
       )}
+
+      {/* Style scoped — samain banner gradient & kartu dengan dashboard */}
+      <style>{`
+        .ns-welcome {
+          background: linear-gradient(135deg, var(--blue-l) 0%, var(--white) 70%);
+          border: 1px solid var(--border);
+          box-shadow: var(--shadow);
+        }
+        .root.dark .ns-welcome {
+          background: linear-gradient(135deg, var(--blue-l2) 0%, var(--white) 75%);
+        }
+        .ns-welcome-blob {
+          position: absolute;
+          border-radius: 50%;
+          pointer-events: none;
+          filter: blur(2px);
+        }
+        .ns-welcome-blob-a {
+          top: -70px; right: -40px;
+          width: 220px; height: 220px;
+          background: radial-gradient(circle, rgba(37,99,235,.18) 0%, transparent 70%);
+        }
+        .ns-welcome-blob-b {
+          bottom: -90px; right: 120px;
+          width: 200px; height: 200px;
+          background: radial-gradient(circle, rgba(139,92,246,.12) 0%, transparent 70%);
+        }
+      `}</style>
     </div>
   );
 }

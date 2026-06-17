@@ -199,9 +199,9 @@ export default async function handler(req, res) {
         // Ambil markup rules (per-kategori / per-service)
         if (action === 'get_markup_rules') {
             const { data } = await supabase.from('settings').select('value').eq('key', 'markup_rules').maybeSingle();
-            let rules = { categories: {}, services: {} };
+            let rules = { categories: {}, services: {}, providers: {} };
             if (data?.value) {
-                try { const p = JSON.parse(data.value); rules = { categories: p.categories || {}, services: p.services || {} }; } catch { /* ignore */ }
+                try { const p = JSON.parse(data.value); rules = { categories: p.categories || {}, services: p.services || {}, providers: p.providers || {} }; } catch { /* ignore */ }
             }
             return res.status(200).json({ rules });
         }
@@ -619,7 +619,7 @@ export default async function handler(req, res) {
                 }
                 return out;
             };
-            const rules = { categories: cleanMap(body.categories), services: cleanMap(body.services) };
+            const rules = { categories: cleanMap(body.categories), services: cleanMap(body.services), providers: cleanMap(body.providers) };
             const { error } = await supabase.from('settings').upsert({
                 key: 'markup_rules', value: JSON.stringify(rules), updated_at: new Date().toISOString()
             }, { onConflict: 'key' });

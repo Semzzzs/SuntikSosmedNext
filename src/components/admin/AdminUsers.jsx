@@ -45,6 +45,9 @@ async function getAllBalances(emails) {
 export default function AdminUsers() {
     const [users, setUsers] = useState([]);
     const [balances, setBalances] = useState({});
+    const [spends, setSpends] = useState({}); // total belanja (order) per email
+    const [deposits, setDeposits] = useState({}); // total masuk per email
+    const [detailUser, setDetailUser] = useState(null); // baris user yang dibuka detailnya
     const [modal, setModal] = useState(null);
     const [amount, setAmount] = useState('');
     const [msg, setMsg] = useState('');
@@ -65,13 +68,17 @@ export default function AdminUsers() {
             const txList = txData.transactions || [];
 
             const balanceMap = {};
+            const spendMap = {};
+            const depositMap = {};
             // ✅ Init semua email ke 0 — hindari "Rp ..." untuk user tanpa transaksi
-            for (const u of apiData.users) { if (u.email) balanceMap[u.email] = 0; }
+            for (const u of apiData.users) { if (u.email) { balanceMap[u.email] = 0; spendMap[u.email] = 0; depositMap[u.email] = 0; } }
             for (const t of txList) {
                 if (!t.email || t.status !== 'success') continue;
                 const masuk = ['deposit', 'bonus', 'refund'].includes(t.type) ? (t.amount || 0) : 0;
                 const keluar = ['order', 'purchase'].includes(t.type) ? (t.amount || 0) : 0;
                 balanceMap[t.email] = (balanceMap[t.email] || 0) + masuk - keluar;
+                if (keluar) spendMap[t.email] = (spendMap[t.email] || 0) + keluar; // akumulasi belanja
+                if (masuk) depositMap[t.email] = (depositMap[t.email] || 0) + masuk; // akumulasi deposit
             }
             // ✅ Clamp ke 0 — hindari nilai negatif
             for (const k of Object.keys(balanceMap)) balanceMap[k] = Math.max(0, balanceMap[k]);
@@ -79,8 +86,12 @@ export default function AdminUsers() {
             setUsers(apiData.users.map(u => ({
                 ...u,
                 balance: Math.max(0, balanceMap[u.email] || 0),
+                spend: spendMap[u.email] || 0,
+                deposit: depositMap[u.email] || 0,
             })));
             setBalances(balanceMap); // ✅ FIX: sync state saldo agar tabel render angka
+            setSpends(spendMap);
+            setDeposits(depositMap);
             setLoadingUsers(false);
             return;
         }
@@ -218,6 +229,53 @@ export default function AdminUsers() {
                     style={{ width: 260, fontSize: 13 }} />
             </div>
 
+            <style dangerouslySetInnerHTML={{
+                __html: `
+                .usr-tr { cursor: pointer; transition: background .12s; }
+                .usr-tr:hover td { background: var(--bg2); }
+                .usr-act { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 700; padding: 6px 11px; border-radius: 9px; cursor: pointer; font-family: 'Plus Jakarta Sans',sans-serif; transition: filter .15s, transform .12s; }
+                .usr-act:hover { filter: brightness(1.07); transform: translateY(-1px); }
+                .usr-act:active { transform: translateY(0); }
+            ` }} />
+
+            {detailUser && (
+                <div onClick={() => setDetailUser(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+                    <div onClick={e => e.stopPropagation()} style={{ background: 'var(--bg)', borderRadius: 18, width: '100%', maxWidth: 440, overflow: 'hidden', boxShadow: '0 20px 60px rgba(0,0,0,.3)' }}>
+                        <div style={{ padding: '22px 24px', background: detailUser.blocked ? 'linear-gradient(135deg,#6b7280,#4b5563)' : 'linear-gradient(135deg,#2563eb,#1d4ed8)', display: 'flex', alignItems: 'center', gap: 14 }}>
+                            <div style={{ width: 48, height: 48, borderRadius: 14, background: 'rgba(255,255,255,.2)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 20, flexShrink: 0 }}>{(detailUser.name || detailUser.email || 'U').charAt(0).toUpperCase()}</div>
+                            <div style={{ minWidth: 0 }}>
+                                <div style={{ fontSize: 16, fontWeight: 800, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{detailUser.name || '—'}</div>
+                                <div style={{ fontSize: 12, color: 'rgba(255,255,255,.8)', fontFamily: "'JetBrains Mono',monospace", whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{detailUser.email}</div>
+                            </div>
+                        </div>
+                        <div style={{ padding: '20px 24px 24px' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 16 }}>
+                                {[
+                                    { l: 'Saldo', v: balances[detailUser.email] || 0, c: 'var(--green)' },
+                                    { l: 'Total Deposit', v: deposits[detailUser.email] || 0, c: 'var(--blue)' },
+                                    { l: 'Total Spend', v: spends[detailUser.email] || 0, c: 'var(--yellow)' },
+                                ].map(s => (
+                                    <div key={s.l} style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 12, padding: '12px 8px', textAlign: 'center' }}>
+                                        <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text3)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.03em' }}>{s.l}</div>
+                                        <div style={{ fontSize: 13.5, fontWeight: 800, color: s.c, lineHeight: 1.2, wordBreak: 'break-word' }}>Rp {Math.round(s.v).toLocaleString('id-ID')}</div>
+                                    </div>
+                                ))}
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12.5, color: 'var(--text3)', marginBottom: 18 }}>
+                                <span>Terdaftar: {detailUser.createdAt ? new Date(detailUser.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : '—'}</span>
+                                <span style={{ fontWeight: 700, color: detailUser.blocked ? 'var(--red)' : 'var(--green)', background: detailUser.blocked ? 'var(--red-l)' : 'var(--green-l)', padding: '3px 10px', borderRadius: 20 }}>{detailUser.blocked ? 'Diblokir' : 'Aktif'}</span>
+                            </div>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                                <button className="usr-act" onClick={() => { setModal({ type: 'add', email: detailUser.email }); setAmount(''); setDetailUser(null); }} style={{ flex: 1, justifyContent: 'center', padding: '10px 0', background: 'var(--green-l)', color: 'var(--green)', border: '1px solid color-mix(in srgb, var(--green) 28%, transparent)' }}><DollarSign size={13} /> Saldo</button>
+                                <button className="usr-act" onClick={() => { setModal({ type: 'kurang', email: detailUser.email }); setAmount(''); setDetailUser(null); }} style={{ flex: 1, justifyContent: 'center', padding: '10px 0', background: 'var(--red-l)', color: 'var(--red)', border: '1px solid color-mix(in srgb, var(--red) 28%, transparent)' }}><MinusCircle size={13} /> Kurangi</button>
+                                <button className="usr-act" onClick={() => { toggleBlock(detailUser.email); setDetailUser(d => d ? { ...d, blocked: !d.blocked } : d); }} style={{ flex: 1, justifyContent: 'center', padding: '10px 0', background: detailUser.blocked ? 'var(--green-l)' : 'var(--yellow-l)', color: detailUser.blocked ? 'var(--green)' : 'var(--yellow)', border: '1px solid transparent' }}>{detailUser.blocked ? <CheckCircle size={13} /> : <Ban size={13} />} {detailUser.blocked ? 'Unblock' : 'Blokir'}</button>
+                            </div>
+                            <button onClick={() => setDetailUser(null)} style={{ width: '100%', marginTop: 10, padding: '9px 0', borderRadius: 10, border: '1px solid var(--border)', background: 'transparent', color: 'var(--text2)', fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif" }}>Tutup</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {modal && (
                 <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
                     <div style={{ background: 'var(--bg)', borderRadius: 18, width: '100%', maxWidth: 400, overflow: 'hidden', boxShadow: '0 20px 60px rgba(0,0,0,.3)' }}>
@@ -281,7 +339,7 @@ export default function AdminUsers() {
                         </thead>
                         <tbody>
                             {filteredUsers.map((u, i) => (
-                                <tr key={u.email} style={{ borderBottom: i < filteredUsers.length - 1 ? '1px solid var(--border)' : 'none', opacity: u.blocked ? 0.6 : 1 }}>
+                                <tr key={u.email} className="usr-tr" onClick={() => setDetailUser(u)} title="Klik untuk lihat detail" style={{ borderBottom: i < filteredUsers.length - 1 ? '1px solid var(--border)' : 'none', opacity: u.blocked ? 0.6 : 1 }}>
                                     <td style={{ padding: '11px 14px' }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                                             <div style={{ width: 34, height: 34, borderRadius: 10, background: u.blocked ? 'var(--text3)' : 'var(--blue)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 13, flexShrink: 0 }}>
@@ -299,15 +357,15 @@ export default function AdminUsers() {
                                         </span>
                                     </td>
                                     <td style={{ padding: '11px 14px' }}>
-                                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                                            <button onClick={() => { setModal({ type: 'add', email: u.email }); setAmount(''); }} style={{ background: 'var(--green-l)', border: 'none', cursor: 'pointer', color: 'var(--green)', display: 'flex', alignItems: 'center', gap: 4, fontSize: 11.5, fontFamily: "'Plus Jakarta Sans',sans-serif", fontWeight: 700, padding: '5px 9px', borderRadius: 8 }}>
-                                                <DollarSign size={11} /> +Saldo
+                                        <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
+                                            <button className="usr-act" onClick={(e) => { e.stopPropagation(); setModal({ type: 'add', email: u.email }); setAmount(''); }} style={{ background: 'var(--green-l)', color: 'var(--green)', border: '1px solid color-mix(in srgb, var(--green) 28%, transparent)' }}>
+                                                <DollarSign size={12} /> Saldo
                                             </button>
-                                            <button onClick={() => { setModal({ type: 'kurang', email: u.email }); setAmount(''); }} style={{ background: 'var(--red-l)', border: 'none', cursor: 'pointer', color: 'var(--red)', display: 'flex', alignItems: 'center', gap: 4, fontSize: 11.5, fontFamily: "'Plus Jakarta Sans',sans-serif", fontWeight: 700, padding: '5px 9px', borderRadius: 8 }}>
-                                                <MinusCircle size={11} /> -Saldo
+                                            <button className="usr-act" onClick={(e) => { e.stopPropagation(); setModal({ type: 'kurang', email: u.email }); setAmount(''); }} style={{ background: 'var(--red-l)', color: 'var(--red)', border: '1px solid color-mix(in srgb, var(--red) 28%, transparent)' }}>
+                                                <MinusCircle size={12} /> Kurangi
                                             </button>
-                                            <button onClick={() => toggleBlock(u.email)} style={{ background: u.blocked ? 'var(--green-l)' : 'var(--yellow-l)', border: 'none', cursor: 'pointer', color: u.blocked ? 'var(--green)' : 'var(--yellow)', display: 'flex', alignItems: 'center', gap: 4, fontSize: 11.5, fontFamily: "'Plus Jakarta Sans',sans-serif", fontWeight: 700, padding: '5px 9px', borderRadius: 8 }}>
-                                                {u.blocked ? <CheckCircle size={11} /> : <Ban size={11} />} {u.blocked ? 'Unblock' : 'Blokir'}
+                                            <button className="usr-act" onClick={(e) => { e.stopPropagation(); toggleBlock(u.email); }} style={{ background: u.blocked ? 'var(--green-l)' : 'var(--yellow-l)', color: u.blocked ? 'var(--green)' : 'var(--yellow)', border: `1px solid color-mix(in srgb, ${u.blocked ? 'var(--green)' : 'var(--yellow)'} 28%, transparent)` }}>
+                                                {u.blocked ? <CheckCircle size={12} /> : <Ban size={12} />} {u.blocked ? 'Unblock' : 'Blokir'}
                                             </button>
                                         </div>
                                     </td>

@@ -1630,3 +1630,54 @@ a {
     animation: none !important;
   }
 }
+
+/* ══════════════════════════════════════
+   MOBILE / iOS HARDENING (tambahan)
+   ══════════════════════════════════════ */
+
+/* iOS: hilangkan chrome bawaan (inner-shadow / sudut native) di input & tombol.
+   App ini sudah styling sendiri, jadi aman di-reset. */
+.inp,
+input.inp,
+textarea.inp,
+button,
+.btn {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+/* Spinner number input iOS/desktop dirapikan */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* Media tak melebar keluar layar (SVG/icon sengaja TIDAK disentuh agar tak distorsi) */
+img,
+video,
+canvas {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Cegah scroll-chaining aneh di area scroll utama (iOS rubber-band) */
+.main-scroll,
+.ns {
+  overscroll-behavior: contain;
+}
+
+@media (max-width: 768px) {
+
+  /* Tabel di dalam .card BISA di-scroll horizontal — bukan ke-clip/kepotong.
+     Override overflow:hidden inline lewat !important. :has() didukung iOS 15.4+. */
+  .card:has(table) {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Tombol aksi kecil (mis. di tabel) boleh turun baris, jangan mepet */
+  .usr-act {
+    min-height: 40px;
+  }
+}
