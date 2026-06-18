@@ -1,12 +1,13 @@
 import { useRouter } from 'next/router';
 import Link from 'next/link';
+import Head from 'next/head';
 import { useEffect, useRef, useState } from 'react';
 import {
   Target, Moon, Sun, ArrowRight, UserPlus, Wallet, ShoppingCart,
   Instagram, Youtube, Twitter, Facebook, Play, Star, Sparkles,
   ShieldCheck, TrendingUp, CheckCircle, Zap, Globe, Lock, Search, ChevronDown,
   Menu, X, Home, LayoutGrid, HelpCircle,
-  ArrowUp, Briefcase, Store, Music, Repeat, Users, RefreshCw
+  Briefcase, Store, Music, Repeat, RefreshCw
 } from 'lucide-react';
 import { useTheme } from '@/context/ThemeContext';
 import { supabase } from '@/lib/supabase';
@@ -247,6 +248,19 @@ const SOCIALS = [
 const socialIcon = (id, size) =>
   id === 'ig' ? <Instagram size={size} /> : id === 'wa' ? <WhatsAppIcon size={size} /> : <TikTokIcon size={size} />;
 
+const FAQS = [
+  { q: 'Apa itu SuntikSosmed?', a: 'SuntikSosmed adalah platform SMM (Social Media Marketing) yang menyediakan layanan tambah followers, likes, views, komentar, dan engagement untuk Instagram, TikTok, YouTube, Facebook, Twitter/X, Telegram, Spotify, dan media sosial lainnya. Harga mulai dari Rp1 per 1.000, dengan lebih dari 2.000 pilihan layanan dan proses otomatis 24 jam.' },
+  { q: 'Bagaimana cara order?', a: 'Cukup 4 langkah: (1) Daftar akun gratis, (2) Top up saldo lewat QRIS, (3) Pilih layanan yang kamu mau lalu masukkan link atau username target beserta jumlahnya, (4) Klik order. Pesanan langsung masuk antrian dan diproses otomatis tanpa perlu menunggu konfirmasi manual.' },
+  { q: 'Berapa lama pesanan selesai?', a: 'Kecepatan tergantung jenis layanan dan antrian sistem. Sebagian besar pesanan mulai diproses dalam hitungan menit setelah order dibuat, namun ada juga layanan yang butuh waktu lebih lama tergantung jumlah dan jenisnya. Kamu bisa memantau progres pesanan secara real-time di halaman "My Orders".' },
+  { q: 'Apakah aman untuk akun saya?', a: 'Aman. Kami tidak pernah meminta password atau akses login ke akun media sosial kamu — cukup link postingan atau username yang bersifat publik. Pastikan akun kamu tidak dalam mode privat saat order agar layanan dapat diproses dengan benar.' },
+  { q: 'Metode pembayaran apa saja yang didukung?', a: 'Top up saldo dilakukan lewat QRIS, yang bisa dibayar dari hampir semua bank dan e-wallet di Indonesia: DANA, OVO, GoPay, ShopeePay, LinkAja, BCA, BNI, BRI, Mandiri, dan lainnya. Setelah pembayaran berhasil, saldo masuk otomatis ke akun kamu secara instan.' },
+  { q: 'Berapa minimum deposit?', a: 'Minimum deposit sangat terjangkau, mulai dari Rp5.000. Saldo yang kamu top up bisa dipakai untuk order layanan apa saja sesuai kebutuhan, tanpa masa kedaluwarsa.' },
+  { q: 'Apakah ada garansi refill?', a: 'Banyak layanan kami dilengkapi garansi refill — artinya jika followers atau likes berkurang (drop) dalam periode garansi, kamu bisa mengajukan refill gratis. Ketersediaan dan durasi garansi tertera jelas di setiap layanan saat kamu memilihnya sebelum order.' },
+  { q: 'Apakah followers/likes-nya real?', a: 'Kami menyediakan berbagai kualitas layanan, dari yang reguler hingga premium dengan akun berkualitas tinggi (HQ/real-looking). Kualitas dan karakteristik tiap layanan dijelaskan pada nama dan deskripsi layanan, jadi kamu bisa memilih sesuai kebutuhan dan budget.' },
+  { q: 'Bagaimana kalau pesanan bermasalah?', a: 'Jika ada kendala dengan pesanan, kamu bisa menghubungi tim support kami lewat fitur Tickets di dashboard, atau lewat kontak yang tersedia. Kami berusaha merespons dan membantu menyelesaikan setiap kendala secepat mungkin.' },
+  { q: 'Apakah bisa untuk reseller?', a: 'Bisa. Dengan harga modal yang murah dan saldo deposit, banyak pengguna kami menjadikan SuntikSosmed sebagai sumber untuk usaha reseller jasa SMM mereka sendiri. Semakin sering order, semakin hemat.' },
+];
+
 // ── Kartu testimoni ──
 function TestiCard({ t, dark }) {
   return (
@@ -369,6 +383,21 @@ export default function Landing() {
     return () => { window.removeEventListener('scroll', onScroll); if (raf) cancelAnimationFrame(raf); };
   }, []);
 
+  // ── Spotlight per-kartu: set posisi kursor relatif ke tiap kartu ──
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (window.matchMedia('(hover: none)').matches) return;
+    const onMove = (e) => {
+      const card = e.target.closest?.('.spotlight-card');
+      if (!card) return;
+      const r = card.getBoundingClientRect();
+      card.style.setProperty('--mx', `${e.clientX - r.left}px`);
+      card.style.setProperty('--my', `${e.clientY - r.top}px`);
+    };
+    document.addEventListener('mousemove', onMove, { passive: true });
+    return () => document.removeEventListener('mousemove', onMove);
+  }, []);
+
   const filteredServices = SERVICES.filter(sv => {
     const q = serviceQuery.trim().toLowerCase();
     if (!q) return true;
@@ -377,6 +406,23 @@ export default function Landing() {
 
   return (
     <div className={`root${dark ? ' dark' : ''}`} style={{ minHeight: '100vh', overflow: 'hidden' }}>
+
+      <Head>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@type': 'FAQPage',
+              mainEntity: FAQS.map(f => ({
+                '@type': 'Question',
+                name: f.q,
+                acceptedAnswer: { '@type': 'Answer', text: f.a },
+              })),
+            }),
+          }}
+        />
+      </Head>
 
       {/* ── Reading progress bar ── */}
       <div style={{ position: 'fixed', top: 0, left: 0, right: 0, height: 3, zIndex: 9999, pointerEvents: 'none' }}>
@@ -511,7 +557,7 @@ export default function Landing() {
               {[0, 1, 2, 3, 4].map(i => <Star key={i} size={13} fill="#F59E0B" style={{ color: '#F59E0B' }} />)}
               <span style={{ fontSize: 12.5, fontWeight: 800, color: 'var(--text)', marginLeft: 4 }}>4.8/5</span>
             </div>
-            <div style={{ fontSize: 12.5, color: 'var(--text2)', fontWeight: 600, lineHeight: 1.5 }}>Dipercaya 50.000+ kreator & bisnis di Indonesia.</div>
+            <div style={{ fontSize: 12.5, color: 'var(--text2)', fontWeight: 600, lineHeight: 1.5 }}>Panel SMM otomatis — cepat, aman, & terjangkau untuk semua.</div>
           </div>
 
           {/* Sosial media */}
@@ -631,26 +677,6 @@ export default function Landing() {
             ))}
           </div>
 
-          {/* Metode pembayaran — sinyal trust lokal */}
-          <div style={{ marginBottom: 44 }}>
-            <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--text3)', letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 12 }}>Bayar mudah lewat QRIS — semua bank & e-wallet</p>
-            <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 8 }}>
-              {[
-                { file: 'Dana', alt: 'DANA' },
-                { file: 'Ovo', alt: 'OVO' },
-                { file: 'Gopay', alt: 'GoPay' },
-                { file: 'Shoppe', alt: 'ShopeePay' },
-                { file: 'Bca', alt: 'BCA' },
-                { file: 'Bri', alt: 'BRI' },
-                { file: 'Mandiri', alt: 'Mandiri' },
-              ].map(m => (
-                <div key={m.file} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 64, height: 38, padding: '0 8px', background: '#fff', border: '1px solid var(--border)', borderRadius: 9, boxShadow: dark ? 'none' : '0 1px 6px rgba(37,99,235,.06)' }}>
-                  <img src={`/payments/${m.file}.png`} alt={m.alt} loading="lazy" style={{ maxWidth: '100%', maxHeight: 20, objectFit: 'contain' }} />
-                </div>
-              ))}
-            </div>
-          </div>
-
           {/* Platform logos greyscale */}
           <p style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--text3)', letterSpacing: '.07em', textTransform: 'uppercase', marginBottom: 16 }}>Tersedia untuk platform terbaik</p>
           <div className="logo-marquee-wrap" style={{ marginBottom: 48 }}>
@@ -686,7 +712,7 @@ export default function Landing() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 18 }}>
             {FEATURES.map((f, i) => (
               <RevealSection key={i} delay={i * 120} variant="scale" duration={900}>
-                <div className="feature-card">
+                <div className="feature-card spotlight-card">
                   <div style={{ width: 52, height: 52, borderRadius: 16, background: f.iconBg, color: f.iconColor, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 18, boxShadow: '0 6px 20px rgba(0,0,0,.15)' }}>{f.icon}</div>
                   <div style={{ fontWeight: 800, fontSize: 15.5, color: 'var(--text)', marginBottom: 8 }}>{f.title}</div>
                   <p style={{ fontSize: 13.5, color: 'var(--text2)', lineHeight: 1.65 }}>{f.desc}</p>
@@ -714,7 +740,7 @@ export default function Landing() {
               { icon: <Music size={22} />, c: '#1DB954', bg: 'rgba(29,185,84,.1)', title: 'Musisi & Artis', desc: 'Dongkrak plays Spotify, views YouTube, dan engagement biar karya makin terdengar.' },
             ].map((b, i) => (
               <RevealSection key={i} delay={i * 100} variant="scale" duration={850}>
-                <div className="feature-card" style={{ height: '100%' }}>
+                <div className="feature-card spotlight-card" style={{ height: '100%' }}>
                   <div style={{ width: 50, height: 50, borderRadius: 15, background: b.bg, color: b.c, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>{b.icon}</div>
                   <div style={{ fontWeight: 800, fontSize: 15.5, color: 'var(--text)', marginBottom: 8 }}>{b.title}</div>
                   <p style={{ fontSize: 13.5, color: 'var(--text2)', lineHeight: 1.65 }}>{b.desc}</p>
@@ -756,6 +782,32 @@ export default function Landing() {
                 ))}
               </div>
             </div>
+          </div>
+        </div>
+      </RevealSection>
+
+      {/* ── KENAPA MURAH (bangun trust) ── */}
+      <RevealSection variant="up" duration={900}>
+        <div style={{ position: 'relative', zIndex: 10, maxWidth: 1160, margin: '0 auto', padding: '0 16px 60px' }}>
+          <div style={{ textAlign: 'center', marginBottom: 40 }}>
+            <div style={{ display: 'inline-block', background: 'rgba(16,185,129,.1)', border: '1px solid rgba(16,185,129,.25)', borderRadius: 50, padding: '5px 16px', fontSize: 12.5, fontWeight: 700, color: '#10B981', marginBottom: 14 }}>TRANSPARAN</div>
+            <h2 style={{ fontSize: 'clamp(24px, 4vw, 38px)', fontWeight: 800, color: 'var(--text)', letterSpacing: '-.5px', marginBottom: 10 }}>Kenapa Harga Kami Bisa Semurah Ini?</h2>
+            <p style={{ fontSize: 15, color: 'var(--text2)', maxWidth: 520, margin: '0 auto', lineHeight: 1.7 }}>Murah bukan berarti murahan. Ini alasan jujur kenapa kami bisa kasih harga terbaik tanpa mengorbankan kualitas.</p>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16 }}>
+            {[
+              { icon: <TrendingUp size={22} />, c: '#2563EB', bg: 'rgba(37,99,235,.1)', title: 'Skala Besar, Harga Efisien', desc: 'Volume order yang besar bikin biaya per layanan jadi lebih rendah — dan hematnya kami teruskan langsung ke kamu.' },
+              { icon: <Zap size={22} />, c: '#F59E0B', bg: 'rgba(245,158,11,.1)', title: 'Sistem Otomatis Penuh', desc: 'Order diproses mesin 24 jam tanpa admin manual. Biaya operasional kecil, jadi harga bisa ditekan tanpa korbankan kualitas.' },
+              { icon: <ShieldCheck size={22} />, c: '#10B981', bg: 'rgba(16,185,129,.1)', title: 'Tanpa Biaya Tersembunyi', desc: 'Harga yang kamu lihat itu harga final. Tidak ada markup mendadak, tidak ada jebakan saat checkout.' },
+            ].map((b, i) => (
+              <RevealSection key={i} delay={i * 110} variant="scale" duration={850}>
+                <div className="feature-card spotlight-card" style={{ height: '100%' }}>
+                  <div style={{ width: 50, height: 50, borderRadius: 15, background: b.bg, color: b.c, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>{b.icon}</div>
+                  <div style={{ fontWeight: 800, fontSize: 15.5, color: 'var(--text)', marginBottom: 8 }}>{b.title}</div>
+                  <p style={{ fontSize: 13.5, color: 'var(--text2)', lineHeight: 1.65 }}>{b.desc}</p>
+                </div>
+              </RevealSection>
+            ))}
           </div>
         </div>
       </RevealSection>
@@ -812,7 +864,10 @@ export default function Landing() {
           <div style={{ textAlign: 'center', marginBottom: 40 }}>
             <div style={{ display: 'inline-block', background: 'rgba(245,158,11,.1)', border: '1px solid rgba(245,158,11,.2)', borderRadius: 50, padding: '5px 16px', fontSize: 12.5, fontWeight: 700, color: '#F59E0B', marginBottom: 14 }}>LAYANAN POPULER</div>
             <h2 id="layanan" style={{ fontSize: 'clamp(24px, 4vw, 38px)', fontWeight: 800, color: 'var(--text)', letterSpacing: '-.5px', marginBottom: 10 }}>Jelajahi Layanan Kami</h2>
-            <p style={{ fontSize: 15, color: 'var(--text2)' }}>Sekilas layanan terpopuler kami. Harga transparan, tanpa biaya tersembunyi.</p>
+            <p style={{ fontSize: 15, color: 'var(--text2)', marginBottom: 14 }}>Sekilas layanan terpopuler kami. Harga transparan, tanpa biaya tersembunyi.</p>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 7, background: 'rgba(16,185,129,.1)', border: '1px solid rgba(16,185,129,.22)', borderRadius: 50, padding: '5px 14px', fontSize: 12.5, fontWeight: 700, color: '#10B981' }}>
+              <span className="live-dot" /> Sistem online · proses 24 jam
+            </div>
           </div>
           {/* Search bar */}
           <div style={{ position: 'relative', marginBottom: 16 }}>
@@ -1128,6 +1183,28 @@ export default function Landing() {
           @media (prefers-reduced-motion: reduce) {
             .feature-card:hover::before { animation: none; }
           }
+          /* Live dot berkedut */
+          .live-dot {
+            width: 8px; height: 8px; border-radius: 50%; background: #10B981;
+            box-shadow: 0 0 0 0 rgba(16,185,129,.6);
+            animation: liveDotPulse 1.8s ease-out infinite;
+            flex-shrink: 0;
+          }
+          @keyframes liveDotPulse {
+            0% { box-shadow: 0 0 0 0 rgba(16,185,129,.55); }
+            70% { box-shadow: 0 0 0 7px rgba(16,185,129,0); }
+            100% { box-shadow: 0 0 0 0 rgba(16,185,129,0); }
+          }
+          /* Spotlight per-kartu: glow halus mengikuti kursor di dalam kartu */
+          .spotlight-card::after {
+            content: ''; position: absolute; inset: 0; border-radius: 20px; pointer-events: none;
+            opacity: 0; transition: opacity .3s ease;
+            background: radial-gradient(220px circle at var(--mx, 50%) var(--my, 50%), rgba(59,130,246,.12), transparent 65%);
+          }
+          .spotlight-card:hover::after { opacity: 1; }
+          @media (prefers-reduced-motion: reduce) {
+            .live-dot { animation: none; }
+          }
           @media (max-width: 600px) {
             .svc-table th, .svc-table td { padding-left: 10px !important; padding-right: 10px !important; padding-top: 12px !important; padding-bottom: 12px !important; }
             .svc-table td > div { font-size: 12px !important; gap: 8px !important; }
@@ -1179,18 +1256,7 @@ export default function Landing() {
             <p style={{ fontSize: 15, color: 'var(--text2)' }}>Hal-hal yang sering ditanyakan sebelum mulai order.</p>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {[
-              { q: 'Apa itu SuntikSosmed?', a: 'SuntikSosmed adalah platform SMM (Social Media Marketing) yang menyediakan layanan tambah followers, likes, views, komentar, dan engagement untuk Instagram, TikTok, YouTube, Facebook, Twitter/X, Telegram, Spotify, dan media sosial lainnya. Harga mulai dari Rp1 per 1.000, dengan lebih dari 2.000 pilihan layanan dan proses otomatis 24 jam.' },
-              { q: 'Bagaimana cara order?', a: 'Cukup 4 langkah: (1) Daftar akun gratis, (2) Top up saldo lewat QRIS, (3) Pilih layanan yang kamu mau lalu masukkan link atau username target beserta jumlahnya, (4) Klik order. Pesanan langsung masuk antrian dan diproses otomatis tanpa perlu menunggu konfirmasi manual.' },
-              { q: 'Berapa lama pesanan selesai?', a: 'Kecepatan tergantung jenis layanan dan antrian dari provider. Sebagian besar pesanan mulai diproses dalam hitungan menit setelah order dibuat, namun ada juga layanan yang butuh waktu lebih lama tergantung jumlah dan jenisnya. Kamu bisa memantau progres pesanan secara real-time di halaman "My Orders".' },
-              { q: 'Apakah aman untuk akun saya?', a: 'Aman. Kami tidak pernah meminta password atau akses login ke akun media sosial kamu — cukup link postingan atau username yang bersifat publik. Pastikan akun kamu tidak dalam mode privat saat order agar layanan dapat diproses dengan benar.' },
-              { q: 'Metode pembayaran apa saja yang didukung?', a: 'Top up saldo dilakukan lewat QRIS, yang bisa dibayar dari hampir semua bank dan e-wallet di Indonesia: DANA, OVO, GoPay, ShopeePay, LinkAja, BCA, BNI, BRI, Mandiri, dan lainnya. Setelah pembayaran berhasil, saldo masuk otomatis ke akun kamu secara instan.' },
-              { q: 'Berapa minimum deposit?', a: 'Minimum deposit sangat terjangkau, mulai dari Rp5.000. Saldo yang kamu top up bisa dipakai untuk order layanan apa saja sesuai kebutuhan, tanpa masa kedaluwarsa.' },
-              { q: 'Apakah ada garansi refill?', a: 'Banyak layanan kami dilengkapi garansi refill — artinya jika followers atau likes berkurang (drop) dalam periode garansi, kamu bisa mengajukan refill gratis. Ketersediaan dan durasi garansi tertera jelas di setiap layanan saat kamu memilihnya sebelum order.' },
-              { q: 'Apakah followers/likes-nya real?', a: 'Kami menyediakan berbagai kualitas layanan, dari yang reguler hingga premium dengan akun berkualitas tinggi (HQ/real-looking). Kualitas dan karakteristik tiap layanan dijelaskan pada nama dan deskripsi layanan, jadi kamu bisa memilih sesuai kebutuhan dan budget.' },
-              { q: 'Bagaimana kalau pesanan bermasalah?', a: 'Jika ada kendala dengan pesanan, kamu bisa menghubungi tim support kami lewat fitur Tickets di dashboard, atau lewat kontak yang tersedia. Kami berusaha merespons dan membantu menyelesaikan setiap kendala secepat mungkin.' },
-              { q: 'Apakah bisa untuk reseller?', a: 'Bisa. Dengan harga modal yang murah dan saldo deposit, banyak pengguna kami menjadikan SuntikSosmed sebagai sumber untuk usaha reseller jasa SMM mereka sendiri. Semakin sering order, semakin hemat.' },
-            ].map((item, i) => (
+            {FAQS.map((item, i) => (
               <FaqItem key={i} q={item.q} a={item.a} dark={dark} />
             ))}
           </div>
@@ -1209,7 +1275,7 @@ export default function Landing() {
                 <Sparkles size={12} /> Mulai dari Rp 1/K · Tanpa kontrak · Cancel kapan saja
               </div>
               <h2 style={{ fontSize: 'clamp(24px, 6vw, 44px)', fontWeight: 800, color: '#fff', marginBottom: 14, letterSpacing: '-.5px', lineHeight: 1.15 }}>Siap meningkatkan<br />jangkauan kamu?</h2>
-              <p style={{ fontSize: 'clamp(13px, 3vw, 16px)', color: 'rgba(255,255,255,.75)', marginBottom: 32, maxWidth: 420, margin: '0 auto 32px', lineHeight: 1.7 }}>Bergabung dengan 50.000+ kreator yang sudah menggunakan SuntikSosmed setiap hari.</p>
+              <p style={{ fontSize: 'clamp(13px, 3vw, 16px)', color: 'rgba(255,255,255,.75)', marginBottom: 32, maxWidth: 420, margin: '0 auto 32px', lineHeight: 1.7 }}>Daftar gratis, top up saldo, dan langsung order ribuan layanan SMM dalam hitungan menit.</p>
               <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
                 <button onClick={() => router.push('/register')} style={{ background: '#fff', border: 'none', borderRadius: 50, padding: '12px 28px', fontSize: 'clamp(13px, 3vw, 15px)', fontWeight: 800, color: 'var(--blue)', cursor: 'pointer', fontFamily: "'Outfit','Plus Jakarta Sans',sans-serif", display: 'inline-flex', alignItems: 'center', gap: 8, boxShadow: '0 8px 32px rgba(0,0,0,.2)', transition: 'transform .2s' }}>
                   Mulai Sekarang <ArrowRight size={16} />
