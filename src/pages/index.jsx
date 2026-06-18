@@ -5,7 +5,8 @@ import {
   Target, Moon, Sun, ArrowRight, UserPlus, Wallet, ShoppingCart,
   Instagram, Youtube, Twitter, Facebook, Play, Star, Sparkles,
   ShieldCheck, TrendingUp, CheckCircle, Zap, Globe, Lock, Search, ChevronDown,
-  Menu, X, Home, LayoutGrid, HelpCircle
+  Menu, X, Home, LayoutGrid, HelpCircle,
+  ArrowUp, Briefcase, Store, Music, Repeat, Users, RefreshCw
 } from 'lucide-react';
 import { useTheme } from '@/context/ThemeContext';
 import { supabase } from '@/lib/supabase';
@@ -349,6 +350,25 @@ export default function Landing() {
     return () => { window.removeEventListener('mousemove', onMove); if (raf) cancelAnimationFrame(raf); };
   }, []);
 
+  // ── Reading progress bar ──
+  const [scrollPct, setScrollPct] = useState(0);
+  useEffect(() => {
+    let raf = null;
+    const onScroll = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        const h = document.documentElement;
+        const max = h.scrollHeight - h.clientHeight;
+        const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+        setScrollPct(pct);
+        raf = null;
+      });
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+    return () => { window.removeEventListener('scroll', onScroll); if (raf) cancelAnimationFrame(raf); };
+  }, []);
+
   const filteredServices = SERVICES.filter(sv => {
     const q = serviceQuery.trim().toLowerCase();
     if (!q) return true;
@@ -357,6 +377,11 @@ export default function Landing() {
 
   return (
     <div className={`root${dark ? ' dark' : ''}`} style={{ minHeight: '100vh', overflow: 'hidden' }}>
+
+      {/* ── Reading progress bar ── */}
+      <div style={{ position: 'fixed', top: 0, left: 0, right: 0, height: 3, zIndex: 9999, pointerEvents: 'none' }}>
+        <div style={{ height: '100%', width: `${scrollPct}%`, background: 'linear-gradient(90deg, var(--blue), #60A5FA)', boxShadow: '0 0 8px rgba(37,99,235,.5)', transition: 'width .1s linear' }} />
+      </div>
 
       {/* ── BLOB BG ── */}
       <div style={{ position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none', overflow: 'hidden' }}>
@@ -606,6 +631,26 @@ export default function Landing() {
             ))}
           </div>
 
+          {/* Metode pembayaran — sinyal trust lokal */}
+          <div style={{ marginBottom: 44 }}>
+            <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--text3)', letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 12 }}>Bayar mudah lewat QRIS — semua bank & e-wallet</p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 8 }}>
+              {[
+                { file: 'Dana', alt: 'DANA' },
+                { file: 'Ovo', alt: 'OVO' },
+                { file: 'Gopay', alt: 'GoPay' },
+                { file: 'Shoppe', alt: 'ShopeePay' },
+                { file: 'Bca', alt: 'BCA' },
+                { file: 'Bri', alt: 'BRI' },
+                { file: 'Mandiri', alt: 'Mandiri' },
+              ].map(m => (
+                <div key={m.file} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 64, height: 38, padding: '0 8px', background: '#fff', border: '1px solid var(--border)', borderRadius: 9, boxShadow: dark ? 'none' : '0 1px 6px rgba(37,99,235,.06)' }}>
+                  <img src={`/payments/${m.file}.png`} alt={m.alt} loading="lazy" style={{ maxWidth: '100%', maxHeight: 20, objectFit: 'contain' }} />
+                </div>
+              ))}
+            </div>
+          </div>
+
           {/* Platform logos greyscale */}
           <p style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--text3)', letterSpacing: '.07em', textTransform: 'uppercase', marginBottom: 16 }}>Tersedia untuk platform terbaik</p>
           <div className="logo-marquee-wrap" style={{ marginBottom: 48 }}>
@@ -651,6 +696,68 @@ export default function Landing() {
           </div>
         </div>
 
+      </RevealSection>
+
+      {/* ── UNTUK SIAPA ── */}
+      <RevealSection variant="up" duration={850}>
+        <div style={{ position: 'relative', zIndex: 10, maxWidth: 1160, margin: '0 auto', padding: '0 16px 60px' }}>
+          <div style={{ textAlign: 'center', marginBottom: 40 }}>
+            <div style={{ display: 'inline-block', background: 'linear-gradient(135deg,rgba(139,92,246,.12),rgba(139,92,246,.05))', border: '1px solid rgba(139,92,246,.25)', borderRadius: 50, padding: '5px 16px', fontSize: 12.5, fontWeight: 700, color: '#8B5CF6', marginBottom: 14 }}>UNTUK SIAPA</div>
+            <h2 style={{ fontSize: 'clamp(24px, 4vw, 38px)', fontWeight: 800, color: 'var(--text)', letterSpacing: '-.5px', marginBottom: 10 }}>Cocok untuk Siapa Saja</h2>
+            <p style={{ fontSize: 15, color: 'var(--text2)', maxWidth: 480, margin: '0 auto' }}>Dari kreator pemula sampai pebisnis dan reseller — semua bisa tumbuh di sini.</p>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
+            {[
+              { icon: <Star size={22} />, c: '#E1306C', bg: 'rgba(225,48,108,.1)', title: 'Influencer & Kreator', desc: 'Naikkan followers, likes, dan views biar konten makin dilirik brand dan masuk FYP.' },
+              { icon: <Store size={22} />, c: '#10B981', bg: 'rgba(16,185,129,.1)', title: 'UMKM & Bisnis', desc: 'Bangun kredibilitas toko online — akun yang ramai bikin calon pembeli lebih percaya.' },
+              { icon: <Repeat size={22} />, c: '#2563EB', bg: 'rgba(37,99,235,.1)', title: 'Reseller', desc: 'Harga modal murah + panel otomatis. Jual lagi ke klien kamu dengan markup sendiri.' },
+              { icon: <Music size={22} />, c: '#1DB954', bg: 'rgba(29,185,84,.1)', title: 'Musisi & Artis', desc: 'Dongkrak plays Spotify, views YouTube, dan engagement biar karya makin terdengar.' },
+            ].map((b, i) => (
+              <RevealSection key={i} delay={i * 100} variant="scale" duration={850}>
+                <div className="feature-card" style={{ height: '100%' }}>
+                  <div style={{ width: 50, height: 50, borderRadius: 15, background: b.bg, color: b.c, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>{b.icon}</div>
+                  <div style={{ fontWeight: 800, fontSize: 15.5, color: 'var(--text)', marginBottom: 8 }}>{b.title}</div>
+                  <p style={{ fontSize: 13.5, color: 'var(--text2)', lineHeight: 1.65 }}>{b.desc}</p>
+                </div>
+              </RevealSection>
+            ))}
+          </div>
+        </div>
+      </RevealSection>
+
+      {/* ── RESELLER ── */}
+      <RevealSection variant="scale" duration={950}>
+        <div style={{ position: 'relative', zIndex: 10, maxWidth: 1160, margin: '0 auto', padding: '0 16px 60px' }}>
+          <div className="reseller-card" style={{ position: 'relative', overflow: 'hidden', borderRadius: 28, padding: 'clamp(28px, 5vw, 52px)', background: dark ? 'linear-gradient(135deg, #0F172A 0%, #1E293B 100%)' : 'linear-gradient(135deg, #EFF5FF 0%, #DBEAFE 100%)', border: '1px solid var(--border)' }}>
+            <div style={{ position: 'absolute', top: -70, right: -50, width: 240, height: 240, borderRadius: '50%', background: 'radial-gradient(circle, rgba(37,99,235,.18) 0%, transparent 70%)', pointerEvents: 'none' }} />
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 32, alignItems: 'center', position: 'relative', zIndex: 1 }}>
+              <div>
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'var(--blue)', borderRadius: 50, padding: '5px 14px', fontSize: 12, fontWeight: 700, color: '#fff', marginBottom: 16 }}>
+                  <Briefcase size={13} /> PROGRAM RESELLER
+                </div>
+                <h2 style={{ fontSize: 'clamp(22px, 4vw, 34px)', fontWeight: 800, color: 'var(--text)', letterSpacing: '-.5px', marginBottom: 12, lineHeight: 1.2 }}>Jadikan SuntikSosmed Sumber Bisnismu</h2>
+                <p style={{ fontSize: 15, color: 'var(--text2)', lineHeight: 1.7, marginBottom: 22 }}>Beli dengan harga modal, jual lagi ke klien dengan harga kamu sendiri. Panel otomatis 24 jam, deposit fleksibel, dan ribuan layanan siap dijual. Makin sering order, makin hemat.</p>
+                <button onClick={() => router.push('/register')} className="hero-btn-main">
+                  Mulai Jadi Reseller <ArrowRight size={16} />
+                </button>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                {[
+                  { icon: <Wallet size={18} />, t: 'Harga Modal', d: 'Mulai Rp 1/K' },
+                  { icon: <Zap size={18} />, t: 'Proses Otomatis', d: '24 jam non-stop' },
+                  { icon: <LayoutGrid size={18} />, t: 'Ribuan Layanan', d: '2.000+ pilihan' },
+                  { icon: <RefreshCw size={18} />, t: 'Garansi Refill', d: 'Banyak layanan' },
+                ].map((s, i) => (
+                  <div key={i} style={{ background: 'var(--white)', border: '1px solid var(--border)', borderRadius: 14, padding: '16px 16px' }}>
+                    <div style={{ width: 38, height: 38, borderRadius: 11, background: 'var(--blue-l)', color: 'var(--blue)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 10 }}>{s.icon}</div>
+                    <div style={{ fontSize: 13.5, fontWeight: 800, color: 'var(--text)', marginBottom: 2 }}>{s.t}</div>
+                    <div style={{ fontSize: 12, color: 'var(--text3)', fontWeight: 600 }}>{s.d}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
       </RevealSection>
 
       <RevealSection variant="fade" duration={800}>
@@ -961,18 +1068,24 @@ export default function Landing() {
           /* ── Tombol CTA hero — rapi & proporsional di mobile ── */
           @media (max-width: 600px) {
             .hero-cta-main, .hero-cta-sub {
-              flex: 1 1 0 !important;
-              min-width: 0 !important;
+              flex: 0 0 auto !important;
               width: auto !important;
-              padding: 9px 12px !important;
-              font-size: 12.5px !important;
+              min-width: 0 !important;
+              padding: 9px 16px !important;
+              font-size: 12px !important;
               font-weight: 700 !important;
               white-space: nowrap !important;
-              box-shadow: 0 4px 16px rgba(37,99,235,.35) !important;
+              box-shadow: 0 4px 14px rgba(37,99,235,.3) !important;
             }
             .hero-cta-sub { box-shadow: none !important; }
-            .hero-cta-main { flex-grow: 1.5 !important; gap: 6px !important; }
-            .hero-cta-main svg, .hero-cta-sub svg { width: 13px !important; height: 13px !important; }
+            .hero-cta-main { gap: 5px !important; }
+            .hero-cta-main svg, .hero-cta-sub svg { width: 12px !important; height: 12px !important; }
+          }
+          @media (max-width: 360px) {
+            .hero-cta-main, .hero-cta-sub {
+              padding: 8px 13px !important;
+              font-size: 11.5px !important;
+            }
           }
           @media (prefers-reduced-motion: reduce) {
             .hero-badge .badge-shine, .badge-dot::before, .badge-dot::after { animation: none; }

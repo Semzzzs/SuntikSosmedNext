@@ -1182,7 +1182,31 @@ export default function AdminPanel() {
     return (
         <div className={`root admin-shell${dark ? ' dark' : ''}`} style={{ display: 'flex', height: '100vh', overflow: 'hidden', fontFamily: "'Plus Jakarta Sans',sans-serif" }}>
 
-            <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+            <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+                .adm-kpi-card { transition: transform .18s ease, box-shadow .18s ease; }
+                .adm-kpi-card:hover { transform: translateY(-3px); box-shadow: 0 12px 28px rgba(0,0,0,.12); }
+                .adm-hero-card { isolation: isolate; }
+                .adm-bento-pattern {
+                    position: absolute; inset: 0; pointer-events: none; opacity: .5;
+                    background-image: radial-gradient(circle at 1px 1px, rgba(255,255,255,.16) 1px, transparent 0);
+                    background-size: 15px 15px;
+                    -webkit-mask-image: linear-gradient(135deg, #000 0%, transparent 70%);
+                    mask-image: linear-gradient(135deg, #000 0%, transparent 70%);
+                }
+                .adm-bento-glow {
+                    position: absolute; top: -55px; right: -45px; width: 200px; height: 200px;
+                    border-radius: 50%; pointer-events: none; filter: blur(8px);
+                    background: radial-gradient(circle, rgba(255,255,255,.2) 0%, transparent 70%);
+                }
+                @media (max-width: 920px) {
+                    .adm-bento-top { grid-template-columns: 1fr 1fr !important; }
+                    .adm-bento-top > .adm-hero-card { grid-column: 1 / -1 !important; }
+                }
+                @media (max-width: 560px) {
+                    .adm-bento-top { grid-template-columns: 1fr !important; }
+                    .adm-bento-top > .adm-hero-card { grid-column: auto !important; }
+                }
+            `}</style>
 
             {/* Backdrop mobile saat sidebar terbuka */}
             {isMobile && sideOpen && (
@@ -1293,43 +1317,67 @@ export default function AdminPanel() {
                                     <button onClick={() => setOverviewError('')} style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--red)' }}><X size={14} /></button>
                                 </div>
                             )}
-                            {/* Statistik hari ini */}
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginBottom: 20 }}>
+                            {/* ── BENTO: hero revenue + quick stats ── */}
+                            <div className="adm-bento-top" style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr', gap: 14, marginBottom: 14 }}>
+                                {/* Hero — Revenue hari ini */}
+                                <div className="adm-hero-card" style={{ position: 'relative', overflow: 'hidden', borderRadius: 18, padding: '22px 24px', background: 'linear-gradient(135deg, #2563EB 0%, #1D4ED8 55%, #1E3A8A 100%)', color: '#fff', boxShadow: '0 12px 32px rgba(37,99,235,.3), inset 0 1px 0 rgba(255,255,255,.16)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', minHeight: 150 }}>
+                                    <div className="adm-bento-pattern" />
+                                    <div className="adm-bento-glow" />
+                                    <div style={{ position: 'relative', zIndex: 1 }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                                            <span style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '.1em', color: 'rgba(255,255,255,.8)' }}>REVENUE HARI INI</span>
+                                            <div style={{ width: 36, height: 36, borderRadius: 11, background: 'rgba(255,255,255,.16)', border: '1px solid rgba(255,255,255,.22)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><TrendingUp size={18} /></div>
+                                        </div>
+                                        <div style={{ fontSize: 32, fontWeight: 800, letterSpacing: '-.02em', textShadow: '0 2px 8px rgba(0,0,0,.18)', lineHeight: 1.1 }}>Rp {revenueTodayIDR.toLocaleString('id-ID')}</div>
+                                    </div>
+                                    <div style={{ position: 'relative', zIndex: 1, display: 'flex', gap: 18, marginTop: 14, paddingTop: 14, borderTop: '1px solid rgba(255,255,255,.18)' }}>
+                                        <div>
+                                            <div style={{ fontSize: 19, fontWeight: 800 }}>{ordersToday.length}</div>
+                                            <div style={{ fontSize: 11, color: 'rgba(255,255,255,.7)' }}>Order hari ini</div>
+                                        </div>
+                                        <div>
+                                            <div style={{ fontSize: 19, fontWeight: 800 }}>{users.length}</div>
+                                            <div style={{ fontSize: 11, color: 'rgba(255,255,255,.7)' }}>Total user</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* 2 KPI ringkas */}
                                 {[
-                                    { l: 'Order Hari Ini', v: ordersToday.length, c: 'var(--yellow)', icon: <ShoppingCart size={16} /> },
-                                    { l: 'Revenue Hari Ini', v: `Rp ${revenueTodayIDR.toLocaleString('id-ID')}`, c: 'var(--green)', icon: <TrendingUp size={16} /> },
-                                    { l: 'Total User Terdaftar', v: users.length, c: '#8B5CF6', icon: <Users size={16} /> },
+                                    { label: 'Total Orders', value: orders.length, sub: `${orders.filter(o => o.status?.toLowerCase() === 'completed').length} completed · ${orders.filter(o => o.status?.toLowerCase() === 'processing').length} aktif`, icon: <ShoppingCart size={19} />, iconBg: 'var(--yellow-l)', iconColor: 'var(--yellow)' },
+                                    { label: 'Markup Aktif', value: `${markup}x`, sub: `+${Math.round((markup - 1) * 100)}% keuntungan`, icon: <Percent size={19} />, iconBg: 'rgba(233,30,99,.1)', iconColor: '#E91E63' },
                                 ].map(s => (
-                                    <div key={s.l} className="card" style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
-                                        <div style={{ width: 34, height: 34, borderRadius: 10, background: 'var(--bg2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: s.c, flexShrink: 0 }}>{s.icon}</div>
-                                        <div style={{ minWidth: 0 }}>
-                                            <div style={{ fontSize: 16, fontWeight: 800, color: s.c, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.v}</div>
-                                            <div style={{ fontSize: 11.5, color: 'var(--text3)' }}>{s.l}</div>
+                                    <div key={s.label} className="card adm-kpi-card" style={{ padding: 18, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', minHeight: 150, borderRadius: 16 }}>
+                                        <div style={{ width: 42, height: 42, borderRadius: 12, background: s.iconBg, color: s.iconColor, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{s.icon}</div>
+                                        <div>
+                                            <div style={{ fontSize: 26, fontWeight: 800, color: 'var(--text)', letterSpacing: '-.02em', marginBottom: 2 }}>{s.value}</div>
+                                            <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text2)', marginBottom: 2 }}>{s.label}</div>
+                                            <div style={{ fontSize: 11.5, color: 'var(--text3)' }}>{s.sub}</div>
                                         </div>
                                     </div>
                                 ))}
                             </div>
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 20 }}>
+
+                            {/* ── BENTO: saldo provider + total services ── */}
+                            <div className="adm-bento-mid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14, marginBottom: 14 }}>
                                 {[
                                     ...providerBalanceCards,
                                     { label: 'Total Services', value: services.length || '...', sub: `${[...new Set(services.map(s => s.category))].length} kategori`, icon: <Layers size={20} />, iconBg: 'var(--green-l)', iconColor: 'var(--green)', badge: `${services.length} layanan` },
-                                    { label: 'Total Orders', value: orders.length, sub: `${orders.filter(o => o.status?.toLowerCase() === 'completed').length} completed`, icon: <ShoppingCart size={20} />, iconBg: 'var(--yellow-l)', iconColor: 'var(--yellow)', badge: `${orders.filter(o => o.status?.toLowerCase() === 'processing').length} aktif` },
-                                    { label: 'Markup Aktif', value: `${markup}x`, sub: `+${Math.round((markup - 1) * 100)}% keuntungan`, icon: <Percent size={20} />, iconBg: 'rgba(233,30,99,.1)', iconColor: '#E91E63', badge: 'Persistent' },
-                                ].map((s, i) => (
-                                    <div key={s.label} className="card" style={{ padding: 20 }}>
-                                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, marginBottom: 12 }}>
+                                ].map((s) => (
+                                    <div key={s.label} className="card adm-kpi-card" style={{ padding: 18, borderRadius: 16 }}>
+                                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 14 }}>
                                             <div style={{ width: 42, height: 42, borderRadius: 12, background: s.iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center', color: s.iconColor, flexShrink: 0 }}>{s.icon}</div>
-                                            <div style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 700, color: 'var(--blue)', background: 'var(--blue-l)', padding: '3px 8px', borderRadius: 20 }}>{s.badge}</div>
+                                            <div style={{ marginLeft: 'auto', fontSize: 10.5, fontWeight: 700, color: s.badge === 'Error' ? 'var(--red)' : 'var(--blue)', background: s.badge === 'Error' ? 'var(--red-l)' : 'var(--blue-l)', padding: '3px 9px', borderRadius: 20 }}>{s.badge}</div>
                                         </div>
-                                        <div style={{ fontSize: 24, fontWeight: 800, color: 'var(--text)', marginBottom: 2 }}>{s.value}</div>
-                                        <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 2 }}>{s.label}</div>
+                                        <div style={{ fontSize: 23, fontWeight: 800, color: 'var(--text)', marginBottom: 2, letterSpacing: '-.02em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.value}</div>
+                                        <div style={{ fontSize: 12, color: 'var(--text2)', fontWeight: 600, marginBottom: 1 }}>{s.label}</div>
                                         <div style={{ fontSize: 11.5, color: 'var(--text3)' }}>{s.sub}</div>
                                     </div>
                                 ))}
                             </div>
 
                             {/* Revenue Summary */}
-                            <div className="card" style={{ padding: 22, marginBottom: 20 }}>
+                            <div className="card" style={{ padding: 22, marginBottom: 14, borderRadius: 16 }}>
                                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
                                     <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text)' }}>Revenue Summary · {statsOrders.length} order</div>
                                     <Dropdown width={170} value={statsPeriod} options={PERIOD_OPTIONS} onChange={setStatsPeriod} />
@@ -1350,8 +1398,8 @@ export default function AdminPanel() {
                             </div>
 
                             {/* Quick Stats + API Config */}
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
-                                <div className="card" style={{ padding: 20 }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14 }}>
+                                <div className="card" style={{ padding: 20, borderRadius: 16 }}>
                                     <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text)', marginBottom: 14 }}>Quick Stats</div>
                                     {[
                                         { l: 'Services Loaded', v: services.length, c: 'var(--blue)' },
@@ -1366,7 +1414,7 @@ export default function AdminPanel() {
                                         </div>
                                     ))}
                                 </div>
-                                <div className="card" style={{ padding: 20 }}>
+                                <div className="card" style={{ padding: 20, borderRadius: 16 }}>
                                     <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text)', marginBottom: 14 }}>API Configuration</div>
                                     {[
                                         { l: 'Provider URL', v: apiUrl || 'Not set' },

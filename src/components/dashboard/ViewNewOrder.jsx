@@ -196,27 +196,38 @@ export default function ViewNewOrder({ user, setMenu }) {
   // ✅ Fix: hapus guard apiUrl/effectiveApiKey — /api/smm baca SMM_API_KEY dari env server
   // Client tidak perlu tahu API key, cukup kirim auth token user
   useEffect(() => {
-    const CACHE_KEY = 'smm_services_cache';
+    const CACHE_KEY = 'smm_services_cache_v2';
+    const TS_KEY = 'smm_services_cache_ts';
+    const TTL = 1000 * 60 * 60 * 6; // 6 jam — anggap masih segar, skip refetch
     // 1. Tampilkan cache dulu kalau ada → instan, tanpa "Memuat layanan..."
+    //    Pakai localStorage (persist lintas tab/session), bukan sessionStorage.
     let hasCache = false;
+    let cacheFresh = false;
     if (typeof window !== 'undefined') {
       try {
-        const cached = JSON.parse(sessionStorage.getItem(CACHE_KEY) || 'null');
+        const cached = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
+        const ts = Number(localStorage.getItem(TS_KEY) || 0);
         if (Array.isArray(cached) && cached.length) {
           setServices(cached);
           hasCache = true;
+          cacheFresh = Date.now() - ts < TTL;
         }
       } catch { }
     }
-    // 2. Spinner hanya muncul saat belum ada cache (load pertama)
+    // 2. Kalau cache masih segar, jangan refetch sama sekali → hemat waktu & beban provider.
+    if (cacheFresh) { setLoadingServices(false); return; }
+    // 3. Spinner hanya muncul saat belum ada cache (load pertama benar-benar kosong)
     if (!hasCache) setLoadingServices(true);
     setError('');
-    // 3. Revalidate di belakang — data terbaru tetap di-fetch & cache diperbarui
+    // 4. Revalidate di belakang — data terbaru tetap di-fetch & cache diperbarui
     api.getServices()
       .then(svcs => {
         const arr = Array.isArray(svcs) ? svcs : [];
         setServices(arr);
-        try { sessionStorage.setItem(CACHE_KEY, JSON.stringify(arr)); } catch { }
+        try {
+          localStorage.setItem(CACHE_KEY, JSON.stringify(arr));
+          localStorage.setItem(TS_KEY, String(Date.now()));
+        } catch { }
       })
       .catch(e => { if (!hasCache) setError(e.message); }) // jangan timpa data cache kalau revalidate gagal
       .finally(() => { setLoadingServices(false); });
@@ -456,25 +467,25 @@ export default function ViewNewOrder({ user, setMenu }) {
         </div>
       </div>
 
-      {/* Stat cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 18 }} className="ns-stat-grid">
+      {/* Stat cards — bento grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 18 }} className="ns-stat-grid">
         {/* mobile-first: default 2 kolom; 4 kolom di desktop diatur via CSS .ns-stat-grid */}
         {[
-          { icon: <CreditCard size={20} />, iconBg: 'var(--blue-l)', iconColor: 'var(--blue)', label: 'Saldo Akun', value: balance !== null ? `Rp ${(typeof balance === 'number' ? balance : Math.round(parseFloat(balance || 0) * rate)).toLocaleString('id-ID')}` : <Shimmer w={110} />, action: 'Tambah Saldo', actionColor: 'var(--blue)', actionBg: 'var(--blue-l)', target: 'Add Funds' },
-          { icon: <Package size={20} />, iconBg: 'var(--green-l)', iconColor: 'var(--green)', label: 'Total Layanan', value: services.length > 0 ? services.length : (loadingServices ? <Shimmer w={44} /> : '—'), action: 'Buat Order', actionColor: 'var(--green)', actionBg: 'var(--green-l)', target: 'New Order' },
-          { icon: <Activity size={20} />, iconBg: 'var(--red-l)', iconColor: 'var(--red)', label: 'Pesanan Saya', value: orderCount !== null ? orderCount : <Shimmer w={36} />, action: 'Lihat Pesanan', actionColor: 'var(--red)', actionBg: 'var(--red-l)', target: 'My Orders' },
-          { icon: <CheckCircle size={20} />, iconBg: 'var(--green-l)', iconColor: 'var(--green)', label: 'Pesanan Berhasil', value: completedCount !== null ? completedCount : <Shimmer w={36} />, action: 'Lihat Pesanan', actionColor: 'var(--green)', actionBg: 'var(--green-l)', target: 'My Orders' },
+          { icon: <CreditCard size={19} />, iconBg: 'var(--blue-l)', iconColor: 'var(--blue)', label: 'Saldo Akun', value: balance !== null ? `Rp ${(typeof balance === 'number' ? balance : Math.round(parseFloat(balance || 0) * rate)).toLocaleString('id-ID')}` : <Shimmer w={110} />, action: 'Tambah Saldo', actionColor: 'var(--blue)', actionBg: 'var(--blue-l)', target: 'Add Funds' },
+          { icon: <Package size={19} />, iconBg: 'var(--green-l)', iconColor: 'var(--green)', label: 'Total Layanan', value: services.length > 0 ? services.length : (loadingServices ? <Shimmer w={44} /> : '—'), action: 'Buat Order', actionColor: 'var(--green)', actionBg: 'var(--green-l)', target: 'New Order' },
+          { icon: <Activity size={19} />, iconBg: 'var(--red-l)', iconColor: 'var(--red)', label: 'Pesanan Saya', value: orderCount !== null ? orderCount : <Shimmer w={36} />, action: 'Lihat Pesanan', actionColor: 'var(--red)', actionBg: 'var(--red-l)', target: 'My Orders' },
+          { icon: <CheckCircle size={19} />, iconBg: 'var(--green-l)', iconColor: 'var(--green)', label: 'Pesanan Berhasil', value: completedCount !== null ? completedCount : <Shimmer w={36} />, action: 'Lihat Pesanan', actionColor: 'var(--green)', actionBg: 'var(--green-l)', target: 'My Orders' },
         ].map((s, i) => (
-          <div key={i} className="card ns-stat-card" style={{ padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-            <div className="ns-stat-top" style={{ padding: '16px 18px 14px', display: 'flex', alignItems: 'center', gap: 13 }}>
-              <div className="ns-stat-ico" style={{ width: 44, height: 44, borderRadius: 13, background: s.iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center', color: s.iconColor, flexShrink: 0 }}>{s.icon}</div>
-              <div style={{ minWidth: 0 }}>
-                <div className="ns-stat-label" style={{ fontSize: 12, color: 'var(--text3)', fontWeight: 600, marginBottom: 3 }}>{s.label}</div>
-                <div className="ns-stat-val" style={{ fontSize: 22, fontWeight: 800, color: 'var(--text)', letterSpacing: '-.02em', lineHeight: 1.05 }}>{s.value}</div>
+          <div key={i} className="card ns-stat-card" style={{ padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', borderRadius: 16 }}>
+            <div className="ns-stat-top" style={{ padding: '14px 15px 12px', display: 'flex', alignItems: 'center', gap: 11, flex: 1 }}>
+              <div className="ns-stat-ico" style={{ width: 42, height: 42, borderRadius: 12, background: s.iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center', color: s.iconColor, flexShrink: 0 }}>{s.icon}</div>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div className="ns-stat-label" style={{ fontSize: 11.5, color: 'var(--text3)', fontWeight: 600, marginBottom: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.label}</div>
+                <div className="ns-stat-val" style={{ fontSize: 17, fontWeight: 800, color: 'var(--text)', letterSpacing: '-.03em', lineHeight: 1.1, wordBreak: 'break-word' }}>{s.value}</div>
               </div>
             </div>
-            <button onClick={() => setMenu(s.target)} className="ns-stat-btn" style={{ width: '100%', marginTop: 'auto', padding: '11px 18px', background: s.actionBg, border: 'none', borderTop: '1px solid var(--border)', borderRadius: '0 0 17px 17px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, fontFamily: "'Outfit',sans-serif", fontWeight: 700, fontSize: 13, color: s.actionColor }}>
-              <span style={{ minWidth: 0 }}>{s.action}</span> <ArrowRight size={15} style={{ flexShrink: 0 }} />
+            <button onClick={() => setMenu(s.target)} className="ns-stat-btn" style={{ width: '100%', padding: '10px 15px', background: s.actionBg, border: 'none', borderTop: '1px solid var(--border)', borderRadius: '0 0 16px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, fontFamily: "'Outfit',sans-serif", fontWeight: 700, fontSize: 12.5, color: s.actionColor }}>
+              <span style={{ minWidth: 0, whiteSpace: 'nowrap' }}>{s.action}</span> <ArrowRight size={14} style={{ flexShrink: 0 }} />
             </button>
           </div>
         ))}
@@ -1079,6 +1090,7 @@ export default function ViewNewOrder({ user, setMenu }) {
           margin: 0;
         }
         .ns-stat-btn:hover { filter: brightness(.97); }
+        .ns-stat-grid { grid-auto-rows: 1fr; }
         .ns-order-grid { max-width: 100%; }
         .ns-order-grid > * { min-width: 0; }
         @media (min-width: 981px) {
@@ -1086,11 +1098,12 @@ export default function ViewNewOrder({ user, setMenu }) {
           .ns-stat-grid { grid-template-columns: repeat(4, 1fr) !important; }
         }
         @media (max-width: 600px) {
-          .ns-stat-top { padding: 13px 13px 11px !important; gap: 10px !important; }
-          .ns-stat-ico { width: 38px !important; height: 38px !important; border-radius: 11px !important; }
-          .ns-stat-label { font-size: 11px !important; line-height: 1.25; }
-          .ns-stat-val { font-size: 18px !important; }
-          .ns-stat-btn { padding: 9px 13px !important; font-size: 12px !important; }
+          .ns-stat-grid { gap: 9px !important; }
+          .ns-stat-top { padding: 12px 12px 10px !important; gap: 9px !important; }
+          .ns-stat-ico { width: 36px !important; height: 36px !important; border-radius: 11px !important; }
+          .ns-stat-label { font-size: 10.5px !important; }
+          .ns-stat-val { font-size: 14px !important; letter-spacing: -.04em !important; }
+          .ns-stat-btn { padding: 9px 12px !important; font-size: 11.5px !important; }
         }
       `}</style>
     </div>

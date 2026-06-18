@@ -15,6 +15,9 @@ body {
   min-height: 100dvh;
   overflow-x: hidden;
   width: 100%;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 :root {
@@ -1679,5 +1682,188 @@ canvas {
   /* Tombol aksi kecil (mis. di tabel) boleh turun baris, jangan mepet */
   .usr-act {
     min-height: 40px;
+  }
+}
+
+/* ══════════════════════════════════════
+   POLISH GLOBAL v3 — smoothing sudah di body.
+   Selection brand + angka tabular + utility bento reusable.
+   Tempel di AKHIR globals.css. Pakai CSS var → ikut light/dark.
+   ══════════════════════════════════════ */
+
+/* ---- 1. Selection warna brand (biru) ---- */
+::selection {
+  background: rgba(37, 99, 235, .22);
+  color: var(--text);
+}
+
+.root.dark ::selection {
+  background: rgba(59, 130, 246, .3);
+}
+
+/* ---- 2. Angka rata lebar (saldo, harga, stat) → gak goyang saat berubah ---- */
+.tnum,
+.ns-stat-val,
+.ns-balance-card,
+.adm-hero-card,
+.adm-kpi-card,
+.landing-svc-price-val {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+/* ══════════════════════════════════════
+   3. UTILITY BENTO REUSABLE
+   Pengganti style inline berulang (ns-balance-card, adm-bento-*)
+   yang dipakai di dashboard, ViewAddFunds, & admin overview.
+   Cukup kasih class — pola/glow/shine otomatis.
+   ══════════════════════════════════════ */
+
+/* Wrapper kartu gradient mewah */
+.bento-grad {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  color: #fff;
+  background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 55%, #1E3A8A 100%);
+  box-shadow: 0 12px 32px rgba(37, 99, 235, .3), inset 0 1px 0 rgba(255, 255, 255, .16);
+}
+
+/* Pola titik halus + glow — auto via pseudo-element, gak perlu div ekstra */
+.bento-grad::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: .5;
+  background-image: radial-gradient(circle at 1px 1px, rgba(255, 255, 255, .16) 1px, transparent 0);
+  background-size: 14px 14px;
+  -webkit-mask-image: linear-gradient(135deg, #000 0%, transparent 68%);
+  mask-image: linear-gradient(135deg, #000 0%, transparent 68%);
+  z-index: 0;
+}
+
+/* Konten di atas pola */
+.bento-grad>* {
+  position: relative;
+  z-index: 1;
+}
+
+/* Glow lembut pojok kanan-atas */
+.bento-grad::after {
+  content: '';
+  position: absolute;
+  top: -50px;
+  right: -40px;
+  width: 180px;
+  height: 180px;
+  border-radius: 50%;
+  pointer-events: none;
+  filter: blur(7px);
+  background: radial-gradient(circle, rgba(255, 255, 255, .2) 0%, transparent 70%);
+  z-index: 0;
+}
+
+/* Shine sweep opsional — tambahkan class .bento-shine */
+@keyframes bentoShine {
+
+  0%,
+  65% {
+    left: -120%;
+  }
+
+  85%,
+  100% {
+    left: 160%;
+  }
+}
+
+.bento-shine .bento-sweep {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -120%;
+  width: 60%;
+  height: 100%;
+  pointer-events: none;
+  transform: skewX(-18deg);
+  background: linear-gradient(105deg, transparent, rgba(255, 255, 255, .2), transparent);
+  animation: bentoShine 5.5s ease-in-out infinite;
+  z-index: 0;
+}
+
+/* Kartu bento biasa (non-gradient) — lift halus saat hover */
+.bento-card {
+  transition: transform .18s ease, box-shadow .18s ease;
+}
+
+.bento-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow2);
+}
+
+/* Ikon dalam kotak frosted (dipakai di header kartu gradient) */
+.bento-ico {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 11px;
+  background: rgba(255, 255, 255, .16);
+  border: 1px solid rgba(255, 255, 255, .22);
+  flex-shrink: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bento-shine .bento-sweep {
+    animation: none;
+    display: none;
+  }
+}
+
+/* ══════════════════════════════════════
+   THEME TRANSITION — fade halus saat ganti light/dark.
+   Transisi warna di-scope agar TIDAK kena animasi lain
+   (transform/opacity tetap dipegang masing-masing komponen).
+   ══════════════════════════════════════ */
+
+.root,
+.root .card,
+.root .inp,
+.root .btn,
+.root th,
+.root td,
+.root .b-blue,
+.root .b-green,
+.root .b-red,
+.root .b-yellow,
+.root .b-gray,
+.root aside,
+.root header,
+.root .ns-topbar,
+.root .ns-top-btn,
+.root .bottom-nav-bar,
+.root .feature-card,
+.root .landing-svc-card {
+  transition:
+    background-color .35s ease,
+    border-color .35s ease,
+    color .35s ease,
+    box-shadow .35s ease;
+}
+
+/* Saat user set reduced-motion → langsung, tanpa fade */
+@media (prefers-reduced-motion: reduce) {
+
+  .root,
+  .root .card,
+  .root .inp,
+  .root .btn,
+  .root th,
+  .root td,
+  .root aside,
+  .root .ns-topbar,
+  .root .ns-top-btn,
+  .root .bottom-nav-bar {
+    transition: none;
   }
 }

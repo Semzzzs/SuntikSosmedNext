@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo, lazy, Suspense } from 'react';
 import { useRouter } from 'next/router';
 import {
-  ShoppingCart, Package, CreditCard, List,
+  ShoppingCart, Package, CreditCard, List, Wallet,
   ChevronRight, ChevronLeft, Bell, Moon, Sun, LogOut, Settings,
   Target, ChevronDown, X, Menu, Ticket, Phone, BarChart2, ArrowLeftRight, HelpCircle, MessageCircle, Newspaper,
   Check, Megaphone, Pin, Info, CheckCircle, AlertCircle, Zap, Clock
@@ -437,6 +437,36 @@ export default function DashboardPage() {
 
   return (
     <div className={`root${dark ? ' dark' : ''}`} style={{ display: 'flex', height: '100vh', overflow: 'hidden', fontFamily: "'Outfit',sans-serif" }}>
+      <style>{`
+        .ns-top-btn { transition: background .15s, border-color .15s, transform .1s; }
+        .ns-top-btn:hover { border-color: rgba(37,99,235,.4); background: var(--blue-l); }
+        .ns-top-btn:active { transform: scale(.93); }
+        @media (max-width: 600px) {
+          .ns-top-btn { width: 34px !important; height: 34px !important; border-radius: 9px !important; }
+          .ns-topbar { padding: 0 14px !important; gap: 8px !important; }
+        }
+        .ns-balance-card { isolation: isolate; }
+        .ns-balance-pattern {
+          position: absolute; inset: 0; pointer-events: none; opacity: .5;
+          background-image: radial-gradient(circle at 1px 1px, rgba(255,255,255,.16) 1px, transparent 0);
+          background-size: 13px 13px;
+          -webkit-mask-image: linear-gradient(135deg, #000 0%, transparent 65%);
+          mask-image: linear-gradient(135deg, #000 0%, transparent 65%);
+        }
+        .ns-balance-glow {
+          position: absolute; top: -45px; right: -35px; width: 150px; height: 150px;
+          border-radius: 50%; pointer-events: none; filter: blur(6px);
+          background: radial-gradient(circle, rgba(255,255,255,.22) 0%, transparent 70%);
+        }
+        .ns-balance-card::after {
+          content: ''; position: absolute; top: 0; left: -120%; width: 60%; height: 100%;
+          pointer-events: none; transform: skewX(-18deg);
+          background: linear-gradient(105deg, transparent, rgba(255,255,255,.2), transparent);
+          animation: nsShine 5.5s ease-in-out infinite;
+        }
+        @keyframes nsShine { 0%, 65% { left: -120%; } 85%, 100% { left: 160%; } }
+        @media (prefers-reduced-motion: reduce) { .ns-balance-card::after { display: none; } }
+      `}</style>
       {sideOpen && isMobile && (
         <div onClick={() => setSideOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.4)', zIndex: 30 }} />
       )}
@@ -457,10 +487,23 @@ export default function DashboardPage() {
 
         {/* Balance card */}
         {balance !== null && (
-          <div style={{ margin: '0 12px 10px', background: 'var(--blue)', borderRadius: 12, padding: '12px 14px' }}>
-            <div style={{ fontSize: 10, color: 'rgba(255,255,255,.7)', fontWeight: 600, marginBottom: 2 }}>SALDO SAYA</div>
-            <div style={{ fontSize: 18, fontWeight: 800, color: '#fff' }}>Rp {Math.round(balance || 0).toLocaleString('id-ID')}</div>
-            <button onClick={() => setMenuAndSave('Add Funds')} style={{ marginTop: 8, background: 'rgba(255,255,255,.2)', border: 'none', borderRadius: 7, padding: '5px 10px', fontSize: 11, fontWeight: 700, color: '#fff', cursor: 'pointer', fontFamily: "'Outfit',sans-serif" }}>+ Add Funds</button>
+          <div className="ns-balance-card" style={{ position: 'relative', overflow: 'hidden', margin: '0 12px 10px', background: 'linear-gradient(135deg, #2563EB 0%, #1D4ED8 55%, #1E3A8A 100%)', borderRadius: 14, padding: '14px 15px', boxShadow: '0 8px 22px rgba(37,99,235,.3), inset 0 1px 0 rgba(255,255,255,.16)' }}>
+            <div className="ns-balance-pattern" />
+            <div className="ns-balance-glow" />
+            <div style={{ position: 'relative', zIndex: 1 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                <span style={{ fontSize: 10, color: 'rgba(255,255,255,.78)', fontWeight: 700, letterSpacing: '.1em' }}>SALDO SAYA</span>
+                <div style={{ width: 28, height: 28, borderRadius: 9, background: 'rgba(255,255,255,.16)', border: '1px solid rgba(255,255,255,.22)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Wallet size={14} style={{ color: '#fff' }} />
+                </div>
+              </div>
+              <div style={{ fontSize: 19, fontWeight: 800, color: '#fff', letterSpacing: '-.02em', textShadow: '0 2px 8px rgba(0,0,0,.18)' }}>Rp {Math.round(balance || 0).toLocaleString('id-ID')}</div>
+              <button onClick={() => setMenuAndSave('Add Funds')} style={{ marginTop: 10, width: '100%', background: 'rgba(255,255,255,.18)', border: '1px solid rgba(255,255,255,.25)', borderRadius: 9, padding: '7px 10px', fontSize: 11.5, fontWeight: 700, color: '#fff', cursor: 'pointer', fontFamily: "'Outfit',sans-serif", display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, backdropFilter: 'blur(4px)', transition: 'background .15s' }}
+                onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,.28)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,.18)'}>
+                <CreditCard size={13} /> Add Funds
+              </button>
+            </div>
           </div>
         )}
 
@@ -495,7 +538,7 @@ export default function DashboardPage() {
       {/* MAIN */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', marginLeft: 0 }}>
         {/* Topbar */}
-        <div style={{ height: 58, background: 'var(--white)', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', padding: '0 24px', gap: 12, flexShrink: 0 }}>
+        <div className="ns-topbar" style={{ height: 58, background: 'var(--white)', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', padding: '0 24px', gap: 12, flexShrink: 0 }}>
           {!sideOpen && (
             <button onClick={() => setSideOpen(true)} style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 8, padding: '7px 8px', cursor: 'pointer', color: 'var(--text2)', display: 'flex', marginRight: 8 }}>
               <Menu size={17} />
@@ -505,12 +548,12 @@ export default function DashboardPage() {
             <span>Dashboard</span><ChevronRight size={13} />
             <span style={{ color: 'var(--text)', fontWeight: 600 }}>{menu}</span>
           </div>
-          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
-            <button onClick={toggle} style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 8, padding: '7px 8px', cursor: 'pointer', color: 'var(--text2)', display: 'flex' }}>
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button onClick={toggle} className="ns-top-btn" style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 10, cursor: 'pointer', color: 'var(--text2)', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, flexShrink: 0 }}>
               {dark ? <Sun size={16} /> : <Moon size={16} />}
             </button>
             <div style={{ position: 'relative' }}>
-              <button onClick={() => { setNotifOpen(v => !v); setProfileOpen(false); }} style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 8, padding: '7px 8px', cursor: 'pointer', color: 'var(--text2)', display: 'flex', position: 'relative' }}>
+              <button onClick={() => { setNotifOpen(v => !v); setProfileOpen(false); }} className="ns-top-btn" style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 10, cursor: 'pointer', color: 'var(--text2)', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, flexShrink: 0, position: 'relative' }}>
                 <Bell size={16} />
                 {unreadCount > 0 && (
                   <span style={{ position: 'absolute', top: 4, right: 4, width: 16, height: 16, background: 'var(--red)', borderRadius: '50%', border: '1.5px solid var(--white)', fontSize: 9, fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -551,7 +594,7 @@ export default function DashboardPage() {
               )}
             </div>
             <div style={{ position: 'relative' }}>
-              <button ref={profileBtnRef} onClick={handleProfileOpen} style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 9, padding: '5px', cursor: 'pointer', display: 'flex', alignItems: 'center', fontFamily: "'Outfit',sans-serif" }}>
+              <button ref={profileBtnRef} onClick={handleProfileOpen} className="ns-top-btn" style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, flexShrink: 0, padding: 0, overflow: 'hidden', fontFamily: "'Outfit',sans-serif" }}>
                 <Avatar seed={user?.email || user?.name} fallback={user?.initials?.charAt(0) || 'U'} size={28} radius={8} fontSize={12} />
               </button>
               {profileOpen && !isMobile && (

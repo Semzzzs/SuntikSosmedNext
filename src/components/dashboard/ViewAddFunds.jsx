@@ -547,15 +547,22 @@ export default function ViewAddFunds({ user, balance: balanceProp = null }) {
 
       {/* Balance card — mobile only */}
       <div className="addfunds-balance-mobile" style={{ marginBottom: 14 }}>
-        <div style={{ background: 'linear-gradient(135deg, var(--blue), #1D4ED8)', borderRadius: 14, padding: '16px 18px', color: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <div style={{ fontSize: 10.5, color: 'rgba(255,255,255,.65)', fontWeight: 600, marginBottom: 2, letterSpacing: '.06em' }}>SALDO SAAT INI</div>
-            <div style={{ fontSize: 22, fontWeight: 800 }}>{balanceIDR !== null ? formatIDR(balanceIDR) : '—'}</div>
+        <div className="ns-balance-card" style={{ position: 'relative', overflow: 'hidden', background: 'linear-gradient(135deg, #2563EB 0%, #1D4ED8 55%, #1E3A8A 100%)', borderRadius: 16, padding: '16px 18px', color: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 10px 26px rgba(37,99,235,.3), inset 0 1px 0 rgba(255,255,255,.16)' }}>
+          <div className="ns-balance-pattern" />
+          <div className="ns-balance-glow" />
+          <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ width: 40, height: 40, borderRadius: 12, background: 'rgba(255,255,255,.16)', border: '1px solid rgba(255,255,255,.22)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, backdropFilter: 'blur(4px)' }}>
+              <Wallet size={19} />
+            </div>
+            <div>
+              <div style={{ fontSize: 10.5, color: 'rgba(255,255,255,.78)', fontWeight: 700, marginBottom: 2, letterSpacing: '.1em' }}>SALDO SAAT INI</div>
+              <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-.02em', textShadow: '0 2px 8px rgba(0,0,0,.18)' }}>{balanceIDR !== null ? formatIDR(balanceIDR) : '—'}</div>
+            </div>
           </div>
           {numIDR > 0 && (
-            <div style={{ fontSize: 12, color: 'rgba(255,255,255,.8)', textAlign: 'right' }}>
-              <div style={{ fontSize: 10, marginBottom: 2 }}>Setelah top up</div>
-              <strong>{formatIDR((balanceIDR || 0) + receiveIDR)}</strong>
+            <div style={{ position: 'relative', zIndex: 1, fontSize: 12, color: 'rgba(255,255,255,.85)', textAlign: 'right' }}>
+              <div style={{ fontSize: 10, marginBottom: 2, color: 'rgba(255,255,255,.7)' }}>Setelah top up</div>
+              <strong style={{ color: '#fff' }}>{formatIDR((balanceIDR || 0) + receiveIDR)}</strong>
             </div>
           )}
         </div>
@@ -805,20 +812,27 @@ export default function ViewAddFunds({ user, balance: balanceProp = null }) {
         {/* RIGHT SIDEBAR */}
         <div style={{ display: step === 3 ? 'none' : 'flex', flexDirection: 'column', gap: 14 }}>
           {/* Balance */}
-          <div className="addfunds-sidebar-balance" style={{ background: 'linear-gradient(135deg, var(--blue), #1D4ED8)', borderRadius: 18, padding: '22px 20px', color: '#fff' }}>
-            <div style={{ fontSize: 11, color: 'rgba(255,255,255,.65)', fontWeight: 600, marginBottom: 4, letterSpacing: '.06em' }}>SALDO SAAT INI</div>
-            <div style={{ fontSize: 28, fontWeight: 800, marginBottom: 4 }}>
-              {balanceIDR !== null ? formatIDR(balanceIDR) : '—'}
-            </div>
-            <div style={{ fontSize: 11.5, color: 'rgba(255,255,255,.5)', marginBottom: numIDR > 0 ? 8 : 0 }}>
-
-            </div>
-            {numIDR > 0 && (
-              <div style={{ fontSize: 12.5, color: 'rgba(255,255,255,.8)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                <ArrowRight size={13} />
-                Setelah top up: <strong>{formatIDR((balanceIDR || 0) + receiveIDR)}</strong>
+          <div className="addfunds-sidebar-balance ns-balance-card" style={{ position: 'relative', overflow: 'hidden', background: 'linear-gradient(135deg, #2563EB 0%, #1D4ED8 55%, #1E3A8A 100%)', borderRadius: 18, padding: '22px 20px', color: '#fff', boxShadow: '0 12px 32px rgba(37,99,235,.32), inset 0 1px 0 rgba(255,255,255,.16)' }}>
+            {/* pola halus + glow */}
+            <div className="ns-balance-pattern" />
+            <div className="ns-balance-glow" />
+            <div style={{ position: 'relative', zIndex: 1 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <span style={{ fontSize: 11, color: 'rgba(255,255,255,.78)', fontWeight: 700, letterSpacing: '.1em' }}>SALDO SAAT INI</span>
+                <div style={{ width: 34, height: 34, borderRadius: 11, background: 'rgba(255,255,255,.16)', border: '1px solid rgba(255,255,255,.22)', display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)' }}>
+                  <Wallet size={17} />
+                </div>
               </div>
-            )}
+              <div style={{ fontSize: 28, fontWeight: 800, marginBottom: 4, letterSpacing: '-.02em', textShadow: '0 2px 8px rgba(0,0,0,.18)' }}>
+                {balanceIDR !== null ? formatIDR(balanceIDR) : '—'}
+              </div>
+              {numIDR > 0 && (
+                <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid rgba(255,255,255,.18)', fontSize: 12.5, color: 'rgba(255,255,255,.85)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <ArrowRight size={13} />
+                  Setelah top up: <strong style={{ color: '#fff' }}>{formatIDR((balanceIDR || 0) + receiveIDR)}</strong>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Crypto bonus */}
@@ -953,6 +967,45 @@ export default function ViewAddFunds({ user, balance: balanceProp = null }) {
           bottom: -90px; right: 120px;
           width: 200px; height: 200px;
           background: radial-gradient(circle, rgba(139,92,246,.12) 0%, transparent 70%);
+        }
+        /* ── Card saldo mewah: pola halus + glow + shine ── */
+        .ns-balance-card { isolation: isolate; }
+        .ns-balance-pattern {
+          position: absolute;
+          inset: 0;
+          pointer-events: none;
+          opacity: .5;
+          background-image:
+            radial-gradient(circle at 1px 1px, rgba(255,255,255,.16) 1px, transparent 0);
+          background-size: 14px 14px;
+          -webkit-mask-image: linear-gradient(135deg, #000 0%, transparent 65%);
+          mask-image: linear-gradient(135deg, #000 0%, transparent 65%);
+        }
+        .ns-balance-glow {
+          position: absolute;
+          top: -50px; right: -40px;
+          width: 180px; height: 180px;
+          border-radius: 50%;
+          pointer-events: none;
+          background: radial-gradient(circle, rgba(255,255,255,.22) 0%, transparent 70%);
+          filter: blur(6px);
+        }
+        .ns-balance-card::after {
+          content: '';
+          position: absolute;
+          top: 0; left: -120%;
+          width: 60%; height: 100%;
+          pointer-events: none;
+          background: linear-gradient(105deg, transparent, rgba(255,255,255,.22), transparent);
+          transform: skewX(-18deg);
+          animation: nsShine 5.5s ease-in-out infinite;
+        }
+        @keyframes nsShine {
+          0%, 65% { left: -120%; }
+          85%, 100% { left: 160%; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .ns-balance-card::after { animation: none; display: none; }
         }
       `}</style>
     </div>
