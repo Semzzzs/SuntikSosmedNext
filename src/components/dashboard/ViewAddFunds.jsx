@@ -17,6 +17,7 @@ const METHODS = [
     desc: 'Scan QR dari semua bank & e-wallet',
     fee: 'Fee Rp 200 + 0.7%',
     time: 'Instan',
+    maintenance: true,
   },
   {
     id: 'manual',
@@ -84,7 +85,7 @@ const formatIDR = (num) => {
 
 export default function ViewAddFunds({ user, balance: balanceProp = null }) {
   const { apiUrl, apiKey } = useApi();
-  const [method, setMethod] = useState('qris');
+  const [method, setMethod] = useState('manual');
   const handleMethodChange = (m) => {
     setMethod(m);
     const min = m === 'qris' ? 10000 : 5000;
@@ -659,22 +660,33 @@ export default function ViewAddFunds({ user, balance: balanceProp = null }) {
                 <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text)', marginBottom: 14 }}>Metode Pembayaran</div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
                   {METHODS.map(m => (
-                    <button key={m.id} onClick={() => !m.coming_soon && handleMethodChange(m.id)}
-                      style={{ padding: '14px 16px', borderRadius: 14, border: `2px solid ${method === m.id ? m.color : 'var(--border)'}`, background: method === m.id ? m.bg : 'var(--bg2)', cursor: m.coming_soon ? 'not-allowed' : 'pointer', textAlign: 'left', transition: 'all .18s', position: 'relative', overflow: 'hidden', fontFamily: "'Outfit',sans-serif", opacity: m.coming_soon ? 0.6 : 1 }}>
+                    <button key={m.id} onClick={() => !m.coming_soon && !m.maintenance && handleMethodChange(m.id)}
+                      style={{ padding: '14px 16px', borderRadius: 14, border: `2px solid ${method === m.id && !m.maintenance ? m.color : m.maintenance ? 'rgba(239,68,68,.35)' : 'var(--border)'}`, background: m.maintenance ? 'rgba(239,68,68,.04)' : method === m.id ? m.bg : 'var(--bg2)', cursor: m.coming_soon || m.maintenance ? 'not-allowed' : 'pointer', textAlign: 'left', transition: 'all .18s', position: 'relative', overflow: 'hidden', fontFamily: "'Outfit',sans-serif", opacity: m.coming_soon || m.maintenance ? 0.75 : 1 }}>
+                      {/* Maintenance overlay */}
+                      {m.maintenance && (
+                        <>
+                          <div style={{ position: 'absolute', inset: 0, borderRadius: 12, background: 'repeating-linear-gradient(45deg, transparent, transparent 8px, rgba(239,68,68,.04) 8px, rgba(239,68,68,.04) 16px)', pointerEvents: 'none' }} />
+                          <div style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(239,68,68,.12)', color: '#EF4444', fontSize: 9.5, fontWeight: 800, padding: '3px 8px', borderRadius: 20, border: '1px solid rgba(239,68,68,.3)', display: 'flex', alignItems: 'center', gap: 4 }}>🔧 Maintenance</div>
+                        </>
+                      )}
                       {/* Coming Soon overlay */}
                       {m.coming_soon && (
                         <div style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(247,147,26,.15)', color: '#F7931A', fontSize: 9.5, fontWeight: 800, padding: '3px 8px', borderRadius: 20, border: '1px solid rgba(247,147,26,.3)' }}>🕐 Akan Datang</div>
                       )}
-                      {!m.coming_soon && m.badge && (
+                      {!m.coming_soon && !m.maintenance && m.badge && (
                         <div style={{ position: 'absolute', top: 8, right: 8, background: m.badgeBg, color: m.badgeColor, fontSize: 9.5, fontWeight: 800, padding: '2px 7px', borderRadius: 20 }}>{m.badge}</div>
                       )}
-                      <div style={{ color: method === m.id ? m.color : 'var(--text3)', marginBottom: 8 }}>{m.icon}</div>
-                      <div style={{ fontSize: 13.5, fontWeight: 700, color: method === m.id ? 'var(--text)' : 'var(--text2)', marginBottom: 2 }}>{m.label}</div>
-                      <div style={{ fontSize: 11.5, color: 'var(--text3)', marginBottom: 8 }}>{m.desc}</div>
-                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                        <span style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--green)', background: 'var(--green-l)', padding: '2px 7px', borderRadius: 20 }}>{m.fee}</span>
-                        <span style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--text3)', background: 'var(--bg2)', border: '1px solid var(--border)', padding: '2px 7px', borderRadius: 20, display: 'flex', alignItems: 'center', gap: 3 }}><Clock size={9} />{m.time}</span>
-                      </div>
+                      <div style={{ color: m.maintenance ? '#EF4444' : method === m.id ? m.color : 'var(--text3)', marginBottom: 8 }}>{m.icon}</div>
+                      <div style={{ fontSize: 13.5, fontWeight: 700, color: m.maintenance ? '#EF4444' : method === m.id ? 'var(--text)' : 'var(--text2)', marginBottom: 2 }}>{m.label}</div>
+                      <div style={{ fontSize: 11.5, color: 'var(--text3)', marginBottom: 8 }}>{m.maintenance ? 'Sedang dalam perbaikan sementara' : m.desc}</div>
+                      {m.maintenance ? (
+                        <div style={{ fontSize: 10.5, fontWeight: 700, color: '#EF4444', background: 'rgba(239,68,68,.08)', border: '1px solid rgba(239,68,68,.25)', padding: '3px 9px', borderRadius: 20, display: 'inline-flex', alignItems: 'center', gap: 4 }}>⏳ Tidak tersedia saat ini</div>
+                      ) : (
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                          <span style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--green)', background: 'var(--green-l)', padding: '2px 7px', borderRadius: 20 }}>{m.fee}</span>
+                          <span style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--text3)', background: 'var(--bg2)', border: '1px solid var(--border)', padding: '2px 7px', borderRadius: 20, display: 'flex', alignItems: 'center', gap: 3 }}><Clock size={9} />{m.time}</span>
+                        </div>
+                      )}
                     </button>
                   ))}
                 </div>
@@ -739,9 +751,14 @@ export default function ViewAddFunds({ user, balance: balanceProp = null }) {
                   </div>
                 )}
 
+                {selectedMethod?.maintenance && (
+                  <div style={{ background: 'rgba(239,68,68,.08)', border: '1.5px solid rgba(239,68,68,.3)', borderRadius: 10, padding: '10px 14px', fontSize: 13, color: '#EF4444', fontWeight: 600, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    🔧 <span>Deposit QRIS <strong>sedang maintenance</strong>. Silakan gunakan metode lain atau coba lagi nanti.</span>
+                  </div>
+                )}
                 <button className="btn btn-blue" onClick={() => setStep(2)}
-                  disabled={!numIDR || (method === 'qris' && numIDR < 10000) || (method === 'crypto' && numIDR < 10000) || selectedMethod?.coming_soon}
-                  style={{ width: '100%', padding: 13, borderRadius: 11, fontSize: 14.5, opacity: (!numIDR || (method === 'qris' && numIDR < 10000) || (method === 'crypto' && numIDR < 10000) || selectedMethod?.coming_soon) ? 0.5 : 1 }}>
+                  disabled={!numIDR || (method === 'qris' && numIDR < 10000) || (method === 'crypto' && numIDR < 10000) || selectedMethod?.coming_soon || selectedMethod?.maintenance}
+                  style={{ width: '100%', padding: 13, borderRadius: 11, fontSize: 14.5, opacity: (!numIDR || (method === 'qris' && numIDR < 10000) || (method === 'crypto' && numIDR < 10000) || selectedMethod?.coming_soon || selectedMethod?.maintenance) ? 0.5 : 1 }}>
                   Lanjut ke Pembayaran <ArrowRight size={16} />
                 </button>
                 {numIDR > 0 && numIDR < minAmount && (
