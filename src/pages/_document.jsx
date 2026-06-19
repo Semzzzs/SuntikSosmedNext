@@ -1,9 +1,37 @@
 import { Html, Head, Main, NextScript } from 'next/document';
 
+// ✅ Anti-flash tema: script ini di-inject sebagai inline <script> mentah,
+// dieksekusi sinkron oleh browser SEBELUM React/Next.js mulai hydrate.
+// Ia membaca localStorage dan langsung menambahkan class "dark" ke <html>
+// kalau perlu — sehingga begitu pertama kali browser melukis (paint),
+// tema yang benar sudah aktif. Tidak ada lagi kedipan terang→gelap.
+//
+// Catatan penting: STORAGE_KEY di sini harus selalu sama persis dengan
+// `storageKey` yang dipakai di <ThemeProvider storageKey="..."> pada _app.jsx.
+// Kalau kamu mengubah salah satunya, ubah juga yang lain.
+const STORAGE_KEY = 'theme_preference';
+
+const noFlashScript = `
+(function() {
+  try {
+    var stored = window.localStorage.getItem('${STORAGE_KEY}');
+    if (stored === 'dark') {
+      document.documentElement.classList.add('dark');
+    }
+  } catch (e) {
+    // localStorage tidak tersedia (private mode dsb) — biarkan default light,
+    // ThemeProvider akan tetap berjalan normal tanpa crash.
+  }
+})();
+`;
+
 export default function Document() {
   return (
     <Html lang="id">
       <Head>
+        {/* ✅ Anti-flash tema — HARUS paling atas, jalan sebelum CSS/font lain dimuat */}
+        <script dangerouslySetInnerHTML={{ __html: noFlashScript }} />
+
         {/* ❌ Viewport DIPINDAH ke _app.jsx (next/head).
             Next.js melarang <meta name="viewport"> di _document.js */}
 

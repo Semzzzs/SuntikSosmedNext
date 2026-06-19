@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo, lazy, Suspense } from 'react';
 import { useRouter } from 'next/router';
+import Head from 'next/head';
 import {
   ShoppingCart, Package, CreditCard, List, Wallet,
   ChevronRight, ChevronLeft, Bell, Moon, Sun, LogOut, Settings,
@@ -437,10 +438,11 @@ export default function DashboardPage() {
 
   return (
     <div className={`root${dark ? ' dark' : ''}`} style={{ display: 'flex', height: '100vh', overflow: 'hidden', fontFamily: "'Outfit',sans-serif" }}>
+      <Head>
+        {/* Cegah auto-zoom saat tap input di iOS & Android */}
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+      </Head>
       <style>{`
-        .ns-top-btn { transition: background .15s, border-color .15s, transform .1s; }
-        .ns-top-btn:hover { border-color: rgba(37,99,235,.4); background: var(--blue-l); }
-        .ns-top-btn:active { transform: scale(.93); }
         @media (max-width: 600px) {
           .ns-top-btn { width: 34px !important; height: 34px !important; border-radius: 9px !important; }
           .ns-topbar { padding: 0 14px !important; gap: 8px !important; }
@@ -538,25 +540,45 @@ export default function DashboardPage() {
       {/* MAIN */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', marginLeft: 0 }}>
         {/* Topbar */}
-        <div className="ns-topbar" style={{ height: 58, background: 'var(--white)', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', padding: '0 24px', gap: 12, flexShrink: 0 }}>
-          {!sideOpen && (
-            <button onClick={() => setSideOpen(true)} style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 8, padding: '7px 8px', cursor: 'pointer', color: 'var(--text2)', display: 'flex', marginRight: 8 }}>
-              <Menu size={17} />
-            </button>
+        <div className="ns-topbar" style={{ height: 62, background: 'var(--white)', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', padding: '0 20px', gap: 12, flexShrink: 0, position: 'relative', zIndex: 100 }}>
+          {/* Logo / hamburger kiri */}
+          {!sideOpen ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <button onClick={() => setSideOpen(true)}
+                style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 11, padding: '7px 8px', cursor: 'pointer', color: 'var(--text2)', display: 'flex', transition: 'all .15s' }}>
+                <Menu size={17} />
+              </button>
+              {/* Logo inline saat sidebar tutup */}
+              <div onClick={() => router.push('/')} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                <div style={{ width: 32, height: 32, borderRadius: 10, background: 'linear-gradient(135deg,#2563EB,#1D4ED8)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 12px rgba(37,99,235,.35)' }}>
+                  <img src="/logo.png" alt="SuntikSosmed" style={{ width: '70%', height: '70%', objectFit: 'contain' }} />
+                </div>
+                <span style={{ fontWeight: 800, fontSize: 16, color: 'var(--text)', letterSpacing: '-.02em', fontFamily: "'Outfit',sans-serif" }}>
+                  Suntik<span style={{ color: 'var(--blue)' }}>Sosmed</span>
+                </span>
+              </div>
+            </div>
+          ) : (
+            <div style={{ fontSize: 13, color: 'var(--text3)', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span>Dashboard</span><ChevronRight size={13} />
+              <span style={{ color: 'var(--text)', fontWeight: 600 }}>{menu}</span>
+            </div>
           )}
-          <div style={{ fontSize: 13, color: 'var(--text3)', display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span>Dashboard</span><ChevronRight size={13} />
-            <span style={{ color: 'var(--text)', fontWeight: 600 }}>{menu}</span>
-          </div>
-          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
-            <button onClick={toggle} className="ns-top-btn" style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 10, cursor: 'pointer', color: 'var(--text2)', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, flexShrink: 0 }}>
+
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
+            {/* Dark mode toggle — pill style */}
+            <button onClick={toggle} className="ns-top-btn"
+              style={{ background: dark ? 'rgba(59,130,246,.15)' : 'var(--bg2)', border: `1px solid ${dark ? 'rgba(59,130,246,.3)' : 'var(--border)'}`, borderRadius: 11, cursor: 'pointer', color: dark ? 'var(--blue)' : 'var(--text2)', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 38, height: 38, flexShrink: 0, transition: 'all .2s' }}>
               {dark ? <Sun size={16} /> : <Moon size={16} />}
             </button>
+
+            {/* Notif bell */}
             <div style={{ position: 'relative' }}>
-              <button onClick={() => { setNotifOpen(v => !v); setProfileOpen(false); }} className="ns-top-btn" style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 10, cursor: 'pointer', color: 'var(--text2)', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, flexShrink: 0, position: 'relative' }}>
+              <button onClick={() => { setNotifOpen(v => !v); setProfileOpen(false); }} className="ns-top-btn"
+                style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 11, cursor: 'pointer', color: 'var(--text2)', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 38, height: 38, flexShrink: 0, position: 'relative', transition: 'all .15s' }}>
                 <Bell size={16} />
                 {unreadCount > 0 && (
-                  <span style={{ position: 'absolute', top: 4, right: 4, width: 16, height: 16, background: 'var(--red)', borderRadius: '50%', border: '1.5px solid var(--white)', fontSize: 9, fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <span style={{ position: 'absolute', top: 5, right: 5, width: 15, height: 15, background: 'var(--red)', borderRadius: '50%', border: '1.5px solid var(--white)', fontSize: 9, fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     {unreadCount > 9 ? '9+' : unreadCount}
                   </span>
                 )}
@@ -593,9 +615,12 @@ export default function DashboardPage() {
                 </div>
               )}
             </div>
+
+            {/* Avatar / profile */}
             <div style={{ position: 'relative' }}>
-              <button ref={profileBtnRef} onClick={handleProfileOpen} className="ns-top-btn" style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, flexShrink: 0, padding: 0, overflow: 'hidden', fontFamily: "'Outfit',sans-serif" }}>
-                <Avatar seed={user?.email || user?.name} fallback={user?.initials?.charAt(0) || 'U'} size={28} radius={8} fontSize={12} />
+              <button ref={profileBtnRef} onClick={handleProfileOpen} className="ns-top-btn"
+                style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 38, height: 38, flexShrink: 0, padding: 0, overflow: 'hidden', fontFamily: "'Outfit',sans-serif", transition: 'all .15s' }}>
+                <Avatar seed={user?.email || user?.name} fallback={user?.initials?.charAt(0) || 'U'} size={30} radius={9} fontSize={12} />
               </button>
               {profileOpen && !isMobile && (
                 <div className="card fu" style={{ position: 'fixed', right: profileDropPos.right, top: profileDropPos.top, width: 220, zIndex: 9999, overflow: 'hidden', padding: '6px 0' }}>

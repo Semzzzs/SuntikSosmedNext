@@ -74,7 +74,7 @@ export default function MyApp({ Component, pageProps }) {
             viewport-fit=cover agar safe-area iPhone aktif. Tanpa user-scalable=no = accessible. */}
         <meta
           name="viewport"
-          content="width=device-width, initial-scale=1, viewport-fit=cover"
+          content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover"
         />
         {/* ✅ Title & description default — bisa di-override per halaman.
             Inilah yang tampil sebagai judul di hasil pencarian Google. */}

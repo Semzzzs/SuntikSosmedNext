@@ -480,8 +480,8 @@ export default function ViewNewOrder({ user, setMenu }) {
             <div className="ns-stat-top" style={{ padding: '14px 15px 12px', display: 'flex', alignItems: 'center', gap: 11, flex: 1 }}>
               <div className="ns-stat-ico" style={{ width: 42, height: 42, borderRadius: 12, background: s.iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center', color: s.iconColor, flexShrink: 0 }}>{s.icon}</div>
               <div style={{ minWidth: 0, flex: 1 }}>
-                <div className="ns-stat-label" style={{ fontSize: 11.5, color: 'var(--text3)', fontWeight: 600, marginBottom: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.label}</div>
-                <div className="ns-stat-val" style={{ fontSize: 17, fontWeight: 800, color: 'var(--text)', letterSpacing: '-.03em', lineHeight: 1.1, wordBreak: 'break-word' }}>{s.value}</div>
+                <div className="ns-stat-label" style={{ fontSize: 11.5, color: 'var(--text3)', fontWeight: 600, marginBottom: 3, lineHeight: 1.25, overflowWrap: 'break-word' }}>{s.label}</div>
+                <div className="ns-stat-val" style={{ fontSize: 17, fontWeight: 800, color: 'var(--text)', letterSpacing: '-.03em', lineHeight: 1.15, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.value}</div>
               </div>
             </div>
             <button onClick={() => setMenu(s.target)} className="ns-stat-btn" style={{ width: '100%', padding: '10px 15px', background: s.actionBg, border: 'none', borderTop: '1px solid var(--border)', borderRadius: '0 0 16px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, fontFamily: "'Outfit',sans-serif", fontWeight: 700, fontSize: 12.5, color: s.actionColor }}>
@@ -1098,12 +1098,14 @@ export default function ViewNewOrder({ user, setMenu }) {
           .ns-stat-grid { grid-template-columns: repeat(4, 1fr) !important; }
         }
         @media (max-width: 600px) {
-          .ns-stat-grid { gap: 9px !important; }
-          .ns-stat-top { padding: 12px 12px 10px !important; gap: 9px !important; }
-          .ns-stat-ico { width: 36px !important; height: 36px !important; border-radius: 11px !important; }
-          .ns-stat-label { font-size: 10.5px !important; }
-          .ns-stat-val { font-size: 14px !important; letter-spacing: -.04em !important; }
-          .ns-stat-btn { padding: 9px 12px !important; font-size: 11.5px !important; }
+          .ns-stat-grid { gap: 7px !important; }
+          .ns-stat-top { padding: 10px 10px 8px !important; gap: 7px !important; }
+          .ns-stat-ico { width: 30px !important; height: 30px !important; border-radius: 9px !important; }
+          .ns-stat-label { font-size: 10px !important; margin-bottom: 2px !important; }
+          .ns-stat-val { font-size: 13px !important; letter-spacing: -.04em !important; }
+          .ns-stat-btn { padding: 7px 10px !important; font-size: 11px !important; }
+          /* Saldo — nilai panjang "Rp 28.207" perlu lebih kecil */
+          .ns-stat-card:first-child .ns-stat-val { font-size: 12px !important; }
         }
       `}</style>
     </div>

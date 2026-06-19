@@ -448,13 +448,13 @@ export default function Landing() {
       </div>
 
       {/* ── NAVBAR ── */}
-      <nav style={{ position: 'relative', zIndex: 50, maxWidth: 1160, margin: '0 auto', padding: '18px 24px 0' }}>
+      <nav style={{ position: 'relative', zIndex: 50, maxWidth: 1160, margin: '0 auto', padding: '18px 16px 0' }}>
         <div style={{
           background: dark ? 'rgba(15,15,20,.97)' : 'rgba(255,255,255,.96)',
           backdropFilter: 'blur(20px)',
           border: dark ? '1px solid var(--border)' : '1px solid rgba(37,99,235,.12)',
           borderRadius: 14,
-          padding: '8px 12px',
+          padding: '10px 14px',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           overflow: 'hidden',
           boxShadow: navScrolled
@@ -478,7 +478,7 @@ export default function Landing() {
               )
             ))}
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
             <button onClick={toggle} aria-label="Ganti tema" className="nav-icon-btn" style={{ background: 'var(--bg2)', border: '1px solid var(--border)', cursor: 'pointer', color: 'var(--text2)', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 40, height: 40, borderRadius: 11, flexShrink: 0 }}>
               {dark ? <Sun size={18} /> : <Moon size={18} />}
             </button>
@@ -636,14 +636,14 @@ export default function Landing() {
           </div>
 
           {/* Stat counters — fakta platform, bukan klaim volume palsu */}
-          <div className="hero-stats" style={{ display: 'flex', justifyContent: 'center', gap: 'clamp(20px, 6vw, 56px)', marginBottom: 36, flexWrap: 'wrap' }}>
+          <div className="hero-stats hero-stats-grid" style={{ display: 'flex', justifyContent: 'center', gap: 'clamp(20px, 6vw, 56px)', marginBottom: 36, flexWrap: 'wrap' }}>
             {[
               { val: 2288, decimals: 0, suffix: '+', label: 'Layanan tersedia' },
               { val: 20, decimals: 0, prefix: '', suffix: '', label: 'Platform didukung' },
               { val: 1, decimals: 0, prefix: 'Rp ', suffix: ' Perak', label: 'Harga mulai dari' },
               { val: 24, decimals: 0, suffix: '/7', label: 'Proses & support' },
             ].map(s => (
-              <div key={s.label} style={{ textAlign: 'center' }}>
+              <div key={s.label} className="hero-stat-item" style={{ textAlign: 'center' }}>
                 <div style={{ fontSize: 'clamp(24px, 5vw, 34px)', fontWeight: 800, color: 'var(--text)', letterSpacing: '-1px', lineHeight: 1.1 }} className="grad-text">
                   <CountUp end={s.val} decimals={s.decimals} prefix={s.prefix || ''} suffix={s.suffix} />
                 </div>
@@ -652,27 +652,17 @@ export default function Landing() {
             ))}
           </div>
 
-          {/* Trust row — sinyal kepercayaan yang jujur (tanpa klaim review palsu) */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 18, marginBottom: 22, flexWrap: 'wrap' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: 'var(--text2)', fontWeight: 600 }}>
-              <ShieldCheck size={15} style={{ color: 'var(--blue)' }} /> Pembayaran aman QRIS
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: 'var(--text2)', fontWeight: 600 }}>
-              <Zap size={15} style={{ color: '#F59E0B' }} /> Proses otomatis & instan
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: 'var(--text2)', fontWeight: 600 }}>
-              <CheckCircle size={15} style={{ color: '#10B981' }} /> Garansi refill
-            </div>
-          </div>
-
-          {/* Feature pills */}
-          <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 8, marginBottom: 44 }}>
-            {['Mulai dari Rp 1/K', 'Non-drop services', 'Garansi Refill', 'Support 24/7'].map(t => (
-              <div key={t} style={{ display: 'flex', alignItems: 'center', gap: 6, background: dark ? 'var(--white)' : 'rgba(255,255,255,.9)', border: dark ? '1px solid var(--border)' : '1px solid rgba(37,99,235,.12)', borderRadius: 20, padding: '6px 14px', fontSize: 12.5, fontWeight: 600, color: 'var(--text)', boxShadow: dark ? 'var(--shadow)' : '0 2px 12px rgba(37,99,235,.08), 0 1px 0 rgba(255,255,255,.9)' }}>
-                <div style={{ width: 16, height: 16, borderRadius: '50%', background: 'var(--blue-l)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <CheckCircle size={10} style={{ color: 'var(--blue)' }} />
-                </div>
-                {t}
+          {/* Trust + Feature row — digabung jadi satu, tanpa makna yang berulang */}
+          <div className="hero-trust-grid" style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 8, marginBottom: 44 }}>
+            {[
+              { icon: <ShieldCheck size={13} style={{ color: 'var(--blue)' }} />, t: 'Pembayaran aman QRIS' },
+              { icon: <Zap size={13} style={{ color: '#F59E0B' }} />, t: 'Proses otomatis & instan' },
+              { icon: <RefreshCw size={13} style={{ color: '#10B981' }} />, t: 'Garansi refill' },
+              { icon: <Globe size={13} style={{ color: '#8B5CF6' }} />, t: 'Support 24/7' },
+            ].map(t => (
+              <div key={t.t} className="hero-trust-pill" style={{ display: 'flex', alignItems: 'center', gap: 6, background: dark ? 'var(--white)' : 'rgba(255,255,255,.9)', border: dark ? '1px solid var(--border)' : '1px solid rgba(37,99,235,.12)', borderRadius: 20, padding: '6px 14px', fontSize: 12.5, fontWeight: 600, color: 'var(--text)', boxShadow: dark ? 'var(--shadow)' : '0 2px 12px rgba(37,99,235,.08), 0 1px 0 rgba(255,255,255,.9)' }}>
+                {t.icon}
+                {t.t}
               </div>
             ))}
           </div>
@@ -1142,6 +1132,32 @@ export default function Landing() {
               font-size: 11.5px !important;
             }
           }
+          /* ── Stats: grid 2x2 rapi di mobile, bukan flex-wrap yang bisa "patah" ── */
+          @media (max-width: 560px) {
+            .hero-stats-grid {
+              display: grid !important;
+              grid-template-columns: repeat(2, 1fr) !important;
+              row-gap: 28px !important;
+              column-gap: 12px !important;
+            }
+            .hero-stat-item { min-width: 0 !important; }
+          }
+          /* ── Trust + feature pills: grid 2 kolom rata, bukan wrap acak ── */
+          @media (max-width: 520px) {
+            .hero-trust-grid {
+              display: grid !important;
+              grid-template-columns: repeat(2, 1fr) !important;
+              gap: 8px !important;
+            }
+            .hero-trust-pill {
+              justify-content: center !important;
+              padding: 7px 8px !important;
+              font-size: 11.5px !important;
+              white-space: nowrap !important;
+              overflow: hidden !important;
+              text-overflow: ellipsis !important;
+            }
+          }
           @media (prefers-reduced-motion: reduce) {
             .hero-badge .badge-shine, .badge-dot::before, .badge-dot::after { animation: none; }
             .badge-dot::after { display: none; }
@@ -1311,6 +1327,8 @@ export default function Landing() {
                 { label: 'Layanan', id: 'layanan', href: '/layanan' },
                 { label: 'Cara Kerja', id: 'panduan' },
                 { label: 'FAQ', id: 'faq' },
+                { label: 'Kebijakan Privasi', href: '/privacy' },
+                { label: 'Syarat & Ketentuan', href: '/terms' },
               ].map(({ label, id, href }) => (
                 href ? (
                   <Link key={label} href={href}
