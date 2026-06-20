@@ -467,27 +467,38 @@ export default function ViewNewOrder({ user, setMenu }) {
         </div>
       </div>
 
-      {/* Stat cards — bento grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 18 }} className="ns-stat-grid">
-        {/* mobile-first: default 2 kolom; 4 kolom di desktop diatur via CSS .ns-stat-grid */}
-        {[
-          { icon: <CreditCard size={19} />, iconBg: 'var(--blue-l)', iconColor: 'var(--blue)', label: 'Saldo Akun', value: balance !== null ? `Rp ${(typeof balance === 'number' ? balance : Math.round(parseFloat(balance || 0) * rate)).toLocaleString('id-ID')}` : <Shimmer w={110} />, action: 'Tambah Saldo', actionColor: 'var(--blue)', actionBg: 'var(--blue-l)', target: 'Add Funds' },
-          { icon: <Package size={19} />, iconBg: 'var(--green-l)', iconColor: 'var(--green)', label: 'Total Layanan', value: services.length > 0 ? services.length : (loadingServices ? <Shimmer w={44} /> : '—'), action: 'Buat Order', actionColor: 'var(--green)', actionBg: 'var(--green-l)', target: 'New Order' },
-          { icon: <Activity size={19} />, iconBg: 'var(--red-l)', iconColor: 'var(--red)', label: 'Pesanan Saya', value: orderCount !== null ? orderCount : <Shimmer w={36} />, action: 'Lihat Pesanan', actionColor: 'var(--red)', actionBg: 'var(--red-l)', target: 'My Orders' },
-          { icon: <CheckCircle size={19} />, iconBg: 'var(--green-l)', iconColor: 'var(--green)', label: 'Pesanan Berhasil', value: completedCount !== null ? completedCount : <Shimmer w={36} />, action: 'Lihat Pesanan', actionColor: 'var(--green)', actionBg: 'var(--green-l)', target: 'My Orders' },
-        ].map((s, i) => (
-          <div key={i} className="card ns-stat-card" style={{ padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', borderRadius: 16 }}>
-            <div className="ns-stat-top" style={{ padding: '14px 15px 12px', display: 'flex', alignItems: 'center', gap: 11, flex: 1 }}>
-              <div className="ns-stat-ico" style={{ width: 42, height: 42, borderRadius: 12, background: s.iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center', color: s.iconColor, flexShrink: 0 }}>{s.icon}</div>
-              <div style={{ minWidth: 0, flex: 1 }}>
-                <div className="ns-stat-label" style={{ fontSize: 11.5, color: 'var(--text3)', fontWeight: 600, marginBottom: 3, lineHeight: 1.25, overflowWrap: 'break-word' }}>{s.label}</div>
-                <div className="ns-stat-val" style={{ fontSize: 17, fontWeight: 800, color: 'var(--text)', letterSpacing: '-.03em', lineHeight: 1.15, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.value}</div>
-              </div>
+      {/* Hero card — Total Layanan, BUKAN saldo (saldo udah ada di sidebar desktop, biar gak dobel) */}
+      <div className="bento-grad bento-shine" style={{ borderRadius: 18, padding: isMobile ? '18px 18px 16px' : '22px 24px 20px', marginBottom: 10 }}>
+        <div className="bento-sweep" />
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 12.5, color: 'rgba(255,255,255,.78)', fontWeight: 600, marginBottom: 4 }}>Total Layanan Tersedia</div>
+            <div className="tnum" style={{ fontSize: 'clamp(20px, 6.5vw, 27px)', fontWeight: 800, letterSpacing: '-.03em', lineHeight: 1.1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {services.length > 0 ? services.length.toLocaleString('id-ID') : (loadingServices ? <Shimmer w={70} /> : '—')}
             </div>
-            <button onClick={() => setMenu(s.target)} className="ns-stat-btn" style={{ width: '100%', padding: '10px 15px', background: s.actionBg, border: 'none', borderTop: '1px solid var(--border)', borderRadius: '0 0 16px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, fontFamily: "'Outfit',sans-serif", fontWeight: 700, fontSize: 12.5, color: s.actionColor }}>
-              <span style={{ minWidth: 0, whiteSpace: 'nowrap' }}>{s.action}</span> <ArrowRight size={14} style={{ flexShrink: 0 }} />
-            </button>
+            <div style={{ fontSize: 12, color: 'rgba(255,255,255,.7)', marginTop: 4 }}>Instagram, TikTok, Facebook & lainnya</div>
           </div>
+          <div className="bento-ico" style={{ width: 46, height: 46, flexShrink: 0 }}>
+            <Package size={22} />
+          </div>
+        </div>
+        <button onClick={() => document.getElementById('ns-order-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' })} style={{ width: '100%', marginTop: 16, padding: '11px 16px', background: 'rgba(255,255,255,.16)', border: '1px solid rgba(255,255,255,.22)', borderRadius: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontFamily: "'Outfit',sans-serif", fontWeight: 700, fontSize: 13, color: '#fff' }}>
+          Buat Order <ArrowRight size={14} />
+        </button>
+      </div>
+
+      {/* 3 stat lain — ringkas, jadi info sekunder di bawah hero */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 8, marginBottom: 18 }} className="ns-stat-grid">
+        {[
+          { icon: <CreditCard size={18} />, iconColor: 'var(--blue)', label: 'Saldo', value: balance !== null ? `${(typeof balance === 'number' ? balance : Math.round(parseFloat(balance || 0) * rate)).toLocaleString('id-ID')}` : <Shimmer w={60} />, target: 'Add Funds' },
+          { icon: <Activity size={18} />, iconColor: 'var(--red)', label: 'Pesanan', value: orderCount !== null ? orderCount : <Shimmer w={28} />, target: 'My Orders' },
+          { icon: <CheckCircle size={18} />, iconColor: 'var(--green)', label: 'Berhasil', value: completedCount !== null ? completedCount : <Shimmer w={28} />, target: 'My Orders' },
+        ].map((s, i) => (
+          <button key={i} onClick={() => setMenu(s.target)} className="card bento-card ns-stat-card" style={{ padding: '12px 8px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, borderRadius: 14, cursor: 'pointer', background: 'var(--white)' }}>
+            <span style={{ color: s.iconColor, display: 'flex' }}>{s.icon}</span>
+            <div className="ns-stat-val tnum" style={{ fontSize: 'clamp(13px, 4.2vw, 16px)', fontWeight: 800, color: 'var(--text)', letterSpacing: '-.02em', lineHeight: 1.1 }}>{s.value}</div>
+            <div className="ns-stat-label" style={{ fontSize: 10.5, color: 'var(--text3)', fontWeight: 600, lineHeight: 1.2 }}>{s.label}</div>
+          </button>
         ))}
       </div>
 
@@ -510,7 +521,7 @@ export default function ViewNewOrder({ user, setMenu }) {
       <div className="ns-order-grid" style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 16, alignItems: 'start' }}>
 
         {/* Order form */}
-        <div className="card" style={{ padding: '16px 18px' }}>
+        <div id="ns-order-form" className="card" style={{ padding: '16px 18px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18 }}>
             <div style={{ width: 38, height: 38, borderRadius: 11, background: 'var(--blue)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}><ShoppingCart size={18} /></div>
             <h2 style={{ fontSize: 16, fontWeight: 800, color: 'var(--text)' }}>Place your order</h2>
@@ -1083,29 +1094,16 @@ export default function ViewNewOrder({ user, setMenu }) {
           transform: translateY(-3px);
           box-shadow: var(--shadow2);
         }
-        .ns-stat-btn {
-          transition: filter var(--ease);
-          display: flex;
-          width: 100%;
-          margin: 0;
-        }
-        .ns-stat-btn:hover { filter: brightness(.97); }
         .ns-stat-grid { grid-auto-rows: 1fr; }
         .ns-order-grid { max-width: 100%; }
         .ns-order-grid > * { min-width: 0; }
         @media (min-width: 981px) {
           .ns-order-grid { grid-template-columns: minmax(0,1fr) 320px !important; }
-          .ns-stat-grid { grid-template-columns: repeat(4, 1fr) !important; }
         }
         @media (max-width: 600px) {
-          .ns-stat-grid { gap: 7px !important; }
-          .ns-stat-top { padding: 10px 10px 8px !important; gap: 7px !important; }
-          .ns-stat-ico { width: 30px !important; height: 30px !important; border-radius: 9px !important; }
-          .ns-stat-label { font-size: 10px !important; margin-bottom: 2px !important; }
-          .ns-stat-val { font-size: 13px !important; letter-spacing: -.04em !important; }
-          .ns-stat-btn { padding: 7px 10px !important; font-size: 11px !important; }
-          /* Saldo — nilai panjang "Rp 28.207" perlu lebih kecil */
-          .ns-stat-card:first-child .ns-stat-val { font-size: 12px !important; }
+          .ns-stat-grid { gap: 6px !important; }
+          /* font-size .ns-stat-label & .ns-stat-val sudah pakai clamp() inline (lihat array map di atas) —
+             otomatis scale fluid sesuai lebar layar, gak perlu override fixed px di sini lagi. */
         }
       `}</style>
     </div>

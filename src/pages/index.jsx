@@ -398,6 +398,22 @@ export default function Landing() {
     return () => document.removeEventListener('mousemove', onMove);
   }, []);
 
+  // ── Pause animasi marquee (testimoni & logo platform) saat di luar viewport ──
+  // Animasi infinite tetap jalan walau section sudah lewat scroll, ini boros CPU/baterai
+  // terutama di Android kelas menengah-bawah. Pause otomatis pakai IntersectionObserver.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const targets = document.querySelectorAll('.js-marquee-pausable');
+    if (!targets.length) return;
+    const obs = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        entry.target.style.animationPlayState = entry.isIntersecting ? 'running' : 'paused';
+      });
+    }, { threshold: 0.01 });
+    targets.forEach(el => obs.observe(el));
+    return () => obs.disconnect();
+  }, []);
+
   const filteredServices = SERVICES.filter(sv => {
     const q = serviceQuery.trim().toLowerCase();
     if (!q) return true;
@@ -467,26 +483,31 @@ export default function Landing() {
             <span>Suntik<span style={{ background: 'var(--blue)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Sosmed</span></span>
           </div>
           <div className="nav-desktop-only" style={{ alignItems: 'center', gap: 4, fontSize: 14, fontWeight: 600 }}>
-            {NAV_LINKS.map(({ label, id, href }) => (
-              href ? (
+            {NAV_LINKS.map(({ label, id, href }) => {
+              const isActive = href ? router.pathname === href : activeSection === id;
+              return href ? (
                 <Link key={label} href={href}
-                  style={{ color: 'var(--text2)', textDecoration: 'none', padding: '7px 16px', borderRadius: 50, background: 'transparent', transition: 'background .15s', cursor: 'pointer' }}>{label}</Link>
+                  className={`nav-link${isActive ? ' active' : ''}`}
+                  style={{ textDecoration: 'none', padding: '7px 16px', borderRadius: 50, cursor: 'pointer' }}>{label}</Link>
               ) : (
                 <a key={label} href={`#${id}`}
                   onClick={e => { e.preventDefault(); goTo(id); }}
-                  style={{ color: 'var(--text2)', textDecoration: 'none', padding: '7px 16px', borderRadius: 50, background: 'transparent', transition: 'background .15s', cursor: 'pointer' }}>{label}</a>
-              )
-            ))}
+                  className={`nav-link${isActive ? ' active' : ''}`}
+                  style={{ textDecoration: 'none', padding: '7px 16px', borderRadius: 50, cursor: 'pointer' }}>{label}</a>
+              );
+            })}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-            <button onClick={toggle} aria-label="Ganti tema" className="nav-icon-btn" style={{ background: 'var(--bg2)', border: '1px solid var(--border)', cursor: 'pointer', color: 'var(--text2)', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 40, height: 40, borderRadius: 11, flexShrink: 0 }}>
-              {dark ? <Sun size={18} /> : <Moon size={18} />}
+            <button onClick={toggle} aria-label="Ganti tema" className="nav-icon-btn" style={{ background: 'var(--bg2)', border: '1px solid var(--border2)', cursor: 'pointer', color: 'var(--text2)', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 38, height: 38, borderRadius: 10, flexShrink: 0, overflow: 'hidden' }}>
+              <span key={dark ? 'sun' : 'moon'} className="theme-icon" style={{ display: 'flex' }}>
+                {dark ? <Sun size={16} /> : <Moon size={16} />}
+              </span>
             </button>
             <div className="nav-desktop-only" style={{ alignItems: 'center', gap: 6 }}>
-              <button onClick={() => router.push('/login')} style={{ background: 'none', border: '1.5px solid var(--border)', cursor: 'pointer', fontWeight: 700, fontSize: 12, color: 'var(--text2)', fontFamily: "'Outfit','Plus Jakarta Sans',sans-serif", padding: '6px 12px', borderRadius: 50, whiteSpace: 'nowrap', transition: 'all .15s' }}>
+              <button onClick={() => router.push('/login')} className="nav-auth-outline" style={{ background: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 12, fontFamily: "'Outfit','Plus Jakarta Sans',sans-serif", padding: '6px 14px', borderRadius: 50, whiteSpace: 'nowrap' }}>
                 Masuk
               </button>
-              <button onClick={() => router.push('/register')} style={{ background: 'var(--blue)', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 12, color: '#fff', fontFamily: "'Outfit','Plus Jakarta Sans',sans-serif", padding: '6px 12px', borderRadius: 50, whiteSpace: 'nowrap', transition: 'all .15s', display: 'flex', alignItems: 'center', gap: 4 }}>
+              <button onClick={() => router.push('/register')} className="nav-auth-solid" style={{ border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 12, color: '#fff', fontFamily: "'Outfit','Plus Jakarta Sans',sans-serif", padding: '6px 14px', borderRadius: 50, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 4 }}>
                 Daftar
               </button>
             </div>
@@ -520,8 +541,8 @@ export default function Landing() {
               <img src="/logo.png" alt="SS" style={{ width: 26, height: 26, borderRadius: 6, objectFit: 'cover' }} />
               <span>Suntik<span style={{ color: 'var(--blue)' }}>Sosmed</span></span>
             </div>
-            <button onClick={() => setMenuOpen(false)} aria-label="Tutup menu"
-              style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 9, width: 34, height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--text2)' }}>
+            <button onClick={() => setMenuOpen(false)} aria-label="Tutup menu" className="nav-icon-btn"
+              style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 10, width: 38, height: 38, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--text2)' }}>
               <X size={18} />
             </button>
           </div>
@@ -564,10 +585,9 @@ export default function Landing() {
           <div style={{ marginTop: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, paddingTop: 18 }}>
             {SOCIALS.map(s => (
               <a key={s.id} href={s.url} target="_blank" rel="noreferrer" aria-label={s.label}
-                style={{ width: 36, height: 36, borderRadius: 10, background: 'var(--bg2)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text3)', textDecoration: 'none', transition: 'all .15s' }}
-                onMouseEnter={e => { e.currentTarget.style.color = 'var(--blue)'; e.currentTarget.style.borderColor = 'rgba(37,99,235,.4)'; }}
-                onMouseLeave={e => { e.currentTarget.style.color = 'var(--text3)'; e.currentTarget.style.borderColor = 'var(--border)'; }}>
-                {socialIcon(s.id, 16)}
+                className="social-icon-btn"
+                style={{ width: 40, height: 40, borderRadius: 11, background: 'var(--bg2)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text3)', textDecoration: 'none' }}>
+                {socialIcon(s.id, 17)}
               </a>
             ))}
           </div>
@@ -670,7 +690,7 @@ export default function Landing() {
           {/* Platform logos greyscale */}
           <p style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--text3)', letterSpacing: '.07em', textTransform: 'uppercase', marginBottom: 16 }}>Tersedia untuk platform terbaik</p>
           <div className="logo-marquee-wrap" style={{ marginBottom: 48 }}>
-            <div className="logo-marquee" style={{ filter: 'grayscale(1)', opacity: 0.4 }}>
+            <div className="logo-marquee js-marquee-pausable" style={{ filter: 'grayscale(1)', opacity: 0.4 }}>
               {[...Array(2)].map((_, dup) => (
                 <div key={dup} className="logo-marquee-track" aria-hidden={dup === 1}>
                   {[
@@ -862,7 +882,7 @@ export default function Landing() {
           {/* Search bar */}
           <div style={{ position: 'relative', marginBottom: 16 }}>
             <Search size={16} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--text3)' }} />
-            <input className="inp" style={{ paddingLeft: 42, borderRadius: 12 }} placeholder="Cari layanan..." value={serviceQuery} onChange={e => setServiceQuery(e.target.value)} />
+            <input className="inp" style={{ paddingLeft: 42, borderRadius: 12, fontSize: 16 }} placeholder="Cari layanan..." value={serviceQuery} onChange={e => setServiceQuery(e.target.value)} />
           </div>
           <div style={{ background: 'var(--white)', border: '1px solid var(--border)', borderRadius: 22, overflow: 'hidden', boxShadow: 'var(--shadow2)' }}>
             <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
@@ -940,7 +960,7 @@ export default function Landing() {
             </div>
 
             <div className="testi-mobile" style={{ overflow: 'hidden', WebkitMaskImage: 'linear-gradient(to right, transparent, #000 7%, #000 93%, transparent)', maskImage: 'linear-gradient(to right, transparent, #000 7%, #000 93%, transparent)' }}>
-              <div className="testi-marquee" style={{ display: 'flex', gap: 14, width: 'max-content', animation: 'scrollLeftTesti 42s linear infinite' }}>
+              <div className="testi-marquee js-marquee-pausable" style={{ display: 'flex', gap: 14, width: 'max-content', animation: 'scrollLeftTesti 42s linear infinite' }}>
                 {[...TESTI_FLAT, ...TESTI_FLAT].map((t, i) => (
                   <div key={i} style={{ flex: '0 0 280px', width: 280 }}>
                     <TestiCard t={t} dark={dark} />
@@ -1164,9 +1184,60 @@ export default function Landing() {
           }
           .nav-desktop-only { display: flex; }
           .nav-mobile-only { display: none; }
-          .nav-icon-btn { transition: transform .12s ease, border-color .15s ease, background .15s ease; }
-          .nav-icon-btn:hover { border-color: rgba(37,99,235,.45); }
+          .nav-icon-btn { transition: transform .12s ease, border-color .15s ease, background .15s ease; -webkit-tap-highlight-color: transparent; }
+          @media (hover: hover) {
+            .nav-icon-btn:hover { border-color: rgba(37,99,235,.45); }
+          }
           .nav-icon-btn:active { transform: scale(.92); }
+          .theme-icon { animation: themeIconIn .32s cubic-bezier(.34,1.56,.64,1); }
+          @keyframes themeIconIn {
+            from { opacity: 0; transform: rotate(-90deg) scale(.4); }
+            to { opacity: 1; transform: rotate(0deg) scale(1); }
+          }
+          @media (prefers-reduced-motion: reduce) {
+            .theme-icon { animation: none; }
+          }
+          .nav-link {
+            position: relative;
+            color: var(--text2);
+            background: transparent;
+            transition: background .15s ease, color .15s ease;
+            -webkit-tap-highlight-color: transparent;
+          }
+          @media (hover: hover) {
+            .nav-link:hover { background: var(--bg2); color: var(--text); }
+          }
+          .nav-link:active { background: var(--bg2); }
+          .social-icon-btn {
+            transition: transform .12s ease, color .15s ease, border-color .15s ease;
+            -webkit-tap-highlight-color: transparent;
+          }
+          @media (hover: hover) {
+            .social-icon-btn:hover { color: var(--blue); border-color: rgba(37,99,235,.4); }
+          }
+          .social-icon-btn:active { transform: scale(.9); color: var(--blue); border-color: rgba(37,99,235,.4); }
+          .nav-link.active { color: var(--blue); font-weight: 800; background: var(--blue-l); }
+          .nav-link.active::after {
+            content: '';
+            position: absolute;
+            bottom: -7px; left: 50%;
+            transform: translateX(-50%);
+            width: 4px; height: 4px;
+            border-radius: 50%;
+            background: var(--blue);
+          }
+          .nav-auth-outline {
+            color: var(--text2);
+            border: 1.5px solid var(--border2);
+            transition: border-color .15s ease, color .15s ease, background .15s ease;
+          }
+          .nav-auth-outline:hover { border-color: rgba(37,99,235,.5); color: var(--text); background: var(--bg2); }
+          .nav-auth-solid {
+            background: linear-gradient(135deg, var(--blue), var(--blue-d));
+            box-shadow: 0 2px 10px rgba(37,99,235,.35);
+            transition: transform .15s ease, box-shadow .15s ease;
+          }
+          .nav-auth-solid:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(37,99,235,.45); }
           .testi-desktop { display: grid; }
           .testi-mobile { display: none; }
           @media (max-width: 768px) {
@@ -1346,7 +1417,8 @@ export default function Landing() {
             <div style={{ display: 'flex', gap: 6 }}>
               {SOCIALS.map(s => (
                 <a key={s.id} href={s.url} target="_blank" rel="noreferrer" aria-label={s.label}
-                  style={{ width: 28, height: 28, borderRadius: 7, background: 'var(--bg2)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text3)', textDecoration: 'none', cursor: 'pointer' }}>{socialIcon(s.id, 14)}</a>
+                  className="social-icon-btn"
+                  style={{ width: 36, height: 36, borderRadius: 9, background: 'var(--bg2)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text3)', textDecoration: 'none', cursor: 'pointer' }}>{socialIcon(s.id, 15)}</a>
               ))}
             </div>
           </div>

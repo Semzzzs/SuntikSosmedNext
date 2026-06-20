@@ -43,11 +43,13 @@ body {
   transition: background .15s, border-color .15s, transform .1s, box-shadow .15s;
 }
 
-.ns-top-btn:hover {
-  border-color: rgba(37, 99, 235, .35) !important;
-  background: var(--blue-l) !important;
-  color: var(--blue) !important;
-  box-shadow: 0 2px 8px rgba(37, 99, 235, .12);
+@media (hover: hover) {
+  .ns-top-btn:hover {
+    border-color: rgba(37, 99, 235, .35) !important;
+    background: var(--blue-l) !important;
+    color: var(--blue) !important;
+    box-shadow: 0 2px 8px rgba(37, 99, 235, .12);
+  }
 }
 
 .ns-top-btn:active {
@@ -259,9 +261,11 @@ body {
   color: #fff;
 }
 
-.btn-blue:hover {
-  background: var(--blue-d);
-  transform: translateY(-1px);
+@media (hover: hover) {
+  .btn-blue:hover {
+    background: var(--blue-d);
+    transform: translateY(-1px);
+  }
 }
 
 .btn-outline {
@@ -270,8 +274,10 @@ body {
   border: 1.5px solid var(--border);
 }
 
-.btn-outline:hover {
-  background: var(--bg2);
+@media (hover: hover) {
+  .btn-outline:hover {
+    background: var(--bg2);
+  }
 }
 
 .btn-pill {
@@ -309,8 +315,10 @@ tr:last-child td {
   border-bottom: none;
 }
 
-tr:hover td {
-  background: var(--bg2);
+@media (hover: hover) {
+  tr:hover td {
+    background: var(--bg2);
+  }
 }
 
 .mono {
@@ -399,10 +407,12 @@ textarea.inp {
   transition: transform .2s, box-shadow .2s, background .2s;
 }
 
-.hero-btn-main:hover {
-  background: var(--blue-d);
-  transform: translateY(-1px);
-  box-shadow: 0 12px 32px rgba(37, 99, 235, .36);
+@media (hover: hover) {
+  .hero-btn-main:hover {
+    background: var(--blue-d);
+    transform: translateY(-1px);
+    box-shadow: 0 12px 32px rgba(37, 99, 235, .36);
+  }
 }
 
 .feature-card {
@@ -413,9 +423,11 @@ textarea.inp {
   transition: transform .22s, box-shadow .22s;
 }
 
-.feature-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 20px 48px rgba(37, 99, 235, .16);
+@media (hover: hover) {
+  .feature-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 20px 48px rgba(37, 99, 235, .16);
+  }
 }
 
 .step-num {
@@ -438,8 +450,10 @@ textarea.inp {
   cursor: pointer;
 }
 
-.service-row:hover td {
-  background: var(--blue-l) !important;
+@media (hover: hover) {
+  .service-row:hover td {
+    background: var(--blue-l) !important;
+  }
 }
 
 @keyframes blobFloat {
@@ -960,8 +974,10 @@ a {
   transition: color var(--ease);
 }
 
-.landing-breadcrumb a:hover {
-  color: var(--blue);
+@media (hover: hover) {
+  .landing-breadcrumb a:hover {
+    color: var(--blue);
+  }
 }
 
 .landing-breadcrumb span[aria-hidden] {
@@ -1016,9 +1032,11 @@ a {
   transition: transform var(--ease), background var(--ease);
 }
 
-.landing-cta:hover {
-  background: var(--blue-d);
-  transform: translateY(-2px);
+@media (hover: hover) {
+  .landing-cta:hover {
+    background: var(--blue-d);
+    transform: translateY(-2px);
+  }
 }
 
 /* ---------- Section heading ---------- */
@@ -1053,10 +1071,12 @@ a {
   transition: transform var(--ease), box-shadow var(--ease), border-color var(--ease);
 }
 
-.landing-card:hover {
-  transform: translateY(-3px);
-  box-shadow: var(--shadow2);
-  border-color: var(--blue);
+@media (hover: hover) {
+  .landing-card:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--shadow2);
+    border-color: var(--blue);
+  }
 }
 
 .landing-card h3 {
@@ -1119,9 +1139,11 @@ a {
   transition: background var(--ease), color var(--ease);
 }
 
-.landing-card-btn:hover {
-  background: var(--blue);
-  color: #fff;
+@media (hover: hover) {
+  .landing-card-btn:hover {
+    background: var(--blue);
+    color: #fff;
+  }
 }
 
 .landing-empty {
@@ -1161,10 +1183,12 @@ a {
   transition: all var(--ease);
 }
 
-.landing-related-list a:hover {
-  color: var(--blue);
-  border-color: var(--blue);
-  background: var(--blue-l);
+@media (hover: hover) {
+  .landing-related-list a:hover {
+    color: var(--blue);
+    border-color: var(--blue);
+    background: var(--blue-l);
+  }
 }
 
 /* ---------- Blok about ---------- */
@@ -1287,9 +1311,11 @@ a {
   transition: border-color var(--ease), transform var(--ease);
 }
 
-.landing-why-card:hover {
-  border-color: var(--blue);
-  transform: translateY(-2px);
+@media (hover: hover) {
+  .landing-why-card:hover {
+    border-color: var(--blue);
+    transform: translateY(-2px);
+  }
 }
 
 .landing-why-icon {
@@ -1369,8 +1395,10 @@ a {
   transition: opacity var(--ease);
 }
 
-.landing-svc-card:hover::before {
-  opacity: 1;
+@media (hover: hover) {
+  .landing-svc-card:hover::before {
+    opacity: 1;
+  }
 }
 
 /* ---- Header: ikon platform + label, dipisah garis ---- */
@@ -1520,10 +1548,12 @@ a {
   box-shadow: 0 4px 14px rgba(37, 99, 235, .25);
 }
 
-.landing-svc-card .landing-card-btn:hover {
-  background: var(--blue-d);
-  color: #fff;
-  transform: translateY(-1px);
+@media (hover: hover) {
+  .landing-svc-card .landing-card-btn:hover {
+    background: var(--blue-d);
+    color: #fff;
+    transform: translateY(-1px);
+  }
 }
 
 /* ============================================================
@@ -1546,8 +1576,10 @@ a {
   z-index: 0;
 }
 
-.landing-svc-card:hover::after {
-  opacity: 1;
+@media (hover: hover) {
+  .landing-svc-card:hover::after {
+    opacity: 1;
+  }
 }
 
 .landing-svc-card>* {
@@ -1555,10 +1587,12 @@ a {
   z-index: 1;
 }
 
-.landing-svc-card:hover {
-  transform: translateY(-4px);
-  border-color: rgba(59, 130, 246, .45);
-  box-shadow: 0 16px 40px rgba(59, 130, 246, .18), 0 0 0 1px rgba(59, 130, 246, .15);
+@media (hover: hover) {
+  .landing-svc-card:hover {
+    transform: translateY(-4px);
+    border-color: rgba(59, 130, 246, .45);
+    box-shadow: 0 16px 40px rgba(59, 130, 246, .18), 0 0 0 1px rgba(59, 130, 246, .15);
+  }
 }
 
 .landing-svc-price-val {
@@ -1580,8 +1614,10 @@ a {
   transition: transform var(--ease), box-shadow var(--ease), border-color var(--ease);
 }
 
-.admin-shell .card:hover {
-  border-color: var(--border2);
+@media (hover: hover) {
+  .admin-shell .card:hover {
+    border-color: var(--border2);
+  }
 }
 
 /* ---- 2. TABEL: header sticky + uppercase + zebra + hover biru ---- */
@@ -1605,9 +1641,12 @@ a {
   background: rgba(127, 127, 127, .025);
 }
 
-/* Hover baris lebih jelas (biru tipis), override zebra */
-.admin-shell tr:hover td {
-  background: var(--blue-l) !important;
+@media (hover: hover) {
+
+  /* Hover baris lebih jelas (biru tipis), override zebra */
+  .admin-shell tr:hover td {
+    background: var(--blue-l) !important;
+  }
 }
 
 /* Kolom pertama (ID/nama) sedikit lebih tegas */
@@ -1646,9 +1685,11 @@ a {
   background-clip: padding-box;
 }
 
-.admin-shell ::-webkit-scrollbar-thumb:hover {
-  background: var(--text3);
-  background-clip: padding-box;
+@media (hover: hover) {
+  .admin-shell ::-webkit-scrollbar-thumb:hover {
+    background: var(--text3);
+    background-clip: padding-box;
+  }
 }
 
 /* ---- 6. AKSESIBILITAS: focus-visible keyboard ---- */
@@ -1856,9 +1897,11 @@ canvas {
   transition: transform .18s ease, box-shadow .18s ease;
 }
 
-.bento-card:hover {
-  transform: translateY(-3px);
-  box-shadow: var(--shadow2);
+@media (hover: hover) {
+  .bento-card:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--shadow2);
+  }
 }
 
 /* Ikon dalam kotak frosted (dipakai di header kartu gradient) */

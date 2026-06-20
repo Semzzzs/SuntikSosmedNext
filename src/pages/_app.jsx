@@ -67,6 +67,12 @@ export default function MyApp({ Component, pageProps }) {
   const router = useRouter();
   const isAdmin = router.pathname.startsWith('/Voltaraz');
 
+  // ✅ URL kanonik & og:url dinamis — ikut halaman aktif, bukan selalu homepage.
+  // Page individual masih bisa override title/description sendiri lewat <Head> di komponennya;
+  // next/head otomatis dedupe tag dengan key yang sama (ambil yang dirender paling akhir/dalam).
+  const canonicalUrl = `https://suntiksosmed.store${router.asPath.split('?')[0]}`;
+  const ogImageUrl = 'https://suntiksosmed.store/og-image.png';
+
   return (
     <ErrorBoundary>
       <Head>
@@ -83,6 +89,16 @@ export default function MyApp({ Component, pageProps }) {
           name="description"
           content="SuntikSosmed — platform SMM #1 Indonesia. 2.000+ layanan followers, likes, views Instagram, TikTok, YouTube. Harga mulai Rp1/1000, proses instan, aman & terpercaya."
         />
+        {/* ✅ Canonical & og:url — dinamis ikut halaman aktif (bukan hardcode homepage),
+            supaya Google nggak nganggap /login, /register, /layanan dll sebagai duplikat homepage. */}
+        <link rel="canonical" href={canonicalUrl} />
+        <meta property="og:url" content={canonicalUrl} />
+        <meta property="og:title" content="SuntikSosmed — Jasa SMM Termurah & Tercepat di Indonesia" />
+        <meta property="og:description" content="2.000+ layanan SMM. Followers, likes, views Instagram, TikTok, YouTube. Mulai Rp1/1000 — proses instan, aman & terpercaya." />
+        <meta property="og:image" content={ogImageUrl} />
+        <meta name="twitter:title" content="SuntikSosmed — Jasa SMM Termurah & Tercepat di Indonesia" />
+        <meta name="twitter:description" content="2.000+ layanan SMM. Followers, likes, views. Mulai Rp1/1000 — proses instan, aman & terpercaya." />
+        <meta name="twitter:image" content={ogImageUrl} />
         {/* ✅ JSON-LD structured data */}
         <script
           type="application/ld+json"

@@ -1,4 +1,9 @@
-import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, useLayoutEffect, useCallback } from 'react';
+
+// useLayoutEffect melempar warning kalau dipanggil di server (gak ada DOM buat di-"layout").
+// Next.js tetap jalanin SSR, jadi kita pakai versi aman: useLayoutEffect di client,
+// useEffect (no-op saat SSR) di server.
+const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
 
 const ThemeCtx = createContext({ dark: false, toggle: () => { } });
 export const useTheme = () => useContext(ThemeCtx);
@@ -28,22 +33,31 @@ function safeSetItem(key, value) {
   }
 }
 
-// ✅ Fix #1: baca preferensi tema sebelum render pertama (dipanggil lazy di useState).
-//            Ini tetap aman untuk SSR karena dibungkus cek `typeof window`.
-//            Dikombinasikan dengan inline script di _document.js, ini menghilangkan
-//            flash of wrong theme di reload tanpa membuat mismatch hydration —
-//            lihat catatan _document.js untuk bagian yang menset class sebelum React mount.
-function getInitialDark(storageKey) {
-  if (typeof window === 'undefined') return false; // SSR: selalu false, konsisten dgn markup awal
-  if (!isSafeStorageKey(storageKey)) return false;
-  return safeGetItem(storageKey) === 'dark';
-}
+// ⚠️ CATATAN: dulu ada getInitialDark() yang dipanggil lewat useState(() => ...) lazy init.
+//    Itu BUG — meski dibungkus cek `typeof window`, fungsi itu tetap jalan persis di render
+//    pertama client (hydration pass), jadi client langsung baca localStorage dan beda sama
+//    HTML dari server (yang selalu `dark=false` karena gak punya akses localStorage).
+//    React deteksi mismatch ini → buang HTML server, render ulang full dari client (keliatan
+//    sebagai kedipan + "Hydration failed" di console).
+//    Fix: state awal SELALU false di kedua sisi (server & client render pertama selalu sama),
+//    baru baca localStorage di useEffect — useEffect dijamin cuma jalan SETELAH hydration
+//    selesai, jadi gak akan pernah mismatch. FOUC (kedipan tema salah) tetap dicegah lewat
+//    inline script anti-flash di _document.jsx yang set class "dark" ke <html> sebelum
+//    React mount sama sekali — itu murni manipulasi DOM/CSS, gak melibatkan React state.
 
 export function ThemeProvider({ children, storageKey = 'theme_preference' }) {
-  // Lazy init: function ini hanya jalan sekali saat mount pertama di client.
-  // Di server selalu false (lihat getInitialDark), sehingga HTML hasil SSR
-  // tetap konsisten dengan markup yang di-generate _document.js → tidak hydration error.
-  const [dark, setDark] = useState(() => getInitialDark(storageKey));
+  // State awal SELALU false — sama persis dengan apa yang di-render server.
+  // Ini WAJIB sama supaya hydration pass pertama gak mismatch.
+  const [dark, setDark] = useState(false);
+
+  // useLayoutEffect (bukan useEffect) khusus di sini — jalan sebelum browser
+  // sempat paint, jadi swap false→true ini gak kelihatan sebagai kedipan sama sekali.
+  // Tetap aman dari hydration mismatch karena ini jalan SETELAH hydration commit,
+  // cuma SEBELUM paint — bukan bagian dari render yang dibandingkan React.
+  useIsomorphicLayoutEffect(() => {
+    if (!isSafeStorageKey(storageKey)) return;
+    if (safeGetItem(storageKey) === 'dark') setDark(true);
+  }, [storageKey]);
 
   // ✅ Fix #2: sinkronkan antar tab/jendela — saat tab lain mengubah localStorage,
   //            event 'storage' terpicu di tab ini (tidak terpicu di tab yang menulis sendiri).
