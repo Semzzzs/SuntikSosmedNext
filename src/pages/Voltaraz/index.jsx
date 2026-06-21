@@ -540,6 +540,7 @@ export default function AdminPanel() {
                     description: t.description,
                     link: t.link,
                     qty: t.qty,
+                    is_refunded: t.is_refunded ?? false,
                 };
             }));
         } catch (e) {
@@ -654,6 +655,10 @@ export default function AdminPanel() {
             if (data?.error) showToast(`Gagal refund: ${data.error}`, 'error');
             else {
                 showToast(`Refund Rp ${Number(data.refunded || estimasi).toLocaleString('id-ID')} berhasil ke ${data.email || order.email}.`, 'success');
+                // Update state lokal langsung agar tombol $ hilang seketika tanpa nunggu fetchOrders
+                setOrders(prev => prev.map(o =>
+                    String(o.id) === String(orderId) ? { ...o, is_refunded: true } : o
+                ));
                 fetchOrders();
                 loadUsers();
             }
@@ -1558,7 +1563,7 @@ export default function AdminPanel() {
                                                                             <RotateCw size={14} />
                                                                         </button>
                                                                     )}
-                                                                    {isNumeric && canRefund(o.status) && (
+                                                                    {isNumeric && canRefund(o.status) && !o.is_refunded && (
                                                                         <button title="Refund saldo ke user" disabled={busy} onClick={() => refundOrder(o)} style={iconBtn('var(--blue-l)', 'var(--blue)')}>
                                                                             <DollarSign size={14} />
                                                                         </button>
@@ -1653,7 +1658,7 @@ export default function AdminPanel() {
                                                         <RotateCw size={14} /> Minta Refill
                                                     </button>
                                                 )}
-                                                {/^\d+$/.test(String(orderDetail.id)) && canRefund(orderDetail.status) && (
+                                                {/^\d+$/.test(String(orderDetail.id)) && canRefund(orderDetail.status) && !orderDetail.is_refunded && (
                                                     <button className="btn" onClick={() => { refundOrder(orderDetail); setOrderDetail(null); }} style={{ flex: 1, minWidth: 120, padding: 10, borderRadius: 9, fontSize: 13, background: 'var(--blue)', color: '#fff', border: 'none' }}>
                                                         <DollarSign size={14} /> Refund Saldo
                                                     </button>

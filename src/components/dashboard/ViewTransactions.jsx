@@ -51,6 +51,27 @@ export default function ViewTransactions({ user }) {
     deduction: { label: 'Pengurangan', icon: <ArrowUpRight size={16} />, color: 'var(--red)', bg: 'var(--red-l)', sign: '-' },
   };
 
+  const [filter, setFilter] = useState('all');
+
+  const FILTER_TABS = [
+    { key: 'all', label: 'Semua', color: 'var(--blue)', bg: 'var(--blue-l)' },
+    { key: 'deposit', label: 'Deposit', color: 'var(--green)', bg: 'var(--green-l)' },
+    { key: 'order', label: 'Order', color: 'var(--red)', bg: 'var(--red-l)' },
+    { key: 'refund', label: 'Refund', color: 'var(--blue)', bg: 'var(--blue-l)' },
+  ];
+
+  const FILTER_TYPE_MAP = {
+    all: null,
+    deposit: ['deposit', 'manual_deposit'],
+    order: ['order', 'purchase', 'deduction'],
+    refund: ['refund'],
+    bonus: ['bonus'],
+  };
+
+  const filteredTx = filter === 'all'
+    ? transactions
+    : transactions.filter(t => FILTER_TYPE_MAP[filter]?.includes(t.type));
+
   const totalDeposit = transactions.filter(t => CREDIT_TYPES.includes(t.type) && isSettled(t)).reduce((s, t) => s + (t.amount || 0), 0);
   const totalOrder = transactions.filter(t => DEBIT_TYPES.includes(t.type) && isSettled(t)).reduce((s, t) => s + (t.amount || 0), 0);
 
@@ -86,18 +107,54 @@ export default function ViewTransactions({ user }) {
         ))}
       </div>
 
+      {!loading && transactions.length > 0 && (
+        <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+          {FILTER_TABS.map(tab => {
+            const count = tab.key === 'all' ? transactions.length : transactions.filter(t => FILTER_TYPE_MAP[tab.key]?.includes(t.type)).length;
+            const active = filter === tab.key;
+            return (
+              <button
+                key={tab.key}
+                onClick={() => setFilter(tab.key)}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  padding: '7px 14px', borderRadius: 20, fontSize: 13, fontWeight: 700,
+                  border: `1.5px solid ${active ? tab.color : 'var(--border)'}`,
+                  background: active ? tab.bg : 'var(--white)',
+                  color: active ? tab.color : 'var(--text2)',
+                  cursor: 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif",
+                  transition: 'all .15s',
+                }}
+              >
+                {tab.label}
+                <span style={{
+                  fontSize: 11, fontWeight: 700, minWidth: 18, height: 18, display: 'inline-flex',
+                  alignItems: 'center', justifyContent: 'center', borderRadius: 20, padding: '0 5px',
+                  background: active ? tab.color : 'var(--bg2)',
+                  color: active ? '#fff' : 'var(--text3)',
+                }}>{count}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {loading ? (
         <div className="card" style={{ padding: 48, textAlign: 'center' }}>
           <span style={{ width: 28, height: 28, border: '3px solid var(--border)', borderTop: '3px solid var(--blue)', borderRadius: '50%', display: 'inline-block' }} className="spin" />
           <p style={{ marginTop: 14, color: 'var(--text3)', fontSize: 13 }}>Memuat transaksi...</p>
         </div>
-      ) : transactions.length === 0 ? (
+      ) : filteredTx.length === 0 ? (
         <div className="card" style={{ padding: 56, textAlign: 'center' }}>
           <div style={{ width: 60, height: 60, borderRadius: 16, background: 'var(--blue-l)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
             <ArrowLeftRight size={28} style={{ color: 'var(--blue)' }} />
           </div>
-          <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--text)', marginBottom: 8 }}>Belum ada transaksi</div>
-          <p style={{ fontSize: 13.5, color: 'var(--text2)' }}>Transaksi akan muncul setelah kamu deposit atau melakukan order.</p>
+          <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--text)', marginBottom: 8 }}>
+            {filter === 'all' ? 'Belum ada transaksi' : `Tidak ada transaksi ${FILTER_TABS.find(t => t.key === filter)?.label}`}
+          </div>
+          <p style={{ fontSize: 13.5, color: 'var(--text2)' }}>
+            {filter === 'all' ? 'Transaksi akan muncul setelah kamu deposit atau melakukan order.' : 'Coba pilih kategori lain.'}
+          </p>
         </div>
       ) : (
         <>
@@ -112,10 +169,10 @@ export default function ViewTransactions({ user }) {
                 </tr>
               </thead>
               <tbody>
-                {transactions.map((t, i) => {
+                {filteredTx.map((t, i) => {
                   const cfg = TYPE_CONFIG[t.type] || TYPE_CONFIG.deposit;
                   return (
-                    <tr key={t.id || i} style={{ borderBottom: i < transactions.length - 1 ? '1px solid var(--border)' : 'none' }}>
+                    <tr key={t.id || i} style={{ borderBottom: i < filteredTx.length - 1 ? '1px solid var(--border)' : 'none' }}>
                       <td style={{ padding: '12px 16px', color: 'var(--text3)', fontSize: 12 }}>
                         {new Date(t.created_at).toLocaleString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                       </td>
@@ -145,7 +202,7 @@ export default function ViewTransactions({ user }) {
 
           {/* Mobile: card list */}
           <div className="trx-card-list" style={{ display: 'none', flexDirection: 'column', gap: 10 }}>
-            {transactions.map((t, i) => {
+            {filteredTx.map((t, i) => {
               const cfg = TYPE_CONFIG[t.type] || TYPE_CONFIG.deposit;
               return (
                 <div key={t.id || i} className="card" style={{ padding: '14px 16px' }}>

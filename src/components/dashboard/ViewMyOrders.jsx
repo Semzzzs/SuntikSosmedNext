@@ -4,13 +4,12 @@ import { useApi } from '@/context/ApiContext';
 import { supabase } from '@/lib/supabase';
 
 const STATUS_CONFIG = {
-  'Completed': { label: 'Selesai', color: '#059669', bg: '#d1fae5', icon: <CheckCircle size={12} /> },
-  'In progress': { label: 'Berjalan', color: 'var(--blue)', bg: 'var(--blue-l)', icon: <Loader size={12} /> },
-  'Processing': { label: 'Diproses', color: 'var(--blue)', bg: 'var(--blue-l)', icon: <Loader size={12} /> },
-  'Pending': { label: 'Menunggu', color: '#d97706', bg: '#fef3c7', icon: <Clock size={12} /> },
-  'Partial': { label: 'Sebagian', color: '#d97706', bg: '#fef3c7', icon: <AlertTriangle size={12} /> },
-  'Canceled': { label: 'Dibatalkan', color: 'var(--red)', bg: 'var(--red-l)', icon: <XCircle size={12} /> },
-  'Refunded': { label: 'Dana Kembali', color: 'var(--text3)', bg: 'var(--bg2)', icon: <XCircle size={12} /> },
+  'Completed': { label: 'Completed', color: '#059669', bg: '#d1fae5', icon: <CheckCircle size={12} /> },
+  'In progress': { label: 'In progress', color: 'var(--blue)', bg: 'var(--blue-l)', icon: <Loader size={12} /> },
+  'Processing': { label: 'Processing', color: 'var(--blue)', bg: 'var(--blue-l)', icon: <Loader size={12} /> },
+  'Pending': { label: 'Pending', color: '#d97706', bg: '#fef3c7', icon: <Clock size={12} /> },
+  'Partial': { label: 'Partial', color: '#d97706', bg: '#fef3c7', icon: <AlertTriangle size={12} /> },
+  'Canceled': { label: 'Canceled', color: 'var(--red)', bg: 'var(--red-l)', icon: <XCircle size={12} /> },
 };
 
 // Normalisasi status dari SMM API — provider kadang kirim casing/penulisan beda
@@ -41,7 +40,7 @@ export default function ViewMyOrders() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [filterStatus, setFilterStatus] = useState('Semua');
+  const [filterStatus, setFilterStatus] = useState('All');
   const { apiUrl, apiKey } = useApi();
 
   // ✅ Fix: email dari supabase.auth.getSession(), bukan sessionStorage
@@ -224,10 +223,10 @@ export default function ViewMyOrders() {
     };
   }, [fetchOrders]);
 
-  const statuses = ['Semua', ...Object.keys(STATUS_CONFIG)];
+  const statuses = ['All', ...Object.keys(STATUS_CONFIG)];
   const shown = orders.filter(o => {
     const matchSearch = !search || String(o.id).includes(search) || (o.status || '').toLowerCase().includes(search.toLowerCase()) || (o.serviceName || '').toLowerCase().includes(search.toLowerCase());
-    const matchStatus = filterStatus === 'Semua' || o.status === filterStatus;
+    const matchStatus = filterStatus === 'All' || o.status === filterStatus;
     return matchSearch && matchStatus;
   });
 
@@ -256,8 +255,8 @@ export default function ViewMyOrders() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 12, marginBottom: 18 }}>
           {[
             { label: 'Total Order', value: orders.length, color: 'var(--blue)', bg: 'var(--blue-l)' },
-            { label: 'Selesai', value: completedCount, color: '#059669', bg: '#d1fae5' },
-            { label: 'Aktif', value: activeCount, color: '#d97706', bg: '#fef3c7' },
+            { label: 'Completed', value: completedCount, color: '#059669', bg: '#d1fae5' },
+            { label: 'Active', value: activeCount, color: '#d97706', bg: '#fef3c7' },
           ].map(s => (
             <div key={s.label} className="card" style={{ padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 12 }}>
               <div style={{ width: 38, height: 38, borderRadius: 10, background: s.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -286,7 +285,7 @@ export default function ViewMyOrders() {
           const isActive = filterStatus === s;
           const color = isActive ? (cfg?.color || 'var(--blue)') : 'var(--text3)';
           const bg = isActive ? (cfg?.bg || 'var(--blue-l)') : 'transparent';
-          const count = s === 'Semua' ? orders.length : orders.filter(o => o.status === s).length;
+          const count = s === 'All' ? orders.length : orders.filter(o => o.status === s).length;
           return (
             <button key={s} onClick={() => setFilterStatus(s)} style={{
               display: 'inline-flex', alignItems: 'center', gap: 6,
@@ -296,7 +295,7 @@ export default function ViewMyOrders() {
               fontFamily: "'Outfit',sans-serif", transition: 'all .15s',
             }}>
               {cfg?.icon && <span style={{ display: 'flex' }}>{cfg.icon}</span>}
-              {s === 'Semua' ? 'Semua' : cfg?.label || s}
+              {s === 'All' ? 'All' : cfg?.label || s}
               <span style={{ fontSize: 11, opacity: 0.7 }}>({count})</span>
             </button>
           );

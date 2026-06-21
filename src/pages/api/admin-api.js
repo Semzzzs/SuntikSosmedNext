@@ -152,6 +152,20 @@ export default async function handler(req, res) {
             return res.status(200).json({ transactions: data || [] });
         }
 
+        // Ambil semua transaksi milik 1 user (untuk riwayat di admin)
+        if (action === 'get_user_transactions') {
+            const email = req.query.email;
+            if (!email || !email.includes('@')) return res.status(400).json({ error: 'Email tidak valid.' });
+            const { data, error } = await supabase
+                .from('transactions')
+                .select('id, email, type, amount, status, description, order_id, link, service_id, qty, created_at, provider')
+                .eq('email', email)
+                .order('created_at', { ascending: false })
+                .limit(100);
+            if (error) return res.status(500).json({ error: error.message });
+            return res.status(200).json({ transactions: data || [] });
+        }
+
         // Ambil orders (transactions type=order)
         if (action === 'get_orders') {
             const { data, error } = await supabase
@@ -160,7 +174,29 @@ export default async function handler(req, res) {
                 .eq('type', 'order')
                 .order('created_at', { ascending: false });
             if (error) return res.status(500).json({ error: error.message });
-            return res.status(200).json({ orders: data || [] });
+
+            // Cek order mana yang sudah punya refund agar frontend bisa
+            // menyembunyikan tombol $ (refund) tanpa perlu query tambahan.
+            const { data: refunds } = await supabase
+                .from('transactions')
+                .select('order_id, amount')
+                .eq('type', 'refund')
+                .eq('status', 'success');
+
+            const refundedMap = {};
+            for (const r of (refunds || [])) {
+                if (r.order_id) {
+                    refundedMap[r.order_id] = (refundedMap[r.order_id] || 0) + Math.round(r.amount || 0);
+                }
+            }
+
+            const orders = (data || []).map(o => ({
+                ...o,
+                is_refunded: !!refundedMap[o.order_id] &&
+                    refundedMap[o.order_id] >= Math.round(o.amount || 0),
+            }));
+
+            return res.status(200).json({ orders });
         }
 
         // Ambil semua deposits (transactions type=deposit)

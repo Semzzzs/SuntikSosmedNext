@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { DollarSign, Users, MinusCircle, Ban, CheckCircle } from 'lucide-react';
+import { DollarSign, Users, MinusCircle, Ban, CheckCircle, History, ArrowDownCircle, ArrowUpCircle, ShoppingCart, Gift, RefreshCw } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
 const adminFetch = async (url, opts = {}) => {
@@ -213,6 +213,35 @@ export default function AdminUsers() {
         setTimeout(() => { setModal(null); setMsg(''); }, 2000);
     };
 
+    const [userTx, setUserTx] = useState([]); // transaksi untuk user yang dibuka detailnya
+    const [loadingTx, setLoadingTx] = useState(false);
+    const [showTx, setShowTx] = useState(false); // toggle tampil riwayat
+
+    const loadUserTx = async (email) => {
+        setLoadingTx(true);
+        setUserTx([]);
+        try {
+            const res = await adminFetch(`/api/admin-api?action=get_user_transactions&email=${encodeURIComponent(email)}`);
+            const json = await res.json();
+            setUserTx(json.transactions || []);
+        } catch (e) {
+            setUserTx([]);
+        }
+        setLoadingTx(false);
+    };
+
+    const txTypeLabel = (type) => {
+        const map = { deposit: 'Deposit', bonus: 'Bonus', refund: 'Refund', order: 'Order', purchase: 'Pembelian' };
+        return map[type] || type || '—';
+    };
+    const txTypeIcon = (type) => {
+        if (['deposit', 'bonus', 'refund'].includes(type)) return <ArrowDownCircle size={13} style={{ color: 'var(--green)', flexShrink: 0 }} />;
+        if (['order', 'purchase'].includes(type)) return <ArrowUpCircle size={13} style={{ color: 'var(--red)', flexShrink: 0 }} />;
+        return <ShoppingCart size={13} style={{ color: 'var(--text3)', flexShrink: 0 }} />;
+    };
+    const txSign = (type) => ['deposit', 'bonus', 'refund'].includes(type) ? '+' : '-';
+    const txColor = (type) => ['deposit', 'bonus', 'refund'].includes(type) ? 'var(--green)' : 'var(--red)';
+
     const [search, setSearch] = useState('');
     const filteredUsers = users.filter(u =>
         !search || u.email?.toLowerCase().includes(search.toLowerCase()) || u.name?.toLowerCase().includes(search.toLowerCase())
@@ -270,6 +299,70 @@ export default function AdminUsers() {
                                 <button className="usr-act" onClick={() => { setModal({ type: 'kurang', email: detailUser.email }); setAmount(''); setDetailUser(null); }} style={{ flex: 1, justifyContent: 'center', padding: '10px 0', background: 'var(--red-l)', color: 'var(--red)', border: '1px solid color-mix(in srgb, var(--red) 28%, transparent)' }}><MinusCircle size={13} /> Kurangi</button>
                                 <button className="usr-act" onClick={() => { toggleBlock(detailUser.email); setDetailUser(d => d ? { ...d, blocked: !d.blocked } : d); }} style={{ flex: 1, justifyContent: 'center', padding: '10px 0', background: detailUser.blocked ? 'var(--green-l)' : 'var(--yellow-l)', color: detailUser.blocked ? 'var(--green)' : 'var(--yellow)', border: '1px solid transparent' }}>{detailUser.blocked ? <CheckCircle size={13} /> : <Ban size={13} />} {detailUser.blocked ? 'Unblock' : 'Blokir'}</button>
                             </div>
+                            {/* ── Riwayat Transaksi ── */}
+                            <div style={{ marginTop: 14, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
+                                <button
+                                    onClick={() => setShowTx(v => !v)}
+                                    style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 12px', borderRadius: 10, border: '1px solid var(--border)', background: showTx ? 'var(--blue-l)' : 'var(--bg2)', color: showTx ? 'var(--blue)' : 'var(--text2)', fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif', transition: 'background .15s" }}
+                                >
+                                    <span style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                                        <History size={14} /> Riwayat Transaksi
+                                        {userTx.length > 0 && <span style={{ fontSize: 11, fontWeight: 700, background: 'var(--blue)', color: '#fff', borderRadius: 20, padding: '1px 7px' }}>{userTx.length}</span>}
+                                    </span>
+                                    <span style={{ fontSize: 12 }}>{showTx ? '▲' : '▼'}</span>
+                                </button>
+
+                                {showTx && (
+                                    <div style={{ marginTop: 10, maxHeight: 280, overflowY: 'auto', borderRadius: 10, border: '1px solid var(--border)' }}>
+                                        {loadingTx ? (
+                                            <div style={{ padding: '24px 0', textAlign: 'center' }}>
+                                                <span style={{ width: 20, height: 20, border: '2.5px solid var(--border)', borderTop: '2.5px solid var(--blue)', borderRadius: '50%', display: 'inline-block' }} className="spin" />
+                                            </div>
+                                        ) : userTx.length === 0 ? (
+                                            <div style={{ padding: '20px 0', textAlign: 'center', color: 'var(--text3)', fontSize: 13 }}>Belum ada transaksi.</div>
+                                        ) : (
+                                            userTx.map((t, i) => (
+                                                <div key={t.id || i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '11px 12px', borderBottom: i < userTx.length - 1 ? '1px solid var(--border)' : 'none', background: i % 2 === 0 ? 'transparent' : 'var(--bg2)' }}>
+                                                    <div style={{ marginTop: 2 }}>{txTypeIcon(t.type)}</div>
+                                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                                                            <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text)' }}>
+                                                                {txTypeLabel(t.type)}
+                                                                {t.order_id && <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 600, color: 'var(--text3)', fontFamily: "'JetBrains Mono',monospace" }}>#{t.order_id}</span>}
+                                                                {t.status && t.status !== 'success' && (
+                                                                    <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, color: t.status === 'pending' ? 'var(--yellow)' : 'var(--red)', background: t.status === 'pending' ? 'var(--yellow-l)' : 'var(--red-l)', padding: '1px 6px', borderRadius: 10 }}>{t.status}</span>
+                                                                )}
+                                                            </div>
+                                                            <div style={{ fontSize: 13, fontWeight: 800, color: txColor(t.type), flexShrink: 0 }}>
+                                                                {txSign(t.type)}Rp {Math.round(t.amount || 0).toLocaleString('id-ID')}
+                                                            </div>
+                                                        </div>
+                                                        {/* Detail order: description/layanan */}
+                                                        {(t.description || t.service_id) && (
+                                                            <div style={{ fontSize: 11.5, color: 'var(--text2)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                                {t.description || `Layanan #${t.service_id}`}
+                                                            </div>
+                                                        )}
+                                                        {/* Detail order: qty + link */}
+                                                        {(t.qty || t.link) && (
+                                                            <div style={{ display: 'flex', gap: 10, marginTop: 3, flexWrap: 'wrap' }}>
+                                                                {t.qty && <span style={{ fontSize: 11, color: 'var(--text3)' }}>Qty: <b style={{ color: 'var(--text2)' }}>{Number(t.qty).toLocaleString('id-ID')}</b></span>}
+                                                                {t.link && <a href={t.link} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: 'var(--blue)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 180 }}>{t.link}</a>}
+                                                            </div>
+                                                        )}
+                                                        {/* Tanggal */}
+                                                        <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 3 }}>
+                                                            {t.created_at ? new Date(t.created_at).toLocaleString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}
+                                                            {t.provider && <span style={{ marginLeft: 6, fontSize: 10, color: 'var(--text3)' }}>via {t.provider}</span>}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+
                             <button onClick={() => setDetailUser(null)} style={{ width: '100%', marginTop: 10, padding: '9px 0', borderRadius: 10, border: '1px solid var(--border)', background: 'transparent', color: 'var(--text2)', fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif" }}>Tutup</button>
                         </div>
                     </div>
@@ -339,7 +432,7 @@ export default function AdminUsers() {
                         </thead>
                         <tbody>
                             {filteredUsers.map((u, i) => (
-                                <tr key={u.email} className="usr-tr" onClick={() => setDetailUser(u)} title="Klik untuk lihat detail" style={{ borderBottom: i < filteredUsers.length - 1 ? '1px solid var(--border)' : 'none', opacity: u.blocked ? 0.6 : 1 }}>
+                                <tr key={u.email} className="usr-tr" onClick={() => { setDetailUser(u); setShowTx(false); loadUserTx(u.email); }} title="Klik untuk lihat detail" style={{ borderBottom: i < filteredUsers.length - 1 ? '1px solid var(--border)' : 'none', opacity: u.blocked ? 0.6 : 1 }}>
                                     <td style={{ padding: '11px 14px' }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                                             <div style={{ width: 34, height: 34, borderRadius: 10, background: u.blocked ? 'var(--text3)' : 'var(--blue)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 13, flexShrink: 0 }}>

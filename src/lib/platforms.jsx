@@ -68,28 +68,49 @@ export function detectPlatform(cleanCat = '', name = '') {
     return 'other'; // IMDB, dll yang nggak kenal -> bucket "Other"
 }
 
-// ── Icon SVG per platform (key = PLATFORMS.icon) ──
+// ── Icon per platform — logo asli via SimpleIcons CDN ──
+// Catatan penting:
+//  1. CDN tidak terima warna #ffffff → 404
+//  2. Slug 'linkedin' bug di CDN: URL terpotong jadi /link → pakai SVG inline
+//  3. TikTok, X (Twitter), Threads warna brand = hitam → filter invert di dark mode
+//  4. onError: sembunyikan img jika CDN tidak bisa diakses
+const si = (slug, color, invert = false) => (
+    <img
+        src={`https://cdn.simpleicons.org/${slug}/${color}`}
+        width={18} height={18}
+        alt={slug}
+        style={{ display: 'block', flexShrink: 0, filter: invert ? 'invert(1)' : 'none' }}
+        onError={e => { e.currentTarget.style.display = 'none'; }}
+    />
+);
+
 export const PlatformIcons = {
+    // SVG manual — tidak ada di SimpleIcons atau bug di CDN
     all: <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2"><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" /></svg>,
-    instagram: <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="2" width="20" height="20" rx="5" /><circle cx="12" cy="12" r="4.5" /><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none" /></svg>,
-    facebook: <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z" /></svg>,
-    telegram: <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M22 2L11 13M22 2L15 22l-4-9-9-4 20-7z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" /></svg>,
-    tiktok: <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-2.88 2.5 2.89 2.89 0 0 1-2.89-2.89 2.89 2.89 0 0 1 2.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 0 0-.79-.05 6.34 6.34 0 0 0-6.34 6.34 6.34 6.34 0 0 0 6.34 6.34 6.34 6.34 0 0 0 6.33-6.34V8.69a8.18 8.18 0 0 0 4.78 1.52V6.73a4.85 4.85 0 0 1-1.01-.04z" /></svg>,
-    twitter: <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" /></svg>,
-    youtube: <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M22.54 6.42a2.78 2.78 0 0 0-1.95-1.96C18.88 4 12 4 12 4s-6.88 0-8.59.46a2.78 2.78 0 0 0-1.95 1.96A29 29 0 0 0 1 12a29 29 0 0 0 .46 5.58A2.78 2.78 0 0 0 3.41 19.6C5.12 20 12 20 12 20s6.88 0 8.59-.46a2.78 2.78 0 0 0 1.95-1.95A29 29 0 0 0 23 12a29 29 0 0 0-.46-5.58z" /><polygon points="9.75 15.02 15.5 12 9.75 8.98 9.75 15.02" fill="white" /></svg>,
-    whatsapp: <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z" /><path d="M11.999 1.999C6.478 1.999 2 6.478 2 12c0 1.818.483 3.522 1.329 4.997L2 22l5.145-1.311A9.956 9.956 0 0 0 12 22c5.522 0 10-4.478 10-10.001C22 6.478 17.522 1.999 11.999 1.999z" /></svg>,
-    spotify: <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><circle cx="12" cy="12" r="10" /><path d="M8 13.5c2.5-1 5.5-.8 7.5.5" stroke="white" strokeWidth="1.5" strokeLinecap="round" fill="none" /><path d="M7 10.5c3-1.3 6.5-1 9 .8" stroke="white" strokeWidth="1.5" strokeLinecap="round" fill="none" /><path d="M6.5 7.5c3.5-1.5 7.5-1.2 10.5 1" stroke="white" strokeWidth="1.5" strokeLinecap="round" fill="none" /></svg>,
-    linkedin: <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z" /><rect x="2" y="9" width="4" height="12" /><circle cx="4" cy="4" r="2" /></svg>,
-    // ── apk tambahan (icon sederhana, silakan refine) ──
-    threads: <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 12a4 4 0 1 0-3 3.9" /><path d="M15 8.5v4.5a2 2 0 0 0 4 0 7 7 0 1 0-3 5.7" /></svg>,
     bigo: <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="9" /><path d="M10 9l5 3-5 3V9z" fill="currentColor" stroke="none" /></svg>,
-    soundcloud: <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 14v-3M8 16V8M12 17V7M16 16v-7M20 15v-5" /></svg>,
-    shopee: <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"><path d="M6 7h12l1 13H5L6 7z" /><path d="M9 7a3 3 0 0 1 6 0" /></svg>,
-    tokopedia: <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"><path d="M4 9l1.5-4h13L20 9M4 9v10h16V9M4 9h16M9 19v-5h6v5" /></svg>,
-    discord: <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"><path d="M8 5h8a3 3 0 0 1 3 3v9a2 2 0 0 1-2 2l-1.5-2H8.5L7 19a2 2 0 0 1-2-2V8a3 3 0 0 1 3-3z" /><circle cx="9.5" cy="12" r="1" fill="currentColor" stroke="none" /><circle cx="14.5" cy="12" r="1" fill="currentColor" stroke="none" /></svg>,
-    twitch: <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"><path d="M4 4h16v10l-4 4h-4l-3 3v-3H4V4z" /><path d="M10 8v4M14 8v4" /></svg>,
+    tokopedia: <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#03AC0E" strokeWidth="2" strokeLinejoin="round"><path d="M4 9l1.5-4h13L20 9M4 9v10h16V9M4 9h16M9 19v-5h6v5" /></svg>,
     website: <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3c2.5 2.5 2.5 15 0 18M12 3c-2.5 2.5-2.5 15 0 18" /></svg>,
     other: <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="16" /><line x1="8" y1="12" x2="16" y2="12" /></svg>,
+
+    // LinkedIn — SVG inline (bug CDN: slug 'linkedin' terpotong jadi '/link' → 404)
+    linkedin: <svg viewBox="0 0 24 24" width="18" height="18" fill="#0A66C2"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" /></svg>,
+
+    // Logo asli dari SimpleIcons CDN — warna brand asli
+    instagram: si('instagram', 'E1306C'),
+    facebook: si('facebook', '1877F2'),
+    telegram: si('telegram', '26A5E4'),
+    youtube: si('youtube', 'FF0000'),
+    whatsapp: si('whatsapp', '25D366'),
+    spotify: si('spotify', '1DB954'),
+    soundcloud: si('soundcloud', 'FF5500'),
+    shopee: si('shopee', 'EE4D2D'),
+    discord: si('discord', '5865F2'),
+    twitch: si('twitch', '9146FF'),
+
+    // Brand hitam — filter invert agar terlihat di dark mode
+    tiktok: si('tiktok', '000000', true),
+    twitter: si('x', '000000', true),
+    threads: si('threads', '000000', true),
 };
 
 // ── Daftar tombol platform. 'All' & 'Other' selalu; sisanya disembunyiin
