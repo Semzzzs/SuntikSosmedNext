@@ -448,22 +448,47 @@ export default function AdminPanel() {
         const lbl = providerKey === 'smmsoc' ? 'SMMSOC' : providerKey === 'buzzer' ? 'BuzzerPanel' : providerKey;
         const ok = await askConfirm(`${enabled ? 'AKTIFKAN' : 'MATIKAN'} SEMUA layanan ${lbl}? Ini langsung mempengaruhi yang tampil ke user.`);
         if (!ok) return;
+
+        // Daftar service_ids milik provider ini
+        const providerServiceIds = services
+            .filter(s => (s._provider || 'smmsoc') === providerKey)
+            .map(s => String(s.service));
+
+        // Optimistic update: langsung cerminkan perubahan di UI sebelum tunggu server
+        const prevDisabled = disabledServices;
+        setDisabledServices(prev => {
+            const prevSet = new Set(prev);
+            if (enabled) {
+                return prev.filter(id => !providerServiceIds.includes(id));
+            } else {
+                providerServiceIds.forEach(id => prevSet.add(id));
+                return [...prevSet];
+            }
+        });
+
         setBulkBusy(true);
         try {
-            const service_ids = enabled ? [] : services.filter(s => (s._provider || 'smmsoc') === providerKey).map(s => String(s.service));
             const res = await adminFetch('/api/admin-api?action=bulk_toggle_provider', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ provider: providerKey, enabled, service_ids }),
+                body: JSON.stringify({ provider: providerKey, enabled, service_ids: providerServiceIds }),
             });
             if (res.status === 401) { logout(); return; }
             const data = await res.json();
-            if (data?.error) showToast(`Gagal: ${data.error}`, 'error');
-            else {
+            if (data?.error) {
+                // Rollback optimistic update kalau server gagal
+                setDisabledServices(prevDisabled);
+                showToast(`Gagal: ${data.error}`, 'error');
+            } else {
+                // Kalau server kembalikan state terbaru pakai itu, kalau tidak optimistic sudah cukup
                 if (Array.isArray(data.disabled)) setDisabledServices(data.disabled.map(String));
                 showToast(`${enabled ? 'Diaktifkan' : 'Dimatikan'}: semua layanan ${lbl}.`, 'success');
+                // Sync ulang dari server untuk mastiin konsisten
+                fetchDisabledServices();
             }
         } catch (e) {
+            // Rollback optimistic update kalau koneksi gagal
+            setDisabledServices(prevDisabled);
             showToast(`Error: ${e.message}`, 'error');
         }
         setBulkBusy(false);
@@ -565,7 +590,12 @@ export default function AdminPanel() {
         try {
             const res = await smmFetch(`action=status&orders=${orderId}${provider ? `&provider=${provider}` : ''}`);
             const data = await res.json();
-            const live = data && !data.error ? data[orderId] : null;
+            // Coba key "provider:orderId" dulu (format konsisten dengan fetchOrders),
+            // fallback ke orderId langsung untuk kompatibilitas response API lama.
+            const prov = provider || 'smmsoc';
+            const live = data && !data.error
+                ? (data[`${prov}:${orderId}`] ?? data[orderId] ?? null)
+                : null;
             if (live) {
                 setOrders(prev => prev.map(o => String(o.id) === String(orderId) ? {
                     ...o,
@@ -1068,10 +1098,10 @@ export default function AdminPanel() {
     const orderPageCount = Math.max(1, Math.ceil(filteredOrders.length / ORDERS_PER_PAGE));
     const safeOrderPage = Math.min(orderPage, orderPageCount - 1);
     const pagedOrders = filteredOrders.slice(safeOrderPage * ORDERS_PER_PAGE, (safeOrderPage + 1) * ORDERS_PER_PAGE);
-    const canCancel = (st) => ['pending', 'in progress', 'processing'].includes((st || '').toLowerCase());
-    const canRefill = (st) => ['completed', 'partial'].includes((st || '').toLowerCase());
+    const canCancel = (st) => { const s = (st || '').toLowerCase(); if (['canceled', 'cancelled', 'completed', 'success'].includes(s)) return false; return ['pending', 'in progress', 'processing'].includes(s); };
+    const canRefill = (st) => { const s = (st || '').toLowerCase(); if (['canceled', 'cancelled'].includes(s)) return false; return ['completed', 'success', 'partial'].includes(s); };
     // Refund saldo hanya relevan untuk order yang dibatalkan / sebagian gagal
-    const canRefund = (st) => ['canceled', 'cancelled', 'partial'].includes((st || '').toLowerCase());
+    const canRefund = (st) => { const s = (st || '').toLowerCase(); return ['canceled', 'cancelled', 'partial'].includes(s); };
 
     const statusColor = (st) => ({ completed: 'var(--green)', processing: 'var(--blue)', partial: 'var(--yellow)', canceled: 'var(--red)', pending: 'var(--text3)' }[st?.toLowerCase()] || 'var(--text3)');
 
@@ -1512,7 +1542,7 @@ export default function AdminPanel() {
                                             <tbody>
                                                 {pagedOrders.map((o, i) => {
                                                     const isNumeric = /^\d+$/.test(String(o.id));
-                                                    const busy = actioningOrder === o.id;
+                                                    const busy = String(actioningOrder) === String(o.id);
                                                     const iconBtn = (bg, color) => ({ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, borderRadius: 7, border: '1px solid var(--border)', background: bg, color, cursor: busy ? 'not-allowed' : 'pointer', opacity: busy ? 0.5 : 1 });
                                                     return (
                                                         <tr key={o.id} style={{ borderBottom: i < pagedOrders.length - 1 ? '1px solid var(--border)' : 'none' }}>
@@ -1525,15 +1555,26 @@ export default function AdminPanel() {
                                                             </td>
                                                             <td style={{ padding: '11px 14px' }}>
                                                                 {(() => {
-                                                                    const s = o.status;
-                                                                    const cfg = {
-                                                                        'Completed': { label: 'Selesai', color: '#059669', bg: '#d1fae5' },
-                                                                        'In progress': { label: 'Berjalan', color: 'var(--blue)', bg: 'var(--blue-l)' },
-                                                                        'Processing': { label: 'Diproses', color: 'var(--blue)', bg: 'var(--blue-l)' },
-                                                                        'Partial': { label: 'Sebagian', color: '#d97706', bg: '#fef3c7' },
-                                                                        'Pending': { label: 'Menunggu', color: '#d97706', bg: '#fef3c7' },
-                                                                        'Canceled': { label: 'Dibatalkan', color: 'var(--red)', bg: 'var(--red-l)' },
-                                                                    }[s] || { label: s || 'Pending', color: 'var(--text3)', bg: 'var(--bg2)' };
+                                                                    // Normalize status: API provider bisa kirim berbagai format
+                                                                    // mis. 'success', 'completed', 'Completed', 'in progress', dll.
+                                                                    const sRaw = o.status || '';
+                                                                    const sLow = sRaw.toLowerCase().trim();
+                                                                    const STATUS_MAP = {
+                                                                        completed: { label: 'Selesai', color: '#059669', bg: '#d1fae5' },
+                                                                        success: { label: 'Selesai', color: '#059669', bg: '#d1fae5' },
+                                                                        'in progress': { label: 'Berjalan', color: 'var(--blue)', bg: 'var(--blue-l)' },
+                                                                        inprogress: { label: 'Berjalan', color: 'var(--blue)', bg: 'var(--blue-l)' },
+                                                                        processing: { label: 'Diproses', color: 'var(--blue)', bg: 'var(--blue-l)' },
+                                                                        partial: { label: 'Sebagian', color: '#d97706', bg: '#fef3c7' },
+                                                                        pending: { label: 'Menunggu', color: '#d97706', bg: '#fef3c7' },
+                                                                        canceled: { label: 'Dibatalkan', color: 'var(--red)', bg: 'var(--red-l)' },
+                                                                        cancelled: { label: 'Dibatalkan', color: 'var(--red)', bg: 'var(--red-l)' },
+                                                                        refunded: { label: 'Direfund', color: '#7c3aed', bg: '#ede9fe' },
+                                                                        error: { label: 'Error', color: 'var(--red)', bg: 'var(--red-l)' },
+                                                                        fail: { label: 'Gagal', color: 'var(--red)', bg: 'var(--red-l)' },
+                                                                        failed: { label: 'Gagal', color: 'var(--red)', bg: 'var(--red-l)' },
+                                                                    };
+                                                                    const cfg = STATUS_MAP[sLow] || { label: sRaw || 'Pending', color: 'var(--text3)', bg: 'var(--bg2)' };
                                                                     return <span style={{ fontSize: 11.5, fontWeight: 700, color: cfg.color, background: cfg.bg, padding: '3px 8px', borderRadius: 20, whiteSpace: 'nowrap' }}>{cfg.label}</span>;
                                                                 })()}
                                                             </td>
@@ -1549,8 +1590,8 @@ export default function AdminPanel() {
                                                                         <Eye size={14} />
                                                                     </button>
                                                                     {isNumeric && (
-                                                                        <button title="Refresh status" disabled={refreshingOrder === o.id || busy} onClick={() => refreshOrderStatus(o.id, o.provider)} style={iconBtn('var(--white)', 'var(--blue)')}>
-                                                                            <RefreshCw size={14} style={{ animation: refreshingOrder === o.id ? 'spin 1s linear infinite' : 'none' }} />
+                                                                        <button title="Refresh status" disabled={String(refreshingOrder) === String(o.id) || busy} onClick={() => refreshOrderStatus(o.id, o.provider)} style={iconBtn('var(--white)', 'var(--blue)')}>
+                                                                            <RefreshCw size={14} style={{ animation: String(refreshingOrder) === String(o.id) ? 'spin 1s linear infinite' : 'none' }} />
                                                                         </button>
                                                                     )}
                                                                     {isNumeric && canCancel(o.status) && (
@@ -1623,7 +1664,7 @@ export default function AdminPanel() {
                                                 { l: 'Order ID', v: String(orderDetail.id) },
                                                 { l: 'Email', v: orderDetail.email || '—' },
                                                 { l: 'Layanan', v: orderDetail.description || orderDetail.service || '—' },
-                                                { l: 'Status', v: orderDetail.status || 'Pending' },
+                                                { l: 'Status', v: (() => { const sLow = (orderDetail.status || '').toLowerCase().trim(); return { 'completed': 'Selesai', 'success': 'Selesai', 'in progress': 'Berjalan', 'inprogress': 'Berjalan', 'processing': 'Diproses', 'partial': 'Sebagian', 'pending': 'Menunggu', 'canceled': 'Dibatalkan', 'cancelled': 'Dibatalkan', 'refunded': 'Direfund', 'error': 'Error', 'fail': 'Gagal', 'failed': 'Gagal' }[sLow] || orderDetail.status || 'Pending'; })() },
                                                 { l: 'Link', v: orderDetail.link || '—' },
                                                 { l: 'Qty', v: orderDetail.qty != null ? String(orderDetail.qty) : '—' },
                                                 { l: 'Start Count', v: orderDetail.start_count != null ? String(orderDetail.start_count) : '—' },

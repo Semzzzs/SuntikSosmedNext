@@ -105,6 +105,8 @@ export default function ViewNewOrder({ user, setMenu }) {
   const [selectedPlatform, setSelectedPlatform] = useState('');
   const [orderCount, setOrderCount] = useState(null);
   const [completedCount, setCompletedCount] = useState(null);
+  const [disabledServiceIds, setDisabledServiceIds] = useState(new Set()); // service id yang dimatikan admin
+  const disabledRef = useRef(new Set()); // ref agar bisa diakses di dalam useEffect services
 
   // Deteksi apakah service butuh username atau link
   const getInputType = (service) => {
@@ -124,6 +126,21 @@ export default function ViewNewOrder({ user, setMenu }) {
 
   useEffect(() => {
     fetch('/api/rate').then(r => r.json()).then(d => { if (d.rate) setRate(d.rate); }).catch(() => { });
+  }, []);
+
+  // Sync ref setiap kali disabledServiceIds berubah (agar useEffect services bisa akses)
+  useEffect(() => { disabledRef.current = disabledServiceIds; }, [disabledServiceIds]);
+
+  // Fetch daftar service yang dimatikan admin — filter dari tampilan user
+  useEffect(() => {
+    fetch('/api/smm?action=get_disabled_services')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (d && Array.isArray(d.disabled)) {
+          setDisabledServiceIds(new Set(d.disabled.map(String)));
+        }
+      })
+      .catch(() => { });
   }, []);
 
   // Load markup + rules via server endpoint (pakai service role, lolos RLS).
@@ -225,7 +242,9 @@ export default function ViewNewOrder({ user, setMenu }) {
         const arr = Array.isArray(svcs) ? svcs : [];
         setServices(arr);
         try {
-          localStorage.setItem(CACHE_KEY, JSON.stringify(arr));
+          // Simpan ke cache tanpa service yang dimatikan admin (agar cache tidak stale)
+          const cacheable = arr.filter(s => !disabledRef.current.has(String(s.service)));
+          localStorage.setItem(CACHE_KEY, JSON.stringify(cacheable));
           localStorage.setItem(TS_KEY, String(Date.now()));
         } catch { }
       })
@@ -244,7 +263,8 @@ export default function ViewNewOrder({ user, setMenu }) {
     const effectiveQty = isCustomComments ? commentList.length : parseInt(qty);
 
     // Validasi field
-    if (!link) { setError('Lengkapi link/username dulu.'); return; }
+    const trimmedLink = link.trim();
+    if (!trimmedLink) { setError('Lengkapi link/username dulu.'); return; }
     if (isCustomComments) {
       if (commentList.length === 0) { setError('Isi minimal satu komentar (satu komentar per baris).'); return; }
     } else if (!qty) {
@@ -254,7 +274,7 @@ export default function ViewNewOrder({ user, setMenu }) {
     // Validasi min/max berdasar jumlah komentar / quantity
     const minV = Number(selectedService.min) || 0;
     const maxV = Number(selectedService.max) || Infinity;
-    if (effectiveQty < minV || effectiveQty > maxV) {
+    if (!effectiveQty || isNaN(effectiveQty) || effectiveQty <= 0 || effectiveQty < minV || effectiveQty > maxV) {
       setError(`Jumlah harus antara ${minV} dan ${maxV}.${isCustomComments ? ` Kamu menulis ${commentList.length} komentar.` : ''}`);
       return;
     }
@@ -269,8 +289,8 @@ export default function ViewNewOrder({ user, setMenu }) {
     try {
       // Custom Comments → kirim daftar komentar; lainnya → kirim quantity biasa.
       const res = isCustomComments
-        ? await api.addOrder(selectedService.service, link, effectiveQty, { comments: commentList.join('\n') })
-        : await api.addOrder(selectedService.service, link, effectiveQty);
+        ? await api.addOrder(selectedService.service, trimmedLink, effectiveQty, { comments: commentList.join('\n') })
+        : await api.addOrder(selectedService.service, trimmedLink, effectiveQty);
       setOrderResult({ success: true, orderId: res.order, msg: `Order #${res.order} berhasil dibuat!` });
       // Simpan order ID ke sessionStorage
       if (typeof window !== 'undefined' && res.order) {
@@ -281,7 +301,7 @@ export default function ViewNewOrder({ user, setMenu }) {
           email: user?.email || 'guest',
           service: selectedService.service,
           serviceName: selectedService.name,
-          link,
+          link: trimmedLink,
           qty: effectiveQty,
           rate: selectedService.rate,
           comments: isCustomComments ? commentList : undefined,
@@ -303,6 +323,9 @@ export default function ViewNewOrder({ user, setMenu }) {
         await refreshBalance();
       }
       setLink(''); setQty(''); setComments(''); setSelectedService(null);
+      // Update counter pesanan langsung tanpa nunggu reload
+      setOrderCount(prev => (prev !== null ? prev + 1 : 1));
+      setCompletedCount(prev => (prev !== null ? prev + 1 : 1));
     } catch (e) { setError(e.message); }
     setOrderLoading(false);
   };
@@ -312,6 +335,7 @@ export default function ViewNewOrder({ user, setMenu }) {
     if (lines.length === 0) { setError('Masukkan minimal 1 baris order.'); return; }
     setBulkLoading(true); setError(''); setBulkResults([]);
     const results = [];
+    let runningBalance = balance; // track saldo lokal agar cek per-baris akurat
     for (const line of lines) {
       const [serviceId, orderLink, orderQty] = line.split('|').map(s => s.trim());
       if (!serviceId || !orderLink || !orderQty) {
@@ -332,8 +356,28 @@ export default function ViewNewOrder({ user, setMenu }) {
       }
       const resolvedId = resolved.id;
 
+      const parsedQty = parseInt(orderQty, 10);
+      if (!parsedQty || isNaN(parsedQty) || parsedQty <= 0) {
+        results.push({ line, status: 'error', msg: `Quantity tidak valid: "${orderQty}"` });
+        continue;
+      }
+      const svcObj = services.find(s => String(s.service) === String(resolvedId));
+      if (svcObj) {
+        const minQ = Number(svcObj.min) || 0;
+        const maxQ = Number(svcObj.max) || Infinity;
+        if (parsedQty < minQ || parsedQty > maxQ) {
+          results.push({ line, status: 'error', msg: `Quantity ${parsedQty.toLocaleString('id-ID')} di luar batas (Min: ${minQ.toLocaleString('id-ID')}, Max: ${maxQ.toLocaleString('id-ID')}).` });
+          continue;
+        }
+        const costIDR = Math.round(parsedQty * parseFloat(svcObj.rate || 0) / 1000 * fxFor(svcObj) * resolveMarkup(svcObj));
+        // Pakai runningBalance (bukan state `balance`) agar cek saldo akurat tiap iterasi loop
+        if (runningBalance !== null && costIDR > runningBalance) {
+          results.push({ line, status: 'error', msg: `Saldo tidak cukup. Dibutuhkan Rp ${costIDR.toLocaleString('id-ID')}, sisa saldo Rp ${Math.round(runningBalance).toLocaleString('id-ID')}.` });
+          continue;
+        }
+      }
       try {
-        const res = await api.addOrder(resolvedId, orderLink, orderQty);
+        const res = await api.addOrder(resolvedId, orderLink.trim(), parsedQty);
         if (typeof window !== 'undefined' && res.order) {
           const existing = JSON.parse(sessionStorage.getItem('smm_order_ids') || '[]');
           if (!existing.includes(String(res.order))) {
@@ -343,6 +387,11 @@ export default function ViewNewOrder({ user, setMenu }) {
         }
         // ✅ Saldo & baris transaksi 'order' ditangani server per-baris (RPC).
         //    Karena server motong saldo atomik tiap request, bulk over-spend gak mungkin lagi.
+        const successSvc = services.find(s => String(s.service) === String(resolvedId));
+        if (successSvc && runningBalance !== null) {
+          const deducted = Math.round(parsedQty * parseFloat(successSvc.rate || 0) / 1000 * fxFor(successSvc) * resolveMarkup(successSvc));
+          runningBalance = Math.max(0, runningBalance - deducted);
+        }
         results.push({ line, status: 'success', msg: `Order #${res.order} berhasil!` });
       } catch (e) {
         results.push({ line, status: 'error', msg: e.message });
@@ -355,10 +404,12 @@ export default function ViewNewOrder({ user, setMenu }) {
 
   // Pra-hitung sekali per perubahan `services`: kategori bersih + platform per service.
   // Memoized supaya 30rb+ service nggak diproses ulang tiap render (tiap ketik qty/link).
-  const enriched = useMemo(() => services.map(s => {
-    const cleanCat = cleanCategory(s.category) || 'Lainnya';
-    return { svc: s, cleanCat, platform: detectPlatform(cleanCat, s.name) };
-  }), [services]);
+  const enriched = useMemo(() => services
+    .filter(s => !disabledServiceIds.has(String(s.service)))
+    .map(s => {
+      const cleanCat = cleanCategory(s.category) || 'Lainnya';
+      return { svc: s, cleanCat, platform: detectPlatform(cleanCat, s.name) };
+    }), [services, disabledServiceIds]);
 
   // Filter platform: cocokkan platform yang TERDETEKSI per service (bukan substring kasar).
   const platformFilteredEnriched = useMemo(
@@ -378,6 +429,7 @@ export default function ViewNewOrder({ user, setMenu }) {
     if (!q) return [];
     const out = [];
     for (const s of services) {
+      if (disabledServiceIds.has(String(s.service))) continue; // skip layanan nonaktif
       if (
         (s.name || '').toLowerCase().includes(q) ||
         String(s.service).toLowerCase().includes(q) ||
@@ -809,7 +861,7 @@ export default function ViewNewOrder({ user, setMenu }) {
                           </div>
                         )}
                       </div>
-                      <input className="inp" placeholder={isMobile ? (inputInfo.type === "username" ? "@username / link" : "https://...") : inputInfo.placeholder} value={link} onChange={e => setLink(e.target.value)} />
+                      <input className="inp" placeholder={isMobile ? (inputInfo.type === "username" ? "@username / link" : "https://...") : inputInfo.placeholder} value={link} onChange={e => setLink(e.target.value)} onBlur={e => setLink(e.target.value.trim())} />
                       {selectedService && (
                         <div style={{ fontSize: 11.5, color: 'var(--text3)', marginTop: 5 }}>
                           {getInputType(selectedService).type === 'username'
@@ -858,7 +910,7 @@ export default function ViewNewOrder({ user, setMenu }) {
                     <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: 'var(--text)', marginBottom: 7 }}>
                       Quantity {selectedService && <span style={{ fontWeight: 500, color: 'var(--text3)' }}>Min: {selectedService.min} — Max: {selectedService.max}</span>}
                     </label>
-                    <input className="inp" type="number" placeholder={selectedService ? `${selectedService.min} – ${selectedService.max}` : 'Pilih service dulu'} value={qty} onChange={e => setQty(e.target.value)} />
+                    <input className="inp" type="number" min={selectedService?.min || 1} max={selectedService?.max} step={1} placeholder={selectedService ? `${selectedService.min} – ${selectedService.max}` : 'Pilih service dulu'} value={qty} onKeyDown={e => ['e', 'E', '+', '.', ',', '-'].includes(e.key) && e.preventDefault()} onChange={e => { const v = e.target.value.replace(/[^0-9]/g, ''); setQty(v); }} />
                   </div>
                 );
               })()}
@@ -894,7 +946,16 @@ export default function ViewNewOrder({ user, setMenu }) {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 320, overflowY: 'auto' }} className="ns">
                 {(searchQuery ? searchResults : services.slice(0, 10)).map(s => (
                   <div key={s.service}
-                    onClick={() => { setSelectedService(s); setTab('New Order'); setSearchQuery(''); }}
+                    onClick={() => {
+                      const plat = detectPlatform(cleanCategory(s.category), s.name);
+                      const cat = cleanCategory(s.category) || 'Lainnya';
+                      setSelectedService(s);
+                      setSelectedPlatform(plat || '');
+                      setSelectedCategory(cat);
+                      setTab('New Order');
+                      setSearchQuery('');
+                      if (s.min) setQty(String(s.min));
+                    }}
                     style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 10, padding: '11px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', transition: 'all .15s' }}
                     onMouseEnter={e => { e.currentTarget.style.background = 'var(--blue-l)'; e.currentTarget.style.borderColor = 'var(--blue)'; }}
                     onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg2)'; e.currentTarget.style.borderColor = 'var(--border)'; }}>
