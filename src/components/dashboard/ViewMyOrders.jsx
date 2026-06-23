@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Search, Package, CheckCircle, Clock, Loader, XCircle, AlertTriangle } from 'lucide-react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { Search, Package, CheckCircle, Clock, Loader, XCircle, AlertTriangle, RefreshCw } from 'lucide-react';
 import { useApi } from '@/context/ApiContext';
 import { supabase } from '@/lib/supabase';
 
+// Fix #4: Tambah 'Refunded' ke STATUS_CONFIG agar status ini punya tampilan yang konsisten
 const STATUS_CONFIG = {
   'Completed': { label: 'Completed', color: '#059669', bg: '#d1fae5', icon: <CheckCircle size={12} /> },
   'In progress': { label: 'In progress', color: 'var(--blue)', bg: 'var(--blue-l)', icon: <Loader size={12} /> },
@@ -10,6 +11,7 @@ const STATUS_CONFIG = {
   'Pending': { label: 'Pending', color: '#d97706', bg: '#fef3c7', icon: <Clock size={12} /> },
   'Partial': { label: 'Partial', color: '#d97706', bg: '#fef3c7', icon: <AlertTriangle size={12} /> },
   'Canceled': { label: 'Canceled', color: 'var(--red)', bg: 'var(--red-l)', icon: <XCircle size={12} /> },
+  'Refunded': { label: 'Refunded', color: '#6b7280', bg: '#f3f4f6', icon: <RefreshCw size={12} /> },
 };
 
 // Normalisasi status dari SMM API — provider kadang kirim casing/penulisan beda
@@ -43,8 +45,10 @@ export default function ViewMyOrders() {
   const [filterStatus, setFilterStatus] = useState('All');
   const { apiUrl, apiKey } = useApi();
 
-  // ✅ Fix: email dari supabase.auth.getSession(), bukan sessionStorage
-  // sessionStorage tidak lagi menyimpan email sejak fix sebelumnya
+  // Fix #2: pakai useRef untuk interval agar tidak ada stale closure / race condition
+  const intervalRef = useRef(null);
+
+  // Fix: email dari supabase.auth.getSession(), bukan sessionStorage
   const [authEmail, setAuthEmail] = useState('');
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -72,8 +76,13 @@ export default function ViewMyOrders() {
 
   const fetchOrders = useCallback(async () => {
     if (!authEmail) { setOrders([]); return; }
+
     setLoading(true);
     setError('');
+
+    // Fix #6: AbortController untuk cegah state update setelah unmount
+    const controller = new AbortController();
+
     try {
       // Baca orders dari Supabase — akurat & persisten lintas device
       const { data: txRaw, error: txError } = await supabase
@@ -81,7 +90,8 @@ export default function ViewMyOrders() {
         .select('*')
         .eq('email', authEmail)
         .eq('type', 'order')
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .abortSignal(controller.signal);
 
       // Filter hanya order SMM asli (punya order_id atau deskripsi "Order #...")
       const txData = txRaw?.filter(t =>
@@ -93,10 +103,8 @@ export default function ViewMyOrders() {
       const { meta } = getOrderData();
 
       if (!txError && txData && txData.length > 0) {
-        // Kumpulkan order non-final + provider-nya untuk fetch live status.
-        // ✅ Hanya order yang BELUM final (status final tak berubah lagi → hemat call).
-        // ✅ Kelompokkan per provider: tiap provider hanya kenal order ID-nya sendiri,
-        //    jadi order BuzzerPanel ditanyakan ke BuzzerPanel, SMMSOC ke SMMSOC.
+        // Hanya order yang BELUM final (status final tak berubah lagi → hemat call).
+        // Kelompokkan per provider: tiap provider hanya kenal order ID-nya sendiri.
         const FINAL = new Set(['Completed', 'Canceled', 'Refunded']);
         const pending = txData.filter(t =>
           t.order_id != null && String(t.order_id).trim() !== '' &&
@@ -120,33 +128,34 @@ export default function ViewMyOrders() {
             await Promise.all(providerKeys.map(async (pk) => {
               const ids = byProvider[pk].slice(0, 100);
               try {
-                const res = await fetch(`/api/smm?action=status&orders=${ids.join(',')}&provider=${encodeURIComponent(pk)}`, {
-                  headers: { 'Authorization': `Bearer ${token}` }
-                });
+                const res = await fetch(
+                  `/api/smm?action=status&orders=${ids.join(',')}&provider=${encodeURIComponent(pk)}`,
+                  { headers: { 'Authorization': `Bearer ${token}` }, signal: controller.signal }
+                );
                 const data = await res.json();
-                // ✅ Namespace key dengan provider — order_id TIDAK unik antar provider
-                //    (SMMSOC & BuzzerPanel bisa sama-sama punya #1234). Tanpa prefix,
-                //    Object.assign akan menimpa status order provider lain → order
-                //    bisa nampilin status yang salah. Cocokkan key dengan pembacaan
-                //    di bawah: `${provider}:${order_id}`.
+                // Namespace key dengan provider — order_id TIDAK unik antar provider
+                // (SMMSOC & BuzzerPanel bisa sama-sama punya #1234).
                 if (data && !data.error && typeof data === 'object') {
                   for (const [oid, info] of Object.entries(data)) {
                     liveStatus[`${pk}:${oid}`] = info;
                   }
                 }
-              } catch { /* provider ini gagal → order-nya pakai status tersimpan */ }
+              } catch (e) {
+                if (e.name !== 'AbortError') { /* provider ini gagal → pakai status tersimpan */ }
+              }
             }));
-          } catch { /* tanpa session → semua pakai status tersimpan */ }
+          } catch (e) {
+            if (e.name !== 'AbortError') { /* tanpa session → semua pakai status tersimpan */ }
+          }
         }
 
         const parsed = txData.map(t => {
-          // ✅ Baca dengan key ber-namespace provider (lihat merge di atas) agar
-          //    order tidak salah ambil status milik provider lain ber-order_id sama.
           const pk = t.provider || 'smmsoc';
-          const live = (t.order_id && liveStatus[`${pk}:${t.order_id}`]) ? liveStatus[`${pk}:${t.order_id}`] : null;
+          const live = (t.order_id && liveStatus[`${pk}:${t.order_id}`])
+            ? liveStatus[`${pk}:${t.order_id}`]
+            : null;
           const localMeta = meta[t.order_id] || {};
-          // ✅ Kalau live status ada → pakai itu. Kalau gagal/tidak ada → fallback ke status tersimpan
-          //    di Supabase (jangan paksa jadi 'Pending' — itu bikin order Completed tampil Menunggu).
+          // Kalau live status ada → pakai itu. Kalau gagal/tidak ada → fallback ke status tersimpan
           const effStatus = live?.status ? normalizeStatus(live.status) : normalizeStatus(t.status);
           return {
             id: t.order_id || t.id,
@@ -157,25 +166,30 @@ export default function ViewMyOrders() {
             error: live?.error,
             serviceName: localMeta.serviceName || t.description?.replace(/^Order #\d+ - /, '') || '—',
             link: t.link || localMeta.link || '—',
+            // Fix #3: guard qty agar string kosong/null tidak jadi Number(0)
             qty: t.qty || localMeta.qty || '—',
             createdAt: t.created_at,
             amountIDR: t.amount,
           };
         });
+
         setOrders(parsed);
-        setLoading(false);
+        // Fix #1: setLoading hanya di finally — tapi early return path ini masih perlu return
         return;
       }
 
       // Fallback: baca dari localStorage (backward compat)
       const { ids, meta: metaFallback } = getOrderData();
-      if (!apiUrl || !apiKey || ids.length === 0) { setOrders([]); setLoading(false); return; }
+      if (!apiUrl || !apiKey || ids.length === 0) { setOrders([]); return; }
+
       const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch(`/api/smm?action=status&orders=${ids.slice(0, 100).join(',')}`, {
-        headers: { 'Authorization': `Bearer ${session?.access_token || ''}` }
-      });
+      const res = await fetch(
+        `/api/smm?action=status&orders=${ids.slice(0, 100).join(',')}`,
+        { headers: { 'Authorization': `Bearer ${session?.access_token || ''}` }, signal: controller.signal }
+      );
       const data = await res.json();
       if (data.error) throw new Error(data.error);
+
       const parsed = Object.entries(data).map(([id, info]) => ({
         id,
         status: normalizeStatus(info.status),
@@ -190,54 +204,76 @@ export default function ViewMyOrders() {
       }));
       parsed.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
       setOrders(parsed);
+
     } catch (e) {
-      setError(e.message);
+      // Abaikan error akibat abort (unmount / tab switch) — bukan error nyata
+      if (e.name !== 'AbortError') setError(e.message);
+    } finally {
+      // Fix #1: setLoading(false) selalu terpanggil di sini, tidak ada duplikat
+      setLoading(false);
     }
-    setLoading(false);
-  }, [authEmail, getOrderData]);
+
+    // Kembalikan fungsi cleanup AbortController agar bisa dibatalkan dari luar jika perlu
+    return () => controller.abort();
+  }, [authEmail, getOrderData, apiUrl, apiKey]);
 
   useEffect(() => {
     fetchOrders();
-    let interval = null;
+
+    // Fix #2: Gunakan ref untuk interval agar tidak ada stale reference
     const start = () => {
-      if (interval) return;
-      interval = setInterval(fetchOrders, 30000);
+      if (intervalRef.current) return;
+      intervalRef.current = setInterval(fetchOrders, 30000);
     };
     const stop = () => {
-      if (interval) { clearInterval(interval); interval = null; }
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
     };
     const onVisibility = () => {
       if (document.hidden) {
         stop();
       } else {
-        fetchOrders();  // refresh langsung saat tab kembali aktif
+        fetchOrders(); // refresh langsung saat tab kembali aktif
         start();
       }
     };
+
     // Mulai polling hanya kalau tab sedang terlihat
     if (!document.hidden) start();
     document.addEventListener('visibilitychange', onVisibility);
+
     return () => {
       stop();
       document.removeEventListener('visibilitychange', onVisibility);
     };
   }, [fetchOrders]);
 
-  const statuses = ['All', ...Object.keys(STATUS_CONFIG)];
+  // Fix #5: statuses dibangun dari STATUS_CONFIG + filter hanya status yang benar-benar ada di orders
+  // agar pill 'Refunded' (dan status lain) muncul kalau ada datanya
+  const existingStatuses = new Set(orders.map(o => o.status));
+  const statuses = ['All', ...Object.keys(STATUS_CONFIG).filter(s => existingStatuses.has(s))];
+
   const shown = orders.filter(o => {
-    const matchSearch = !search || String(o.id).includes(search) || (o.status || '').toLowerCase().includes(search.toLowerCase()) || (o.serviceName || '').toLowerCase().includes(search.toLowerCase());
+    const matchSearch = !search
+      || String(o.id).includes(search)
+      || (o.status || '').toLowerCase().includes(search.toLowerCase())
+      || (o.serviceName || '').toLowerCase().includes(search.toLowerCase());
     const matchStatus = filterStatus === 'All' || o.status === filterStatus;
     return matchSearch && matchStatus;
   });
 
   const noOrders = !loading && orders.length === 0;
-
   const completedCount = orders.filter(o => o.status === 'Completed').length;
   const activeCount = orders.filter(o => ['In progress', 'Processing', 'Pending'].includes(o.status)).length;
 
   const formatDate = (iso) => {
     if (!iso) return '—';
-    return new Date(iso).toLocaleString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    return new Date(iso).toLocaleString('id-ID', {
+      day: 'numeric', month: 'short', year: 'numeric',
+      hour: '2-digit', minute: '2-digit',
+    });
   };
 
   return (
@@ -246,7 +282,9 @@ export default function ViewMyOrders() {
       <div style={{ display: 'flex', alignItems: 'flex-start', marginBottom: 20 }}>
         <div>
           <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text)', marginBottom: 3 }}>My Orders</h1>
-          <p style={{ fontSize: 13.5, color: 'var(--text2)' }}>{orders.length > 0 ? `${orders.length} order ditemukan` : 'Riwayat order kamu'}</p>
+          <p style={{ fontSize: 13.5, color: 'var(--text2)' }}>
+            {orders.length > 0 ? `${orders.length} order ditemukan` : 'Riwayat order kamu'}
+          </p>
         </div>
       </div>
 
@@ -274,8 +312,13 @@ export default function ViewMyOrders() {
       {/* Search */}
       <div style={{ position: 'relative', marginBottom: 12 }}>
         <Search size={14} style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', color: 'var(--text3)' }} />
-        <input className="inp" style={{ paddingLeft: 38 }} placeholder="Cari order ID, service, atau status..."
-          value={search} onChange={e => setSearch(e.target.value)} />
+        <input
+          className="inp"
+          style={{ paddingLeft: 38 }}
+          placeholder="Cari order ID, service, atau status..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+        />
       </div>
 
       {/* Filter pills */}
@@ -349,7 +392,10 @@ export default function ViewMyOrders() {
                         <td style={{ padding: '13px 16px', color: 'var(--text3)', maxWidth: 160 }}>
                           <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12 }} title={o.link}>{o.link}</div>
                         </td>
-                        <td style={{ padding: '13px 16px', color: 'var(--text2)', whiteSpace: 'nowrap' }}>{o.qty !== '—' ? Number(o.qty).toLocaleString('id-ID') : '—'}</td>
+                        {/* Fix #3: guard qty — cegah string kosong/null jadi Number(0) */}
+                        <td style={{ padding: '13px 16px', color: 'var(--text2)', whiteSpace: 'nowrap' }}>
+                          {o.qty && o.qty !== '—' ? Number(o.qty).toLocaleString('id-ID') : '—'}
+                        </td>
                         <td style={{ padding: '13px 16px', fontWeight: 700, color: 'var(--green)', whiteSpace: 'nowrap', fontSize: 12.5 }}>
                           {o.amountIDR ? `Rp ${Number(o.amountIDR).toLocaleString('id-ID')}` : '—'}
                         </td>

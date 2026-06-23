@@ -1702,8 +1702,9 @@ a {
 /* ══════════════════════════════════════
    LANDING HERO — biar stagger child (heroRise di index.jsx)
    gak dobel sama fadeUp parent .fu
+   Scope ke .landing-hero supaya gak matiin .fu di tempat lain
    ══════════════════════════════════════ */
-.root .fu {
+.landing-hero .fu {
   animation: none;
 }
 
@@ -1966,6 +1967,149 @@ canvas {
   .root .ns-topbar,
   .root .ns-top-btn,
   .root .bottom-nav-bar {
+    transition: none;
+  }
+}
+
+/* ══════════════════════════════════════
+   ADMIN USERS — dark mode fix & polish
+   Semua di-scope ke .admin-users-wrap
+   ══════════════════════════════════════ */
+
+/* Pastikan background tabel ikut CSS var (bukan hardcode) */
+.admin-users-wrap .au-table-wrap {
+  background: var(--bg);
+  border-color: var(--border);
+}
+
+/* Header tabel ikut dark mode */
+.admin-users-wrap .au-thead th {
+  background: var(--bg2);
+  color: var(--text3);
+  border-bottom-color: var(--border);
+}
+
+/* Baris zebra dark-safe */
+.admin-users-wrap .usr-tr:nth-child(even) .au-td {
+  background: rgba(127, 127, 127, .03);
+}
+
+/* Hover baris — biru tipis, pakai CSS var */
+.admin-users-wrap .usr-tr:hover .au-td {
+  background: var(--blue-l) !important;
+}
+
+/* Cell border ikut dark */
+.admin-users-wrap .au-td {
+  border-bottom-color: var(--border);
+}
+
+/* Modal background ikut dark */
+.admin-users-wrap .au-modal,
+.admin-users-wrap .au-saldo-modal {
+  background: var(--bg);
+  border-color: var(--border);
+}
+
+/* Stat cards dalam modal */
+.admin-users-wrap .au-stat {
+  background: var(--bg2);
+  border-color: var(--border);
+}
+
+/* Input saldo ikut dark */
+.admin-users-wrap .au-inp {
+  background: var(--bg2);
+  border-color: var(--border);
+  color: var(--text);
+}
+
+.admin-users-wrap .au-inp:focus {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px var(--blue-l);
+}
+
+/* Search input */
+.admin-users-wrap .au-search {
+  background: var(--bg2);
+  border-color: var(--border);
+  color: var(--text);
+}
+
+.admin-users-wrap .au-search:focus {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px var(--blue-l);
+}
+
+/* TX list */
+.admin-users-wrap .au-tx-list {
+  border-color: var(--border);
+  background: var(--bg);
+}
+
+.admin-users-wrap .au-tx-item {
+  border-bottom-color: var(--border);
+}
+
+.admin-users-wrap .au-tx-item:hover {
+  background: var(--bg2);
+}
+
+/* Toggle TX button */
+.admin-users-wrap .au-tx-toggle {
+  background: var(--bg2);
+  border-color: var(--border);
+  color: var(--text2);
+}
+
+.admin-users-wrap .au-tx-toggle.open {
+  background: var(--blue-l);
+  border-color: color-mix(in srgb, var(--blue) 35%, transparent);
+  color: var(--blue);
+}
+
+/* Close & cancel buttons */
+.admin-users-wrap .au-close-btn,
+.admin-users-wrap .au-btn-cancel {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--text2);
+}
+
+.admin-users-wrap .au-close-btn:hover,
+.admin-users-wrap .au-btn-cancel:hover {
+  background: var(--bg2);
+}
+
+/* Divider */
+.admin-users-wrap .au-divider {
+  border-top-color: var(--border);
+}
+
+/* Theme transition untuk admin-users juga */
+.admin-users-wrap .au-table-wrap,
+.admin-users-wrap .au-thead th,
+.admin-users-wrap .au-td,
+.admin-users-wrap .au-modal,
+.admin-users-wrap .au-saldo-modal,
+.admin-users-wrap .au-stat,
+.admin-users-wrap .au-inp,
+.admin-users-wrap .au-search,
+.admin-users-wrap .au-tx-list,
+.admin-users-wrap .au-tx-item,
+.admin-users-wrap .au-tx-toggle,
+.admin-users-wrap .au-close-btn {
+  transition:
+    background-color .35s ease,
+    border-color .35s ease,
+    color .35s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+  .admin-users-wrap .au-table-wrap,
+  .admin-users-wrap .au-thead th,
+  .admin-users-wrap .au-td {
     transition: none;
   }
 }

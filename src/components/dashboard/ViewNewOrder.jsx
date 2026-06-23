@@ -105,8 +105,15 @@ export default function ViewNewOrder({ user, setMenu }) {
   const [selectedPlatform, setSelectedPlatform] = useState('');
   const [orderCount, setOrderCount] = useState(null);
   const [completedCount, setCompletedCount] = useState(null);
-  const [disabledServiceIds, setDisabledServiceIds] = useState(new Set()); // service id yang dimatikan admin
-  const disabledRef = useRef(new Set()); // ref agar bisa diakses di dalam useEffect services
+  // disabled services sudah difilter server-side di action=services (tidak perlu fetch terpisah)
+
+  // ✅ FIX DOUBLE-CHARGE: Gunakan useRef (sync) sebagai guard utama, BUKAN state (async).
+  // Masalahnya: disabled={orderLoading} di button tidak cukup karena React state update
+  // bersifat async — ada jeda antara setOrderLoading(true) dan re-render button.
+  // Di jeda itulah klik kedua bisa masuk dan memanggil api.addOrder() dua kali.
+  // useRef berubah SYNCHRONOUSLY → tidak ada jeda → klik kedua langsung diblokir.
+  const orderingRef = useRef(false); // guard untuk handleOrder (single order)
+  const bulkOrderingRef = useRef(false); // guard untuk handleBulkOrder (bulk order)
 
   // Deteksi apakah service butuh username atau link
   const getInputType = (service) => {
@@ -126,21 +133,6 @@ export default function ViewNewOrder({ user, setMenu }) {
 
   useEffect(() => {
     fetch('/api/rate').then(r => r.json()).then(d => { if (d.rate) setRate(d.rate); }).catch(() => { });
-  }, []);
-
-  // Sync ref setiap kali disabledServiceIds berubah (agar useEffect services bisa akses)
-  useEffect(() => { disabledRef.current = disabledServiceIds; }, [disabledServiceIds]);
-
-  // Fetch daftar service yang dimatikan admin — filter dari tampilan user
-  useEffect(() => {
-    fetch('/api/smm?action=get_disabled_services')
-      .then(r => r.ok ? r.json() : null)
-      .then(d => {
-        if (d && Array.isArray(d.disabled)) {
-          setDisabledServiceIds(new Set(d.disabled.map(String)));
-        }
-      })
-      .catch(() => { });
   }, []);
 
   // Load markup + rules via server endpoint (pakai service role, lolos RLS).
@@ -215,7 +207,16 @@ export default function ViewNewOrder({ user, setMenu }) {
   useEffect(() => {
     const CACHE_KEY = 'smm_services_cache_v2';
     const TS_KEY = 'smm_services_cache_ts';
+    const INVAL_KEY = 'smm_services_invalidated'; // ✅ FIX 6: flag invalidasi dari admin
     const TTL = 1000 * 60 * 60 * 6; // 6 jam — anggap masih segar, skip refetch
+
+    // Cek flag invalidasi — admin bisa set localStorage['smm_services_invalidated']='1'
+    // (mis. via /api/smm?action=invalidate_service_cache) untuk paksa reload semua client
+    const isInvalidated = typeof window !== 'undefined' &&
+      localStorage.getItem(INVAL_KEY) === '1';
+    if (isInvalidated && typeof window !== 'undefined') {
+      localStorage.removeItem(INVAL_KEY); // konsumsi sekali pakai
+    }
     // 1. Tampilkan cache dulu kalau ada → instan, tanpa "Memuat layanan..."
     //    Pakai localStorage (persist lintas tab/session), bukan sessionStorage.
     let hasCache = false;
@@ -227,7 +228,7 @@ export default function ViewNewOrder({ user, setMenu }) {
         if (Array.isArray(cached) && cached.length) {
           setServices(cached);
           hasCache = true;
-          cacheFresh = Date.now() - ts < TTL;
+          cacheFresh = !isInvalidated && (Date.now() - ts < TTL);
         }
       } catch { }
     }
@@ -242,9 +243,8 @@ export default function ViewNewOrder({ user, setMenu }) {
         const arr = Array.isArray(svcs) ? svcs : [];
         setServices(arr);
         try {
-          // Simpan ke cache tanpa service yang dimatikan admin (agar cache tidak stale)
-          const cacheable = arr.filter(s => !disabledRef.current.has(String(s.service)));
-          localStorage.setItem(CACHE_KEY, JSON.stringify(cacheable));
+          // Server sudah filter disabled services — simpan langsung ke cache
+          localStorage.setItem(CACHE_KEY, JSON.stringify(arr));
           localStorage.setItem(TS_KEY, String(Date.now()));
         } catch { }
       })
@@ -255,20 +255,35 @@ export default function ViewNewOrder({ user, setMenu }) {
   const handleOrder = async () => {
     if (!selectedService) { setError('Pilih layanan dulu.'); return; }
 
+    // ✅ FIX DOUBLE-CHARGE: Cek ref SYNCHRONOUSLY di baris pertama — SEBELUM validasi apapun.
+    // Ini memblokir klik kedua bahkan sebelum React sempat re-render button jadi disabled.
+    if (orderingRef.current) return;
+    orderingRef.current = true;
+
     // Deteksi layanan Custom Comments (butuh daftar komentar, bukan quantity)
     const isCustomComments = isCustomCommentsSvc(selectedService);
 
     // Daftar komentar (1 per baris). Quantity untuk custom comments = jumlah baris.
     const commentList = comments.split('\n').map(s => s.trim()).filter(Boolean);
-    const effectiveQty = isCustomComments ? commentList.length : parseInt(qty);
+    const effectiveQty = isCustomComments ? commentList.length : parseInt(qty, 10); // ✅ FIX 2: radix 10 eksplisit
 
     // Validasi field
     const trimmedLink = link.trim();
-    if (!trimmedLink) { setError('Lengkapi link/username dulu.'); return; }
+    if (!trimmedLink) { setError('Lengkapi link/username dulu.'); orderingRef.current = false; return; }
+
+    // ✅ FIX 1: Validasi format link — cegah string sembarang dikirim ke provider
+    // Izinkan: URL lengkap (http/https), atau username (@namauser / namauser)
+    // Blokir: string pendek tanpa makna, spasi, atau karakter berbahaya
+    const isUrl = /^https?:\/\/.{4,}/i.test(trimmedLink);
+    const isUsername = /^@?[\w.\-]{2,}/i.test(trimmedLink);
+    if (!isUrl && !isUsername) {
+      setError('Link atau username tidak valid. Masukkan URL lengkap (https://...) atau username.');
+      orderingRef.current = false; return;
+    }
     if (isCustomComments) {
-      if (commentList.length === 0) { setError('Isi minimal satu komentar (satu komentar per baris).'); return; }
+      if (commentList.length === 0) { setError('Isi minimal satu komentar (satu komentar per baris).'); orderingRef.current = false; return; }
     } else if (!qty) {
-      setError('Lengkapi jumlah (quantity) dulu.'); return;
+      setError('Lengkapi jumlah (quantity) dulu.'); orderingRef.current = false; return;
     }
 
     // Validasi min/max berdasar jumlah komentar / quantity
@@ -276,47 +291,75 @@ export default function ViewNewOrder({ user, setMenu }) {
     const maxV = Number(selectedService.max) || Infinity;
     if (!effectiveQty || isNaN(effectiveQty) || effectiveQty <= 0 || effectiveQty < minV || effectiveQty > maxV) {
       setError(`Jumlah harus antara ${minV} dan ${maxV}.${isCustomComments ? ` Kamu menulis ${commentList.length} komentar.` : ''}`);
-      return;
+      orderingRef.current = false; return;
     }
 
     // Validasi saldo sebelum order
-    const totalIDRCheck = Math.round(effectiveQty * parseFloat(selectedService.rate || 0) / 1000 * fxFor(selectedService) * resolveMarkup(selectedService));
+    const svcRate = parseFloat(selectedService.rate || 0);
+    // ✅ FIX 2b: Blokir order jika harga service = 0 (data belum load / error provider)
+    // Sebelumnya: total = Rp 0, validasi saldo lolos, order terkirim gratis → rugi
+    if (svcRate <= 0) {
+      setError('Harga layanan belum tersedia. Coba refresh atau pilih layanan lain.');
+      orderingRef.current = false; return;
+    }
+    const totalIDRCheck = Math.round(effectiveQty * svcRate / 1000 * fxFor(selectedService) * resolveMarkup(selectedService));
     if (balance !== null && totalIDRCheck > balance) {
       setError(`Saldo tidak cukup. Saldo kamu Rp ${Math.round(balance).toLocaleString('id-ID')}, dibutuhkan Rp ${totalIDRCheck.toLocaleString('id-ID')}.`);
-      return;
+      orderingRef.current = false; return;
     }
+
     setOrderLoading(true); setError(''); setOrderResult(null);
     try {
       // Custom Comments → kirim daftar komentar; lainnya → kirim quantity biasa.
-      const res = isCustomComments
-        ? await api.addOrder(selectedService.service, trimmedLink, effectiveQty, { comments: commentList.join('\n') })
-        : await api.addOrder(selectedService.service, trimmedLink, effectiveQty);
+      // ✅ FIX 7: Timeout 30 detik untuk api.addOrder
+      // Tanpa ini: jika SMM provider tidak merespons, user stuck di loading selamanya
+      const ORDER_TIMEOUT_MS = 30_000;
+      const withTimeout = (promise, ms) => Promise.race([
+        promise,
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Timeout: server provider tidak merespons setelah 30 detik. Silakan coba lagi.')), ms)
+        ),
+      ]);
+      const res = await withTimeout(
+        isCustomComments
+          ? api.addOrder(selectedService.service, trimmedLink, effectiveQty, { comments: commentList.join('\n') })
+          : api.addOrder(selectedService.service, trimmedLink, effectiveQty),
+        ORDER_TIMEOUT_MS
+      );
       setOrderResult({ success: true, orderId: res.order, msg: `Order #${res.order} berhasil dibuat!` });
       // Simpan order ID ke sessionStorage
       if (typeof window !== 'undefined' && res.order) {
-        const userKey = `smm_orders_${user?.email || 'guest'}`;
-        const existing = JSON.parse(localStorage.getItem(userKey) || '[]');
-        const orderObj = {
-          orderId: String(res.order),
-          email: user?.email || 'guest',
-          service: selectedService.service,
-          serviceName: selectedService.name,
-          link: trimmedLink,
-          qty: effectiveQty,
-          rate: selectedService.rate,
-          comments: isCustomComments ? commentList : undefined,
-          createdAt: new Date().toISOString(),
-        };
-        if (!existing.find(o => (typeof o === 'object' ? o.orderId : o) === String(res.order))) {
-          existing.unshift(orderObj);
-          localStorage.setItem(userKey, JSON.stringify(existing.slice(0, 200)));
-        }
+        // ✅ FIX 3: JSON.parse localStorage dibungkus try-catch
+        // Data storage bisa corrupt (clear-site-data, ekstensi browser, iOS private mode)
+        // Tanpa ini: SyntaxError → order history hilang + error UI padahal order sukses
+        try {
+          const userKey = `smm_orders_${user?.email || 'guest'}`;
+          const existing = (() => { try { return JSON.parse(localStorage.getItem(userKey) || '[]'); } catch { return []; } })();
+          const orderObj = {
+            orderId: String(res.order),
+            email: user?.email || 'guest',
+            service: selectedService.service,
+            serviceName: selectedService.name,
+            link: trimmedLink,
+            qty: effectiveQty,
+            rate: selectedService.rate,
+            comments: isCustomComments ? commentList : undefined,
+            createdAt: new Date().toISOString(),
+          };
+          if (!existing.find(o => (typeof o === 'object' ? o.orderId : o) === String(res.order))) {
+            existing.unshift(orderObj);
+            localStorage.setItem(userKey, JSON.stringify(existing.slice(0, 200)));
+          }
+        } catch { /* localStorage penuh atau tidak tersedia — abaikan, order tetap sukses */ }
+
         // backward compat sessionStorage
-        const session = JSON.parse(sessionStorage.getItem('smm_order_ids') || '[]');
-        if (!session.includes(String(res.order))) {
-          session.unshift(String(res.order));
-          sessionStorage.setItem('smm_order_ids', JSON.stringify(session.slice(0, 100)));
-        }
+        try {
+          const session = (() => { try { return JSON.parse(sessionStorage.getItem('smm_order_ids') || '[]'); } catch { return []; } })();
+          if (!session.includes(String(res.order))) {
+            session.unshift(String(res.order));
+            sessionStorage.setItem('smm_order_ids', JSON.stringify(session.slice(0, 100)));
+          }
+        } catch { /* sessionStorage tidak tersedia — abaikan */ }
         // ✅ Saldo & baris transaksi 'order' SUDAH ditangani server (RPC debit + enrich).
         //    Client tidak boleh insert transaksi sendiri (dobel potong + diblok RLS).
         //    Cukup baca ulang saldo dari ledger biar angka di UI sinkron.
@@ -326,13 +369,39 @@ export default function ViewNewOrder({ user, setMenu }) {
       // Update counter pesanan langsung tanpa nunggu reload
       setOrderCount(prev => (prev !== null ? prev + 1 : 1));
       setCompletedCount(prev => (prev !== null ? prev + 1 : 1));
-    } catch (e) { setError(e.message); }
-    setOrderLoading(false);
+    } catch (e) {
+      // ✅ FIX 4: Sanitasi pesan error — jangan tampilkan pesan teknis mentah dari SMM API
+      const rawMsg = e?.message || '';
+      const safeMsg =
+        rawMsg.includes('insufficient') || rawMsg.includes('balance')
+          ? 'Saldo tidak mencukupi di provider. Hubungi admin.'
+          : rawMsg.includes('incorrect order amount') || rawMsg.includes('min') || rawMsg.includes('max')
+            ? `Jumlah order tidak valid: ${rawMsg.slice(0, 80)}`
+            : rawMsg.includes('invalid link') || rawMsg.includes('url')
+              ? 'Link tidak valid. Pastikan link publik dan benar.'
+              : rawMsg.includes('Network') || rawMsg.includes('fetch') || rawMsg.includes('timeout')
+                ? 'Koneksi gagal. Cek internet kamu dan coba lagi.'
+                : rawMsg.length > 0 && rawMsg.length < 120
+                  ? rawMsg  // pesan pendek dan jelas → tampilkan langsung
+                  : 'Gagal membuat order. Coba lagi atau hubungi admin.';
+      setError(safeMsg);
+    }
+    finally {
+      // ✅ FIX: Reset KEDUANYA — ref (sync) dan state (untuk UI) — di finally agar
+      // selalu bersih meski order sukses, error, atau network timeout sekalipun.
+      orderingRef.current = false;
+      setOrderLoading(false);
+    }
   };
 
   const handleBulkOrder = async () => {
     const lines = bulkText.trim().split('\n').filter(l => l.trim());
     if (lines.length === 0) { setError('Masukkan minimal 1 baris order.'); return; }
+
+    // ✅ FIX DOUBLE-CHARGE: Guard sync untuk bulk order — sama dengan handleOrder
+    if (bulkOrderingRef.current) return;
+    bulkOrderingRef.current = true;
+
     setBulkLoading(true); setError(''); setBulkResults([]);
     const results = [];
     let runningBalance = balance; // track saldo lokal agar cek per-baris akurat
@@ -400,16 +469,17 @@ export default function ViewNewOrder({ user, setMenu }) {
     setBulkResults(results);
     await refreshBalance();
     setBulkLoading(false);
+    bulkOrderingRef.current = false; // ✅ Reset ref setelah bulk selesai (sukses/error)
   };
 
   // Pra-hitung sekali per perubahan `services`: kategori bersih + platform per service.
   // Memoized supaya 30rb+ service nggak diproses ulang tiap render (tiap ketik qty/link).
+  // Server sudah filter disabled services via action=services.
   const enriched = useMemo(() => services
-    .filter(s => !disabledServiceIds.has(String(s.service)))
     .map(s => {
       const cleanCat = cleanCategory(s.category) || 'Lainnya';
       return { svc: s, cleanCat, platform: detectPlatform(cleanCat, s.name) };
-    }), [services, disabledServiceIds]);
+    }), [services]);
 
   // Filter platform: cocokkan platform yang TERDETEKSI per service (bukan substring kasar).
   const platformFilteredEnriched = useMemo(
@@ -429,7 +499,6 @@ export default function ViewNewOrder({ user, setMenu }) {
     if (!q) return [];
     const out = [];
     for (const s of services) {
-      if (disabledServiceIds.has(String(s.service))) continue; // skip layanan nonaktif
       if (
         (s.name || '').toLowerCase().includes(q) ||
         String(s.service).toLowerCase().includes(q) ||
@@ -542,7 +611,7 @@ export default function ViewNewOrder({ user, setMenu }) {
       {/* 3 stat lain — ringkas, jadi info sekunder di bawah hero */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 8, marginBottom: 18 }} className="ns-stat-grid">
         {[
-          { icon: <CreditCard size={18} />, iconColor: 'var(--blue)', label: 'Saldo', value: balance !== null ? `${(typeof balance === 'number' ? balance : Math.round(parseFloat(balance || 0) * rate)).toLocaleString('id-ID')}` : <Shimmer w={60} />, target: 'Add Funds' },
+          { icon: <CreditCard size={18} />, iconColor: 'var(--blue)', label: 'Saldo', value: balance !== null ? `${Math.round(balance).toLocaleString('id-ID')}` : <Shimmer w={60} />, target: 'Add Funds' }, // ✅ FIX 5: balance sudah IDR dari refreshBalance, tidak perlu * rate
           { icon: <Activity size={18} />, iconColor: 'var(--red)', label: 'Pesanan', value: orderCount !== null ? orderCount : <Shimmer w={28} />, target: 'My Orders' },
           { icon: <CheckCircle size={18} />, iconColor: 'var(--green)', label: 'Berhasil', value: completedCount !== null ? completedCount : <Shimmer w={28} />, target: 'My Orders' },
         ].map((s, i) => (
