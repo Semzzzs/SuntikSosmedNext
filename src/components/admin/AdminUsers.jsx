@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { DollarSign, Users, MinusCircle, Ban, CheckCircle, History, ArrowDownCircle, ArrowUpCircle, ShoppingCart, Gift, RefreshCw } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
 
 const adminFetch = async (url, opts = {}) => {
     const res = await fetch(url, {
@@ -96,26 +95,22 @@ export default function AdminUsers() {
             return;
         }
 
-        // Fallback: coba langsung (mungkin gagal karena RLS)
-        const { data: blockData } = await supabase.from('settings').select('value').eq('key', 'blocked_emails').maybeSingle();
-        const blockedEmails = blockData?.value ? JSON.parse(blockData.value) : [];
-        const { data: authData, error } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
+        // Fallback: ambil via admin-api (service role, bypass RLS)
+        // Ambil blocked emails via admin-api
+        let blockedEmails = [];
+        try {
+            const blockRes = await adminFetch('/api/admin-api?action=get_settings&key=blocked_emails');
+            const blockData = await blockRes.json();
+            blockedEmails = blockData?.value ? JSON.parse(blockData.value) : [];
+        } catch (e) { /* biarkan kosong jika gagal */ }
 
+        // Ambil transaksi untuk derive email unik sebagai fallback user list
         let userList = [];
-        if (!error && authData && authData.length > 0) {
-            // Kalau ada tabel profiles
-            userList = authData.map(u => ({
-                id: u.id,
-                email: u.email,
-                name: u.full_name || u.name || u.email?.split('@')[0],
-                createdAt: u.created_at,
-                blocked: blockedEmails.includes(u.email),
-            }));
-        } else {
-            // Fallback: ambil dari tabel transactions (kumpulkan email unik)
-            const { data: txData } = await supabase.from('transactions').select('email, created_at').order('created_at', { ascending: true });
+        try {
+            const txRes = await adminFetch('/api/admin-api?action=get_transactions_all');
+            const txData = await txRes.json();
             const seen = new Set();
-            userList = (txData || []).filter(t => {
+            userList = (txData.transactions || []).filter(t => {
                 if (!t.email || seen.has(t.email)) return false;
                 seen.add(t.email);
                 return true;
@@ -125,7 +120,7 @@ export default function AdminUsers() {
                 createdAt: t.created_at,
                 blocked: blockedEmails.includes(t.email),
             }));
-        }
+        } catch (e) { /* userList tetap kosong */ }
 
         setUsers(userList);
         setLoadingUsers(false);

@@ -139,7 +139,8 @@ function TableSkeleton({ cols = 5, rows = 6, headers = null }) {
 export default function AdminPanel() {
     const router = useRouter();
     const { dark, toggle } = useTheme();
-    const { apiUrl, apiKey } = useApi();
+    // ✅ FIX: apiKey dihapus dari context (server-side only) — hapus dari destructure
+    const { apiUrl } = useApi();
     const [authed, setAuthed] = useState(false);
     const [authChecked, setAuthChecked] = useState(false);
     const [adminUser, setAdminUser] = useState('');
@@ -275,7 +276,11 @@ export default function AdminPanel() {
     // Didefinisikan di sini agar bisa dipakai loadUsers, fetchOrders, toggleBlock, dll.
     const adminFetch = (path, options = {}) => {
         const token = sessionStorage.getItem('admin_token') || '';
-        return fetch(path, {
+        // ✅ FIX: Sanitasi path — paksa leading slash agar tidak jadi 'api/...' (tanpa slash)
+        // yang di-parse browser sebagai hostname 'api' → ERR_NAME_NOT_RESOLVED.
+        // Ini safety net untuk index.jsx dan child components yang mungkin lewatkan slash.
+        const safePath = path.startsWith('/') || path.startsWith('http') ? path : `/${path}`;
+        return fetch(safePath, {
             ...options,
             headers: {
                 'Content-Type': 'application/json',
@@ -368,6 +373,9 @@ export default function AdminPanel() {
     };
 
     const fetchBalance = useCallback(async () => {
+        // ✅ FIX: Guard token — jangan fetch jika belum login
+        const token = sessionStorage.getItem('admin_token');
+        if (!token) return;
         setLoadingBalance(true);
         try {
             // Ambil saldo SEMUA provider terkonfigurasi sekaligus (endpoint admin-only).
@@ -409,7 +417,9 @@ export default function AdminPanel() {
             setOverviewError(`Services error: ${e.message}`);
         }
         setLoadingServices(false);
-    }, [apiUrl]);
+    }, []); // ✅ FIX: hapus apiUrl dari deps — tidak dipakai di body fetchServices
+    // (apiUrl ada karena warisan refactor; meninggalkannya menyebabkan fetchServices
+    //  re-run setiap apiUrl berubah dari Supabase → request ganda saat mount)
 
     // Load daftar layanan yang dimatikan admin
     const fetchDisabledServices = useCallback(async () => {
@@ -1453,7 +1463,7 @@ export default function AdminPanel() {
                                     <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text)', marginBottom: 14 }}>API Configuration</div>
                                     {[
                                         { l: 'Provider URL', v: apiUrl || 'Not set' },
-                                        { l: 'API Key', v: apiKey && typeof apiKey === 'string' ? '••••••' + apiKey.slice(-6) : (apiKey ? '••••••••••••' : 'Not set') },
+                                        { l: 'API Key', v: '(server-side only — aman)' },
                                         { l: 'Admin Password', v: '••••••••••• (server-side)' },
                                         { l: 'Proxy', v: '/api/smm (CORS-safe)' },
                                         { l: 'Markup', v: `${markup}x (${Math.round((markup - 1) * 100)}% profit)` },

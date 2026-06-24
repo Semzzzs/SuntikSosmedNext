@@ -10,6 +10,20 @@ const STATUS_STYLE = {
     cancelled: { color: 'var(--text3)', bg: 'var(--bg2)', label: 'Dibatalkan' },
 };
 
+const adminFetch = async (url, opts = {}) => {
+    const res = await fetch(url, {
+        ...opts,
+        headers: { 'Authorization': `Bearer ${sessionStorage.getItem('admin_token') || ''}`, 'Content-Type': 'application/json', ...(opts.headers || {}) },
+    });
+    if (res.status === 401) {
+        sessionStorage.removeItem('admin_authed');
+        sessionStorage.removeItem('admin_token');
+        window.location.reload();
+        throw new Error('SESSION_EXPIRED');
+    }
+    return res;
+};
+
 export default function AdminOrders() {
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -23,23 +37,14 @@ export default function AdminOrders() {
         setError('');
 
         try {
-            const token = sessionStorage.getItem('admin_token') || '';
-            const res = await fetch('/api/admin-api?action=get_orders', {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (res.status === 401) {
-                sessionStorage.removeItem('admin_authed');
-                sessionStorage.removeItem('admin_token');
-                window.location.reload();
+            const res = await adminFetch('/api/admin-api?action=get_orders');
+            if (!res.ok) {
+                const data = await res.json();
+                setError(data.error || 'Gagal mengambil data orders.');
                 return;
             }
             const data = await res.json();
-
-            if (!res.ok) {
-                setError(data.error || 'Gagal mengambil data orders.');
-            } else {
-                setOrders(data.orders || []);
-            }
+            setOrders(data.orders || []);
         } catch (e) {
             setError('Network error: ' + e.message);
         } finally {

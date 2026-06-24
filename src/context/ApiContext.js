@@ -70,6 +70,10 @@ export async function smmRequest(params) {
     });
   } else {
     const query = new URLSearchParams(safeParams);
+    // ✅ FIX: Selalu pakai '/api/smm' dengan leading slash — tidak pakai apiUrl sebagai base.
+    // Penggunaan apiUrl sebagai base URL (misal `${apiUrl}api/smm?...`) berbahaya:
+    // jika apiUrl kosong (belum load dari Supabase), hasilnya 'api/smm?...' tanpa slash
+    // → browser parse 'api' sebagai hostname → ERR_NAME_NOT_RESOLVED.
     res = await fetch(`/api/smm?${query.toString()}`, {
       method: 'GET',
       headers: {

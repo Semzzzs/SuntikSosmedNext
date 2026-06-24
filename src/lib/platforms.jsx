@@ -15,13 +15,14 @@
  * daftarin banyak apk walau belum tentu ada service-nya.
  */
 
-// ── Bersihin nama: buang [tag] + mojibake "��", TAPI emoji valid dibiarkan ──
-// Catatan: kita sengaja TIDAK buang emoji asli (🔥⚡💎 dst) karena itu bagian
-// tampilan. Yang dibuang cuma replacement char U+FFFD ("��") = emoji yang rusak
-// encoding-nya (nggak bisa dirender), plus [tag] dalam kurung siku.
+// ── Bersihin nama: buang kurung siku tapi PERTAHANKAN isinya + buang mojibake "��" ──
+// Catatan: kita sengaja TIDAK buang konten dalam [tag] — info seperti
+// [Max 1M], [HQ Real Profile], [1 Minute Completed], [👍] berguna untuk user.
+// Yang dibuang cuma karakter bracket [ ] -nya saja, dan replacement char
+// U+FFFD ("��") = emoji yang rusak encoding-nya (nggak bisa dirender).
 export const cleanName = (name = '') => String(name)
-    .replace(/\[.*?\]/g, '')   // buang [tag]/[ID]
-    .replace(/\uFFFD/g, '')    // buang mojibake "��" (emoji rusak)
+    .replace(/\[([^\]]*)\]/gu, ' $1 ')  // buang bracket [ ], isinya tetap
+    .replace(/\uFFFD/g, '')             // buang mojibake "��" (emoji rusak)
     .replace(/\s+/g, ' ')
     .trim();
 
