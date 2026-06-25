@@ -422,19 +422,36 @@ export default function AdminPanel() {
     //  re-run setiap apiUrl berubah dari Supabase → request ganda saat mount)
 
     // Load daftar layanan yang dimatikan admin
-    const fetchDisabledServices = useCallback(async () => {
+    const fetchDisabledServices = useCallback(async (attempt = 1) => {
         try {
             const res = await adminFetch('/api/admin-api?action=get_disabled_services');
             if (res.status === 401) { logout(); return; }
+            // ✅ FIX: cek res.ok — sebelumnya HTTP 500/404 dianggap sukses lalu JSON.parse gagal
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const data = await res.json();
-            setDisabledServices(Array.isArray(data.disabled) ? data.disabled.map(String) : []);
-        } catch { }
+            if (Array.isArray(data.disabled)) {
+                setDisabledServices(data.disabled.map(String));
+            }
+        } catch (e) {
+            // ✅ FIX: Jangan telan error diam-diam dengan catch {}
+            // Bug: catch {} kosong → disabledServices tetap [] → semua service tampil ON
+            // meski sudah di-matikan, karena state tidak pernah ter-restore dari DB.
+            console.warn(`[fetchDisabledServices] Gagal (attempt ${attempt}):`, e.message);
+            if (attempt < 3) {
+                // Retry dengan exponential backoff: 1.5s → 3s
+                await new Promise(r => setTimeout(r, attempt * 1500));
+                return fetchDisabledServices(attempt + 1);
+            }
+            // Setelah 3x gagal, JANGAN ubah state — pertahankan nilai sebelumnya.
+            // Lebih baik data lama daripada reset ke [] (semua service tiba-tiba ON).
+            console.error('[fetchDisabledServices] Gagal 3x, state dipertahankan.');
+        }
     }, []);
 
     // Toggle on/off satu layanan (optimistic update)
     const toggleService = async (serviceId, makeEnabled) => {
         const id = String(serviceId);
-        // optimistic
+        // Optimistic update: ubah UI langsung sebelum tunggu server
         setDisabledServices(prev => makeEnabled ? prev.filter(x => x !== id) : [...new Set([...prev, id])]);
         try {
             const res = await adminFetch('/api/admin-api?action=toggle_service', {
@@ -443,11 +460,17 @@ export default function AdminPanel() {
                 body: JSON.stringify({ service_id: id, enabled: makeEnabled }),
             });
             if (res.status === 401) { logout(); return; }
+            // ✅ FIX: cek res.ok sebelum parse JSON
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const data = await res.json();
+            // Sync dari server response (sumber kebenaran)
             if (Array.isArray(data.disabled)) setDisabledServices(data.disabled.map(String));
-        } catch {
-            // revert kalau gagal
+        } catch (e) {
+            // Revert optimistic update kalau server gagal
+            console.error('[toggleService] Gagal, revert:', e.message);
             setDisabledServices(prev => makeEnabled ? [...new Set([...prev, id])] : prev.filter(x => x !== id));
+            // ✅ FIX: beritahu admin bahwa toggle gagal disimpan
+            showToast('Gagal menyimpan perubahan layanan. Coba lagi.', 'error');
         }
     };
 
@@ -722,7 +745,7 @@ export default function AdminPanel() {
         doRefresh();
         const interval = setInterval(doRefresh, 300 * 1000);
         return () => clearInterval(interval);
-    }, [authed, fetchBalance, fetchServices, fetchOrders]);
+    }, [authed, fetchBalance, fetchServices, fetchOrders, fetchDisabledServices]);
 
     // saldo update dipanggil dari AdminUsers child component — reload users setelah update
     const onSaldoUpdated = () => { loadUsers(); };

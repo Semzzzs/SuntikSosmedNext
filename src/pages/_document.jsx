@@ -55,8 +55,12 @@ export default function Document() {
         <meta name="twitter:card" content="summary_large_image" />
 
         {/* ✅ Security headers via meta (backup — utamanya di next.config.js) */}
+        {/* Catatan: X-Content-Type-Options & X-XSS-Protection lebih efektif
+            diset sebagai HTTP response header di next.config.js → headers(),
+            karena meta httpEquiv tidak dipatuhi semua browser untuk kasus ini. */}
         <meta httpEquiv="X-Content-Type-Options" content="nosniff" />
         <meta httpEquiv="X-XSS-Protection" content="1; mode=block" />
+        <meta httpEquiv="Referrer-Policy" content="strict-origin-when-cross-origin" />
 
         {/* ✅ Google Search Console */}
         <meta name="google-site-verification" content="e1LldDJ8ItgQUcLStZOtTdyFfib-7gjgPUDQGK6iGO8" />

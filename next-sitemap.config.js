@@ -45,18 +45,17 @@ module.exports = {
     },
 
     robotsTxtOptions: {
+        // ✅ KEAMANAN: Jangan ekspos nama path sensitif di robots.txt.
+        // robots.txt bisa dibaca siapa saja — mendaftarkan /Voltaraz, /api, dll
+        // justru memberi peta struktur internal ke penyerang.
+        //
+        // Halaman auth & dashboard sudah di-exclude dari sitemap di atas,
+        // jadi Google tidak akan mengindeksnya.
+        // Perlindungan akses sesungguhnya ada di middleware/autentikasi, bukan robots.txt.
         policies: [
             {
                 userAgent: '*',
                 allow: '/',
-                disallow: [
-                    '/Voltaraz',
-                    '/api',
-                    '/dashboard',
-                    '/login',
-                    '/register',
-                    '/reset-password',
-                ],
             },
         ],
     },
