@@ -39,7 +39,19 @@ export default async function handler(req, res) {
             .select('value')
             .eq('key', 'blocked_emails')
             .maybeSingle();
-        const blockedEmails = blk?.value ? JSON.parse(blk.value) : [];
+        // ✅ Fix: JSON.parse di-bungkus try/catch sendiri (bukan cuma andelin
+        //         catch terluar) + validasi hasil parse harus array. Kalau
+        //         value di DB kosong/rusak/bukan array, fallback ke [] —
+        //         jangan sampai nge-crash cek blokir gara-gara data kotor.
+        let blockedEmails = [];
+        if (blk?.value) {
+            try {
+                const parsed = JSON.parse(blk.value);
+                if (Array.isArray(parsed)) blockedEmails = parsed;
+            } catch (parseErr) {
+                console.error('[check-blocked] gagal parse blocked_emails:', parseErr.message);
+            }
+        }
 
         return res.status(200).json({ blocked: blockedEmails.includes(user.email) });
     } catch (e) {

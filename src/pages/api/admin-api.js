@@ -80,6 +80,26 @@ async function logAudit(supabase, req, { action, target = null, detail = null })
     }
 }
 
+// ── Helper: status default per-provider, { [providerKey]: 'on' | 'off' } ──
+//   Provider yang TIDAK ada di object ini dianggap default 'on' (backward
+//   compat dengan behavior lama, sebelum fitur ini ada).
+async function getProviderStatusMap(supabase) {
+    const { data } = await supabase.from('settings').select('value').eq('key', 'provider_status').maybeSingle();
+    try {
+        const parsed = data?.value ? JSON.parse(data.value) : {};
+        return (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) ? parsed : {};
+    } catch {
+        return {};
+    }
+}
+async function saveProviderStatusMap(supabase, map) {
+    return supabase.from('settings').upsert({
+        key: 'provider_status',
+        value: JSON.stringify(map),
+        updated_at: new Date().toISOString(),
+    }, { onConflict: 'key' });
+}
+
 // ──────────────────────────────────────────────────────────────────────────
 // Bulk disable (mis. matikan semua SMMSOC ~30rb id) bisa kirim body besar.
 export const config = {
@@ -298,12 +318,31 @@ export default async function handler(req, res) {
             });
         }
 
-        // Daftar service yang dimatikan admin (array of service id string)
+        // Daftar service yang dimatikan admin, sekarang lengkap dengan status
+        // default per-provider (biar frontend tahu service BARU dari provider
+        // yang di-"Matikan" bakal ikut off, bukan default on).
         if (action === 'get_disabled_services') {
             const { data } = await supabase.from('settings').select('value').eq('key', 'disabled_services').maybeSingle();
             let ids = [];
             try { ids = data?.value ? JSON.parse(data.value) : []; } catch { ids = []; }
-            return res.status(200).json({ disabled: Array.isArray(ids) ? ids : [] });
+
+            const { data: ovData } = await supabase.from('settings').select('value').eq('key', 'enabled_overrides').maybeSingle();
+            let overrides = [];
+            try { overrides = ovData?.value ? JSON.parse(ovData.value) : []; } catch { overrides = []; }
+
+            const providerStatus = await getProviderStatusMap(supabase);
+
+            return res.status(200).json({
+                disabled: Array.isArray(ids) ? ids : [],           // exception individual saat provider default ON
+                enabled_overrides: Array.isArray(overrides) ? overrides : [], // exception individual saat provider default OFF
+                provider_status: providerStatus,                    // { buzzer: 'off', smmsoc: 'on', ... }
+            });
+        }
+
+        // Status default provider saja (dipakai badge/label provider di UI).
+        if (action === 'get_provider_status') {
+            const providerStatus = await getProviderStatusMap(supabase);
+            return res.status(200).json({ status: providerStatus });
         }
 
         // Ambil tier bonus deposit
@@ -338,66 +377,92 @@ export default async function handler(req, res) {
             return res.status(200).json({ ok: true });
         }
 
-        // Toggle on/off layanan — service yang off disembunyikan dari user
+        // Toggle on/off SATU layanan — service yang off disembunyikan dari user.
+        //   Exception individual disimpan di tempat berbeda tergantung status
+        //   DEFAULT provider-nya saat ini:
+        //     - provider default ON  -> exception ("matikan service ini saja")
+        //       disimpan di `disabled_services`.
+        //     - provider default OFF -> exception ("nyalain service ini saja
+        //       walau providernya lagi off") disimpan di `enabled_overrides`.
         if (action === 'toggle_service') {
             const serviceId = String(body.service_id || '').trim();
             const enabled = body.enabled; // true = aktifkan, false = matikan
             if (!serviceId) return res.status(400).json({ error: 'service_id wajib diisi.' });
 
-            // Ambil daftar disabled saat ini
-            const { data: cur } = await supabase.from('settings').select('value').eq('key', 'disabled_services').maybeSingle();
-            let disabled = [];
-            try { disabled = cur?.value ? JSON.parse(cur.value) : []; } catch { disabled = []; }
-            if (!Array.isArray(disabled)) disabled = [];
-            const set = new Set(disabled.map(String));
+            const providerKey = serviceId.includes(':') ? serviceId.split(':')[0] : null;
+            const providerStatus = await getProviderStatusMap(supabase);
+            const providerDefaultOn = !providerKey || providerStatus[providerKey] !== 'off';
 
-            if (enabled) set.delete(serviceId);   // aktifkan = keluarkan dari daftar disabled
-            else set.add(serviceId);               // matikan = masukkan ke daftar disabled
+            const settingKey = providerDefaultOn ? 'disabled_services' : 'enabled_overrides';
+            const { data: cur } = await supabase.from('settings').select('value').eq('key', settingKey).maybeSingle();
+            let list = [];
+            try { list = cur?.value ? JSON.parse(cur.value) : []; } catch { list = []; }
+            if (!Array.isArray(list)) list = [];
+            const set = new Set(list.map(String));
 
-            const next = Array.from(set);
-            const { error } = await supabase.from('settings').upsert({
-                key: 'disabled_services',
-                value: JSON.stringify(next),
-                updated_at: new Date().toISOString()
-            }, { onConflict: 'key' });
-            if (error) return res.status(500).json({ error: error.message });
-            await logAudit(supabase, req, { action: 'toggle_service', target: serviceId, detail: { enabled: !!enabled } });
-            return res.status(200).json({ ok: true, disabled: next });
-        }
-
-        // ── Matikan/aktifkan SEMUA layanan satu provider sekaligus ──
-        //   enabled=true  -> aktifkan: buang semua id milik provider dari daftar
-        //                    disabled (cukup parse prefix "provider:", tak perlu kirim id).
-        //   enabled=false -> matikan: tambahkan semua id provider (dikirim client
-        //                    lewat service_ids) ke daftar disabled.
-        if (action === 'bulk_toggle_provider') {
-            const provider = String(body.provider || '').trim();
-            const enabled = body.enabled;
-            const serviceIds = Array.isArray(body.service_ids) ? body.service_ids.map(String) : [];
-            if (!provider) return res.status(400).json({ error: 'provider wajib diisi.' });
-
-            const { data: cur } = await supabase.from('settings').select('value').eq('key', 'disabled_services').maybeSingle();
-            let disabled = [];
-            try { disabled = cur?.value ? JSON.parse(cur.value) : []; } catch { disabled = []; }
-            if (!Array.isArray(disabled)) disabled = [];
-            const set = new Set(disabled.map(String));
-            const prefix = `${provider}:`;
-
-            if (enabled) {
-                for (const id of [...set]) if (String(id).startsWith(prefix)) set.delete(id);
+            if (providerDefaultOn) {
+                if (enabled) set.delete(serviceId);   // aktifkan = keluarkan dari daftar disabled
+                else set.add(serviceId);               // matikan = masukkan ke daftar disabled
             } else {
-                for (const id of serviceIds) if (id.startsWith(prefix)) set.add(id);
+                if (enabled) set.add(serviceId);       // aktifkan = tambah ke override (opt-in)
+                else set.delete(serviceId);            // matikan = balik ke default provider (off)
             }
 
             const next = Array.from(set);
             const { error } = await supabase.from('settings').upsert({
-                key: 'disabled_services',
+                key: settingKey,
                 value: JSON.stringify(next),
                 updated_at: new Date().toISOString()
             }, { onConflict: 'key' });
             if (error) return res.status(500).json({ error: error.message });
-            await logAudit(supabase, req, { action: 'bulk_toggle_provider', target: provider, detail: { enabled: !!enabled, count: enabled ? 0 : serviceIds.length } });
-            return res.status(200).json({ ok: true, disabled: next });
+            await logAudit(supabase, req, { action: 'toggle_service', target: serviceId, detail: { enabled: !!enabled, via: settingKey } });
+            return res.status(200).json({ ok: true, [settingKey]: next });
+        }
+
+        // ── Matikan/aktifkan SEMUA layanan satu provider sekaligus ──
+        //   FIX: dulu ini nyimpen SNAPSHOT id (service_ids dari client) ke
+        //   disabled_services. Masalahnya, provider (mis. BuzzerPanel) terus
+        //   nambah service BARU dari waktu ke waktu — id baru itu tidak pernah
+        //   tercatat di snapshot lama, jadi otomatis nongol "On" lagi walau
+        //   admin sudah pernah klik "Matikan Semua". Itu sumber laporan
+        //   "kok ada service yang aktif sendiri".
+        //
+        //   Sekarang statusnya PERSISTEN per-provider (provider_status), jadi
+        //   berlaku juga untuk service yang baru ditambahkan provider nanti —
+        //   tidak perlu snapshot id lagi sama sekali.
+        if (action === 'bulk_toggle_provider') {
+            const provider = String(body.provider || '').trim();
+            const enabled = body.enabled;
+            if (!provider) return res.status(400).json({ error: 'provider wajib diisi.' });
+
+            const providerStatus = await getProviderStatusMap(supabase);
+            providerStatus[provider] = enabled ? 'on' : 'off';
+            const { error: statusErr } = await saveProviderStatusMap(supabase, providerStatus);
+            if (statusErr) return res.status(500).json({ error: statusErr.message });
+
+            // Bersihkan exception individual lama untuk provider ini — begitu
+            // status provider di-set eksplisit, exception per-service lama
+            // jadi basi/tidak relevan (dan biar setting tidak numpuk data).
+            const prefix = `${provider}:`;
+            const { data: curDis } = await supabase.from('settings').select('value').eq('key', 'disabled_services').maybeSingle();
+            let disabled = [];
+            try { disabled = curDis?.value ? JSON.parse(curDis.value) : []; } catch { disabled = []; }
+            if (!Array.isArray(disabled)) disabled = [];
+            const disabledNext = disabled.filter((id) => !String(id).startsWith(prefix));
+
+            const { data: curOv } = await supabase.from('settings').select('value').eq('key', 'enabled_overrides').maybeSingle();
+            let overrides = [];
+            try { overrides = curOv?.value ? JSON.parse(curOv.value) : []; } catch { overrides = []; }
+            if (!Array.isArray(overrides)) overrides = [];
+            const overridesNext = overrides.filter((id) => !String(id).startsWith(prefix));
+
+            await Promise.all([
+                supabase.from('settings').upsert({ key: 'disabled_services', value: JSON.stringify(disabledNext), updated_at: new Date().toISOString() }, { onConflict: 'key' }),
+                supabase.from('settings').upsert({ key: 'enabled_overrides', value: JSON.stringify(overridesNext), updated_at: new Date().toISOString() }, { onConflict: 'key' }),
+            ]);
+
+            await logAudit(supabase, req, { action: 'bulk_toggle_provider', target: provider, detail: { enabled: !!enabled, mode: 'persistent_provider_status' } });
+            return res.status(200).json({ ok: true, provider_status: providerStatus });
         }
 
         // Toggle block user

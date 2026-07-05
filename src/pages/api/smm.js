@@ -126,16 +126,46 @@ export default async function handler(req, res) {
 
             let services = await listAllServices();
             if (!isAdmin) {
-                // Sembunyikan service yang dimatikan admin (ID disimpan dalam bentuk prefixed).
+                // Sembunyikan service yang di-off-kan admin.
+                //   - provider_status    : status DEFAULT per-provider, persisten
+                //                          (mis. { buzzer: 'off', smmsoc: 'on' }).
+                //                          Provider yang tak ada di sini = default 'on'.
+                //   - disabled_services  : exception individual saat provider default ON
+                //                          ("semua nyala, KECUALI id-id ini").
+                //   - enabled_overrides  : exception individual saat provider default OFF
+                //                          ("semua mati, KECUALI id-id ini").
+                //
+                // FIX dari versi lama: dulu cuma ada disabled_services berisi SNAPSHOT id
+                // saat admin klik "Matikan Semua". Service baru yang provider tambahkan
+                // belakangan tidak pernah masuk snapshot itu -> otomatis nongol aktif lagi.
+                // Sekarang provider_status berlaku ke SEMUA id (lama & baru) dari provider
+                // tsb, jadi service baru otomatis ikut status default provider-nya.
                 try {
                     const supa = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
-                    const { data: ds } = await supa.from('settings').select('value').eq('key', 'disabled_services').maybeSingle();
+                    const [{ data: ds }, { data: ov }, { data: ps }] = await Promise.all([
+                        supa.from('settings').select('value').eq('key', 'disabled_services').maybeSingle(),
+                        supa.from('settings').select('value').eq('key', 'enabled_overrides').maybeSingle(),
+                        supa.from('settings').select('value').eq('key', 'provider_status').maybeSingle(),
+                    ]);
                     let disabled = [];
                     try { disabled = ds?.value ? JSON.parse(ds.value) : []; } catch { disabled = []; }
-                    if (Array.isArray(disabled) && disabled.length) {
-                        const off = new Set(disabled.map(String));
-                        services = services.filter((s) => !off.has(String(s.service)));
-                    }
+                    let overrides = [];
+                    try { overrides = ov?.value ? JSON.parse(ov.value) : []; } catch { overrides = []; }
+                    let providerStatus = {};
+                    try { providerStatus = ps?.value ? JSON.parse(ps.value) : {}; } catch { providerStatus = {}; }
+
+                    const disabledSet = new Set((Array.isArray(disabled) ? disabled : []).map(String));
+                    const overrideSet = new Set((Array.isArray(overrides) ? overrides : []).map(String));
+
+                    services = services.filter((s) => {
+                        const id = String(s.service);
+                        const providerKey = id.includes(':') ? id.split(':')[0] : null;
+                        const providerDefaultOn = !providerKey || providerStatus[providerKey] !== 'off';
+
+                        return providerDefaultOn
+                            ? !disabledSet.has(id)   // default ON -> tampil kecuali di-exception-in off
+                            : overrideSet.has(id);   // default OFF -> sembunyi kecuali di-exception-in on
+                    });
                 } catch (e) {
                     console.error('[smm] filter disabled services error:', e.message);
                 }

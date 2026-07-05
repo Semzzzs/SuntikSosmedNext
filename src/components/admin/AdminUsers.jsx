@@ -185,6 +185,7 @@ export default function AdminUsers() {
                     email: modal.email,
                     amount: val,
                     mode: modal.type === 'add' ? 'add' : 'deduct',
+                    note: creditNote || undefined,
                 }),
             });
             const data = await res.json().catch(() => ({}));
@@ -205,20 +206,37 @@ export default function AdminUsers() {
 
         setAmount('');
         setLoading(false);
-        setTimeout(() => { setModal(null); setMsg(''); }, 2000);
+        setTimeout(() => { setModal(null); setMsg(''); setCreditNote(''); }, 2000);
     };
 
     const [userTx, setUserTx] = useState([]); // transaksi untuk user yang dibuka detailnya
     const [loadingTx, setLoadingTx] = useState(false);
     const [showTx, setShowTx] = useState(false); // toggle tampil riwayat
+    const [txTab, setTxTab] = useState('order'); // 'order' | 'deposit'
+    const [userDetailData, setUserDetailData] = useState(null); // { orders, deposits, balance, totalMasuk, totalKeluar }
+    const [creditNote, setCreditNote] = useState('');
 
     const loadUserTx = async (email) => {
         setLoadingTx(true);
         setUserTx([]);
+        setUserDetailData(null);
+        setTxTab('order');
         try {
-            const res = await adminFetch(`/api/admin-api?action=get_user_transactions&email=${encodeURIComponent(email)}`);
-            const json = await res.json();
-            setUserTx(json.transactions || []);
+            // Coba endpoint get_user_detail dulu (returns orders & deposits terpisah)
+            const res = await adminFetch(`/api/admin-api?action=get_user_detail&email=${encodeURIComponent(email)}`);
+            if (res.ok) {
+                const json = await res.json();
+                if (json.orders || json.deposits) {
+                    setUserDetailData(json);
+                    setUserTx(json.orders || []);
+                    setLoadingTx(false);
+                    return;
+                }
+            }
+            // Fallback: get_user_transactions (campur semua tipe)
+            const res2 = await adminFetch(`/api/admin-api?action=get_user_transactions&email=${encodeURIComponent(email)}`);
+            const json2 = await res2.json();
+            setUserTx(json2.transactions || []);
         } catch (e) {
             setUserTx([]);
         }
@@ -446,23 +464,44 @@ export default function AdminUsers() {
                                     <button className="usr-act" onClick={() => { toggleBlock(detailUser.email); setDetailUser(d => d ? { ...d, blocked: !d.blocked } : d); }} style={{ flex: 1, justifyContent: 'center', padding: '10px 0', background: detailUser.blocked ? 'var(--green-l)' : 'var(--yellow-l)', color: detailUser.blocked ? 'var(--green)' : 'var(--yellow)', border: `1.5px solid color-mix(in srgb, ${detailUser.blocked ? 'var(--green)' : 'var(--yellow)'} 28%, transparent)` }}>{detailUser.blocked ? <CheckCircle size={13} /> : <Ban size={13} />} {detailUser.blocked ? 'Unblock' : 'Blokir'}</button>
                                 </div>
                                 <hr className="au-divider" />
-                                <button className={`au-tx-toggle ${showTx ? 'open' : ''}`} onClick={() => setShowTx(v => !v)}>
-                                    <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                        <History size={14} /> Riwayat Transaksi
-                                        {userTx.length > 0 && <span style={{ fontSize: 10.5, fontWeight: 700, background: 'var(--blue)', color: '#fff', borderRadius: 20, padding: '2px 8px' }}>{userTx.length}</span>}
-                                    </span>
-                                    <span style={{ fontSize: 11, opacity: .6 }}>{showTx ? '▲' : '▼'}</span>
-                                </button>
+
+                                {/* Tab: Riwayat Order vs Deposit */}
+                                <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+                                    {[{ k: 'order', l: 'Order', count: userDetailData ? userDetailData.orderCount : userTx.filter(t => ['order', 'purchase'].includes(t.type)).length },
+                                    { k: 'deposit', l: 'Deposit', count: userDetailData ? userDetailData.depositCount : userTx.filter(t => ['deposit', 'bonus', 'refund'].includes(t.type)).length }
+                                    ].map(tab => (
+                                        <button key={tab.k}
+                                            onClick={() => { setTxTab(tab.k); setShowTx(true); }}
+                                            style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, padding: '9px 0', borderRadius: 10, border: `1.5px solid ${txTab === tab.k && showTx ? 'var(--blue)' : 'var(--border)'}`, background: txTab === tab.k && showTx ? 'color-mix(in srgb, var(--blue) 10%, var(--bg2))' : 'var(--bg2)', color: txTab === tab.k && showTx ? 'var(--blue)' : 'var(--text2)', fontWeight: 700, fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit', transition: 'all .15s' }}>
+                                            {tab.l}
+                                            {tab.count > 0 && <span style={{ fontSize: 10, fontWeight: 700, background: txTab === tab.k && showTx ? 'var(--blue)' : 'var(--text3)', color: '#fff', borderRadius: 20, padding: '2px 7px' }}>{tab.count}</span>}
+                                        </button>
+                                    ))}
+                                    {showTx && <button onClick={() => setShowTx(false)} style={{ padding: '9px 12px', borderRadius: 10, border: '1.5px solid var(--border)', background: 'transparent', color: 'var(--text3)', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, fontWeight: 600 }}>✕</button>}
+                                </div>
+
                                 {showTx && (
                                     <div className="au-tx-list">
                                         {loadingTx ? (
                                             <div style={{ padding: '28px 0', textAlign: 'center' }}>
                                                 <span style={{ width: 20, height: 20, border: '2.5px solid var(--border)', borderTop: '2.5px solid var(--blue)', borderRadius: '50%', display: 'inline-block' }} className="spin" />
                                             </div>
-                                        ) : userTx.length === 0 ? (
-                                            <div style={{ padding: '24px 0', textAlign: 'center', color: 'var(--text3)', fontSize: 13 }}>Belum ada transaksi.</div>
-                                        ) : (
-                                            userTx.map((t, i) => (
+                                        ) : (() => {
+                                            // Pilih data dari get_user_detail jika tersedia, fallback ke userTx
+                                            const listOrders = userDetailData
+                                                ? (userDetailData.orders || [])
+                                                : userTx.filter(t => ['order', 'purchase'].includes(t.type));
+                                            const listDeposits = userDetailData
+                                                ? (userDetailData.deposits || [])
+                                                : userTx.filter(t => ['deposit', 'bonus', 'refund'].includes(t.type));
+                                            const list = txTab === 'order' ? listOrders : listDeposits;
+
+                                            if (list.length === 0) return (
+                                                <div style={{ padding: '24px 0', textAlign: 'center', color: 'var(--text3)', fontSize: 13 }}>
+                                                    {txTab === 'order' ? 'Belum ada order.' : 'Belum ada deposit.'}
+                                                </div>
+                                            );
+                                            return list.map((t, i) => (
                                                 <div key={t.id || i} className="au-tx-item">
                                                     <div style={{ marginTop: 2 }}>{txTypeIcon(t.type)}</div>
                                                     <div style={{ flex: 1, minWidth: 0 }}>
@@ -495,8 +534,8 @@ export default function AdminUsers() {
                                                         </div>
                                                     </div>
                                                 </div>
-                                            ))
-                                        )}
+                                            ));
+                                        })()}
                                     </div>
                                 )}
                                 <button className="au-close-btn" onClick={() => setDetailUser(null)}>Tutup</button>
@@ -506,7 +545,7 @@ export default function AdminUsers() {
                 )}
 
                 {modal && (
-                    <div className="au-modal-backdrop" onClick={() => { setModal(null); setAmount(''); setMsg(''); }}>
+                    <div className="au-modal-backdrop" onClick={() => { setModal(null); setAmount(''); setMsg(''); setCreditNote(''); }}>
                         <div className="au-saldo-modal" onClick={e => e.stopPropagation()}>
                             <div className="au-saldo-header" style={{ background: modal.type === 'add' ? 'linear-gradient(135deg,#15803d,#16a34a)' : 'linear-gradient(135deg,#b91c1c,#dc2626)' }}>
                                 <div className="au-saldo-header-label">{modal.type === 'add' ? '✦ Tambah Saldo' : '✦ Kurangi Saldo'}</div>
@@ -525,6 +564,8 @@ export default function AdminUsers() {
                                     <>
                                         <label className="au-inp-label">Jumlah (Rp)</label>
                                         <input className="au-inp" type="number" placeholder="0" value={amount} onChange={e => setAmount(e.target.value)} autoFocus />
+                                        <label className="au-inp-label" style={{ marginTop: 4 }}>Catatan (opsional)</label>
+                                        <input className="au-inp" type="text" placeholder="mis. kompensasi, bonus, dll" value={creditNote} onChange={e => setCreditNote(e.target.value)} style={{ fontSize: 14, marginBottom: 14 }} />
                                         <div className="au-presets">
                                             {[5000, 10000, 20000, 50000, 100000, 500000].map(n => {
                                                 const sel = amount === String(n);
@@ -541,7 +582,7 @@ export default function AdminUsers() {
                                             })}
                                         </div>
                                         <div className="au-btn-row">
-                                            <button className="au-btn-cancel" onClick={() => { setModal(null); setAmount(''); }}>Batal</button>
+                                            <button className="au-btn-cancel" onClick={() => { setModal(null); setAmount(''); setCreditNote(''); }}>Batal</button>
                                             <button className="au-btn-confirm" onClick={handleSaldo} disabled={!amount || parseInt(amount) <= 0 || loading} style={{ background: modal.type === 'add' ? '#16a34a' : '#dc2626' }}>
                                                 {loading ? <span style={{ width: 16, height: 16, border: '2px solid rgba(255,255,255,.4)', borderTop: '2px solid #fff', borderRadius: '50%' }} className="spin" /> : modal.type === 'add' ? <DollarSign size={15} /> : <MinusCircle size={15} />}
                                                 {modal.type === 'add' ? 'Tambahkan Saldo' : 'Kurangi Saldo'}

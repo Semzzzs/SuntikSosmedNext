@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useRouter } from 'next/router';
 import {
     Target, LogOut, Moon, Sun, BarChart2, Settings,
@@ -159,6 +159,8 @@ export default function AdminPanel() {
     const [loadingBalance, setLoadingBalance] = useState(false);
     const [serviceSearch, setServiceSearch] = useState('');
     const [serviceProviderFilter, setServiceProviderFilter] = useState('All'); // 'All' | 'smmsoc' | 'buzzer' | ...
+    const [serviceStatusFilter, setServiceStatusFilter] = useState('All'); // 'All' | 'active' | 'inactive'
+    const [serviceSort, setServiceSort] = useState({ key: null, dir: 'asc' }); // sort by 'harga_modal' | 'harga_user' | 'name'
     const [overviewError, setOverviewError] = useState('');
 
     const [markup, setMarkup] = useState(2.5);
@@ -372,18 +374,29 @@ export default function AdminPanel() {
         router.push('/');
     };
 
+    const fetchBalanceAbortRef = useRef(null);
+
     const fetchBalance = useCallback(async () => {
         // ✅ FIX: Guard token — jangan fetch jika belum login
         const token = sessionStorage.getItem('admin_token');
         if (!token) return;
+
+        if (fetchBalanceAbortRef.current) fetchBalanceAbortRef.current.abort();
+        const controller = new AbortController();
+        fetchBalanceAbortRef.current = controller;
+        const { signal } = controller;
+
         setLoadingBalance(true);
         try {
             // Ambil saldo SEMUA provider terkonfigurasi sekaligus (endpoint admin-only).
             const res = await fetch('/api/smm?action=provider_balances', {
-                headers: { 'Authorization': `Bearer ${sessionStorage.getItem('admin_token') || ''}` }
+                signal,
+                headers: { 'Authorization': `Bearer ${token}` }
             });
             if (res.status === 401) { logout(); return; }
+            if (signal.aborted) return;
             const data = await res.json();
+            if (signal.aborted) return;
             const list = Array.isArray(data?.providers) ? data.providers : [];
             setProviderBalances(list);
             // Backward-compat + status badge: SMMSOC (USD) dipakai sebagai 'balance' utama.
@@ -398,40 +411,31 @@ export default function AdminPanel() {
                 setOverviewError(prev => firstErr || data?.error || prev || 'Gagal mengambil balance dari provider.');
             }
         } catch (e) {
+            if (e.name === 'AbortError') return;
             setOverviewError(e.message);
             setApiStatus('error');
+        } finally {
+            if (!signal.aborted) setLoadingBalance(false);
         }
-        setLoadingBalance(false);
     }, []);
 
-    const fetchServices = useCallback(async () => {
-        // ✅ Fix: hapus guard apiUrl — /api/smm sudah baca SMM_API_KEY dari env server-side
-        setLoadingServices(true);
-        try {
-            const res = await fetch('/api/smm?action=services', { headers: { 'Authorization': `Bearer ${sessionStorage.getItem('admin_token') || ''}` } });
-            if (res.status === 401) { logout(); return; }
-            const data = await res.json();
-            if (Array.isArray(data)) setServices(data);
-            else setOverviewError('Gagal memuat daftar services dari provider.');
-        } catch (e) {
-            setOverviewError(`Services error: ${e.message}`);
-        }
-        setLoadingServices(false);
-    }, []); // ✅ FIX: hapus apiUrl dari deps — tidak dipakai di body fetchServices
-    // (apiUrl ada karena warisan refactor; meninggalkannya menyebabkan fetchServices
-    //  re-run setiap apiUrl berubah dari Supabase → request ganda saat mount)
-
-    // Load daftar layanan yang dimatikan admin
+    // Load daftar layanan yang dimatikan admin.
+    // Mengembalikan array disabled IDs agar bisa di-await oleh caller (mis. fetchServicesAndDisabled).
     const fetchDisabledServices = useCallback(async (attempt = 1) => {
         try {
             const res = await adminFetch('/api/admin-api?action=get_disabled_services');
-            if (res.status === 401) { logout(); return; }
+            if (res.status === 401) { logout(); return []; }
             // ✅ FIX: cek res.ok — sebelumnya HTTP 500/404 dianggap sukses lalu JSON.parse gagal
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const data = await res.json();
             if (Array.isArray(data.disabled)) {
-                setDisabledServices(data.disabled.map(String));
+                const ids = data.disabled.map(String);
+                setDisabledServices(ids);
+                return ids;
             }
+            // Response tidak punya field 'disabled' — jangan reset state, pertahankan yang ada.
+            console.warn('[fetchDisabledServices] Response tidak berisi field disabled:', data);
+            return null;
         } catch (e) {
             // ✅ FIX: Jangan telan error diam-diam dengan catch {}
             // Bug: catch {} kosong → disabledServices tetap [] → semua service tampil ON
@@ -445,8 +449,50 @@ export default function AdminPanel() {
             // Setelah 3x gagal, JANGAN ubah state — pertahankan nilai sebelumnya.
             // Lebih baik data lama daripada reset ke [] (semua service tiba-tiba ON).
             console.error('[fetchDisabledServices] Gagal 3x, state dipertahankan.');
+            return null;
         }
     }, []);
+
+    const fetchServicesAbortRef = useRef(null);
+
+    // ✅ FIX RACE CONDITION: fetchServices sekarang SELALU diikuti fetchDisabledServices
+    // dalam urutan yang dijamin. Dulu keduanya di-fire paralel di doRefresh() sehingga
+    // ada window di mana services sudah ter-render tapi disabledServices masih kosong →
+    // semua service muncul "On" padahal sudah dimatikan. Fix: setelah services berhasil
+    // diload, langsung fetch disabled list sebelum loading spinner dimatikan.
+    const fetchServices = useCallback(async () => {
+        // ✅ Fix: hapus guard apiUrl — /api/smm sudah baca SMM_API_KEY dari env server-side
+        if (fetchServicesAbortRef.current) fetchServicesAbortRef.current.abort();
+        const controller = new AbortController();
+        fetchServicesAbortRef.current = controller;
+        const { signal } = controller;
+
+        setLoadingServices(true);
+        try {
+            const res = await fetch('/api/smm?action=services', {
+                signal,
+                headers: { 'Authorization': `Bearer ${sessionStorage.getItem('admin_token') || ''}` }
+            });
+            if (res.status === 401) { logout(); return; }
+            if (signal.aborted) return;
+            const data = await res.json();
+            if (signal.aborted) return;
+            if (Array.isArray(data)) {
+                setServices(data);
+                // ✅ FIX: Fetch disabled list SEGERA setelah services ter-set, sebelum
+                // React sempat render dengan disabledServices stale. Ini eliminasi
+                // race window "services ON semua" yang muncul setiap interval refresh.
+                if (!signal.aborted) await fetchDisabledServices();
+            } else {
+                setOverviewError('Gagal memuat daftar services dari provider.');
+            }
+        } catch (e) {
+            if (e.name === 'AbortError') return;
+            setOverviewError(`Services error: ${e.message}`);
+        } finally {
+            if (!signal.aborted) setLoadingServices(false);
+        }
+    }, [fetchDisabledServices]); // fetchDisabledServices stabil (useCallback + [])
 
     // Toggle on/off satu layanan (optimistic update)
     const toggleService = async (serviceId, makeEnabled) => {
@@ -516,7 +562,10 @@ export default function AdminPanel() {
                 // Kalau server kembalikan state terbaru pakai itu, kalau tidak optimistic sudah cukup
                 if (Array.isArray(data.disabled)) setDisabledServices(data.disabled.map(String));
                 showToast(`${enabled ? 'Diaktifkan' : 'Dimatikan'}: semua layanan ${lbl}.`, 'success');
-                // Sync ulang dari server untuk mastiin konsisten
+                // ✅ FIX: Sync ulang disabled list saja (tidak perlu re-fetch semua services).
+                // fetchDisabledServices() standalone aman di sini karena tidak bersamaan
+                // dengan fetchServices() — ini dipanggil setelah aksi bulk selesai,
+                // bukan dari interval refresh.
                 fetchDisabledServices();
             }
         } catch (e) {
@@ -527,13 +576,31 @@ export default function AdminPanel() {
         setBulkBusy(false);
     };
 
+    // ── Ref untuk AbortController aktif fetchOrders.
+    // Pakai ref (bukan state) agar tidak trigger re-render dan bisa diakses
+    // di dalam useCallback tanpa deps yang berubah.
+    const fetchOrdersAbortRef = useRef(null);
+
     const fetchOrders = useCallback(async () => {
+        // Batalkan request sebelumnya jika masih berjalan (mis. user refresh cepat
+        // atau interval terpanggil sebelum fetch sebelumnya selesai).
+        if (fetchOrdersAbortRef.current) {
+            fetchOrdersAbortRef.current.abort();
+        }
+        const controller = new AbortController();
+        fetchOrdersAbortRef.current = controller;
+        const { signal } = controller;
+
         setLoadingOrders(true);
         try {
             // ✅ Pakai adminFetch (service role) — bypass RLS, bisa baca semua transaksi
-            const res = await adminFetch('/api/admin-api?action=get_orders');
+            const res = await adminFetch('/api/admin-api?action=get_orders', { signal });
             if (res.status === 401) { logout(); return; }
             const json = await res.json();
+
+            // Jika request ini sudah di-abort saat parse JSON selesai, hentikan.
+            if (signal.aborted) return;
+
             const txRaw = json.orders || [];
 
             // Filter hanya SMM orders asli (punya order_id numerik atau desc 'Order #')
@@ -564,10 +631,14 @@ export default function AdminPanel() {
 
             let liveStatus = {};
             for (const [prov, ids] of Object.entries(byProvider)) {
+                // Hentikan seluruh loop jika sudah di-abort (user navigasi atau komponen unmount)
+                if (signal.aborted) return;
                 for (let i = 0; i < ids.length; i += 100) {
+                    if (signal.aborted) return;
                     const chunk = ids.slice(i, i + 100);
                     try {
                         const statusRes = await fetch(`/api/smm?action=status&orders=${chunk.join(',')}&provider=${prov}`, {
+                            signal,
                             headers: { 'Authorization': `Bearer ${sessionStorage.getItem('admin_token') || ''}` }
                         });
                         if (statusRes.status === 401) { logout(); return; }
@@ -575,9 +646,16 @@ export default function AdminPanel() {
                         if (!statusData.error) {
                             for (const [oid, st] of Object.entries(statusData)) liveStatus[`${prov}:${oid}`] = st;
                         }
-                    } catch { /* fallback ke status Supabase */ }
+                    } catch (e) {
+                        // Jika error karena abort, berhenti tanpa log (bukan error sungguhan)
+                        if (e.name === 'AbortError') return;
+                        // Selain abort: fallback ke status Supabase (biarkan chunk ini dilewati)
+                    }
                 }
             }
+
+            // Guard akhir: pastikan tidak ada state update setelah abort
+            if (signal.aborted) return;
 
             setOrders(txData.map(t => {
                 const live = t.order_id ? liveStatus[`${t.provider || 'smmsoc'}:${t.order_id}`] : null;
@@ -602,9 +680,13 @@ export default function AdminPanel() {
                 };
             }));
         } catch (e) {
+            // AbortError bukan error sungguhan — abaikan tanpa update state error
+            if (e.name === 'AbortError') return;
             setOverviewError(e.message);
+        } finally {
+            // Hanya reset loading jika ini masih request yang aktif (belum digantikan request baru)
+            if (!signal.aborted) setLoadingOrders(false);
         }
-        setLoadingOrders(false);
     }, []);
 
     // ── Aksi per-order ──
@@ -736,16 +818,27 @@ export default function AdminPanel() {
         if (!authed) return;
         const doRefresh = () => {
             fetchBalance();
+            // ✅ fetchServices() sekarang otomatis memanggil fetchDisabledServices()
+            // setelah data service ter-load. Jangan panggil fetchDisabledServices()
+            // secara terpisah di sini — akan menyebabkan dua request disabled sekaligus
+            // dan race condition kembali (hasil mana yang menang tidak deterministik).
             fetchServices();
-            fetchDisabledServices();
             fetchOrders();
             loadUsers();
             loadBonusTiers();
         };
         doRefresh();
         const interval = setInterval(doRefresh, 300 * 1000);
-        return () => clearInterval(interval);
-    }, [authed, fetchBalance, fetchServices, fetchOrders, fetchDisabledServices]);
+        return () => {
+            // Batalkan semua fetch yang masih berjalan saat komponen unmount
+            // atau saat authed berubah (mis. logout). Mencegah state update
+            // ke komponen yang sudah tidak ada di tree (React warning + potensi bug).
+            clearInterval(interval);
+            if (fetchOrdersAbortRef.current) fetchOrdersAbortRef.current.abort();
+            if (fetchBalanceAbortRef.current) fetchBalanceAbortRef.current.abort();
+            if (fetchServicesAbortRef.current) fetchServicesAbortRef.current.abort();
+        };
+    }, [authed, fetchBalance, fetchServices, fetchOrders]);
 
     // saldo update dipanggil dari AdminUsers child component — reload users setelah update
     const onSaldoUpdated = () => { loadUsers(); };
@@ -1085,8 +1178,28 @@ export default function AdminPanel() {
             const prov = s._provider || 'smmsoc';
             const matchProvider = serviceProviderFilter === 'All' || prov === serviceProviderFilter;
             const matchQ = !q || s.name?.toLowerCase().includes(q) || String(s.service).toLowerCase().includes(q) || String(s._rawId ?? '').toLowerCase().includes(q) || serviceCode(s).toLowerCase().includes(q);
-            return matchProvider && matchQ;
+            const isOff = disabledSet.has(String(s.service));
+            const matchStatus = serviceStatusFilter === 'All' || (serviceStatusFilter === 'active' && !isOff) || (serviceStatusFilter === 'inactive' && isOff);
+            return matchProvider && matchQ && matchStatus;
         });
+        // Sort: jika ada sort key aktif, pakai itu. Else default: provider → _rawId.
+        if (serviceSort.key) {
+            const dir = serviceSort.dir === 'asc' ? 1 : -1;
+            return out.sort((a, b) => {
+                if (serviceSort.key === 'harga_modal') {
+                    const ma = parseFloat(a.rate || 0) * (String(a?.currency || 'USD').toUpperCase() === 'IDR' ? 1 : rate);
+                    const mb = parseFloat(b.rate || 0) * (String(b?.currency || 'USD').toUpperCase() === 'IDR' ? 1 : rate);
+                    return (ma - mb) * dir;
+                }
+                if (serviceSort.key === 'harga_user') {
+                    const ma = parseFloat(a.rate || 0) * (String(a?.currency || 'USD').toUpperCase() === 'IDR' ? 1 : rate) * resolveMarkup(a);
+                    const mb = parseFloat(b.rate || 0) * (String(b?.currency || 'USD').toUpperCase() === 'IDR' ? 1 : rate) * resolveMarkup(b);
+                    return (ma - mb) * dir;
+                }
+                if (serviceSort.key === 'name') return a.name?.localeCompare(b.name) * dir;
+                return 0;
+            });
+        }
         // Urut: provider dulu (A=smmsoc, lalu B=buzzer, dst sesuai huruf alias),
         // di dalam provider urut by _rawId numerik biar rapi.
         return out.sort((a, b) => {
@@ -1097,7 +1210,7 @@ export default function AdminPanel() {
             if (Number.isFinite(na) && Number.isFinite(nb) && na !== nb) return na - nb;
             return String(a._rawId ?? a.service).localeCompare(String(b._rawId ?? b.service));
         });
-    }, [services, serviceProviderFilter, serviceSearch]);
+    }, [services, serviceProviderFilter, serviceSearch, serviceStatusFilter, serviceSort, disabledSet, rate]);
 
     // Clamp service page agar tak pernah out-of-bound (mis. data berubah saat di page tinggi).
     const servicePageCount = Math.max(1, Math.ceil(filteredSvc.length / SERVICES_PER_PAGE));
@@ -1771,17 +1884,36 @@ export default function AdminPanel() {
                                     )}
                                 </div>
                             </div>
-                            <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
-                                <div style={{ position: 'relative', flex: 1 }}>
+                            <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+                                <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
                                     <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text3)' }} />
                                     <input className="inp" style={{ paddingLeft: 36 }} placeholder="Cari service..." value={serviceSearch} onChange={e => { setServiceSearch(e.target.value); setServicePage(0); }} />
                                 </div>
-                                <Dropdown width={220} value={serviceProviderFilter}
+                                <Dropdown width={200} value={serviceProviderFilter}
                                     options={[{ value: 'All', label: 'Semua Provider' }, ...serviceProviders.map(p => ({
                                         value: p,
                                         label: `Provider ${p === 'smmsoc' ? 'SMMSOC' : p === 'buzzer' ? 'BuzzerPanel' : p}`,
                                     }))]}
                                     onChange={v => { setServiceProviderFilter(v); setServicePage(0); }} />
+                                <Dropdown width={150} value={serviceStatusFilter}
+                                    options={[{ value: 'All', label: 'Semua Status' }, { value: 'active', label: '✅ Aktif saja' }, { value: 'inactive', label: '🔴 Non-aktif' }]}
+                                    onChange={v => { setServiceStatusFilter(v); setServicePage(0); }} />
+                                <Dropdown width={190} value={serviceSort.key ? `${serviceSort.key}_${serviceSort.dir}` : 'default'}
+                                    options={[
+                                        { value: 'default', label: 'Urut: Default' },
+                                        { value: 'harga_modal_asc', label: 'Harga Modal ↑' },
+                                        { value: 'harga_modal_desc', label: 'Harga Modal ↓' },
+                                        { value: 'harga_user_asc', label: 'Harga User ↑' },
+                                        { value: 'harga_user_desc', label: 'Harga User ↓' },
+                                        { value: 'name_asc', label: 'Nama A→Z' },
+                                        { value: 'name_desc', label: 'Nama Z→A' },
+                                    ]}
+                                    onChange={v => {
+                                        if (v === 'default') { setServiceSort({ key: null, dir: 'asc' }); return; }
+                                        const [k, d] = v.split(/_(?=[^_]+$)/);
+                                        setServiceSort({ key: k, dir: d });
+                                        setServicePage(0);
+                                    }} />
                             </div>
                             {providerStats.length > 0 && (
                                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 16, alignItems: 'stretch' }}>
@@ -1852,8 +1984,20 @@ export default function AdminPanel() {
                                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
                                         <thead>
                                             <tr style={{ background: 'var(--bg2)', borderBottom: '1px solid var(--border)' }}>
-                                                {['ID', 'Nama', 'Harga Modal /1K', 'Harga User /1K', 'Min', 'Max', 'Status'].map(h => (
-                                                    <th key={h} style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 700, color: 'var(--text2)', fontSize: 11.5 }}>{h}</th>
+                                                {[
+                                                    { label: 'ID', key: null },
+                                                    { label: 'Nama', key: 'name' },
+                                                    { label: 'Harga Modal /1K', key: 'harga_modal' },
+                                                    { label: 'Harga User /1K', key: 'harga_user' },
+                                                    { label: 'Min', key: null },
+                                                    { label: 'Max', key: null },
+                                                    { label: 'Status', key: null },
+                                                ].map(h => (
+                                                    <th key={h.label}
+                                                        onClick={h.key ? () => setServiceSort(s => ({ key: h.key, dir: s.key === h.key && s.dir === 'asc' ? 'desc' : 'asc' })) : undefined}
+                                                        style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 700, color: serviceSort.key === h.key ? 'var(--blue)' : 'var(--text2)', fontSize: 11.5, cursor: h.key ? 'pointer' : 'default', userSelect: 'none', whiteSpace: 'nowrap' }}>
+                                                        {h.label}{h.key && serviceSort.key === h.key ? (serviceSort.dir === 'asc' ? ' ↑' : ' ↓') : h.key ? ' ⇅' : ''}
+                                                    </th>
                                                 ))}
                                             </tr>
                                         </thead>
@@ -1934,12 +2078,125 @@ export default function AdminPanel() {
                     {/* ── USERS ── */}
                     {menu === 'Users' && <AdminUsers />}
 
+
                     {/* ── DEPOSITS ── */}
                     {menu === 'Deposits' && <AdminDeposits />}
 
                     {/* ── REVENUE ── */}
                     {menu === 'Revenue' && (() => {
                         const chartData = generateChartData(statsPeriod);
+
+                        // Perbandingan periode: periode sebelumnya untuk delta
+                        const PREV_PERIOD_MAP = { today: 'yesterday', '7d': 'prev7d', '30d': 'prev30d', all: null };
+                        const prevPeriodOrders = (() => {
+                            const now = new Date();
+                            if (statsPeriod === 'today') {
+                                const start = new Date(now); start.setDate(start.getDate() - 1); start.setHours(0, 0, 0, 0);
+                                const end = new Date(now); end.setHours(0, 0, 0, 0);
+                                return orders.filter(o => o.created_at && new Date(o.created_at) >= start && new Date(o.created_at) < end);
+                            }
+                            if (statsPeriod === '7d') {
+                                const start = new Date(now); start.setDate(start.getDate() - 14);
+                                const end = new Date(now); end.setDate(end.getDate() - 7);
+                                return orders.filter(o => o.created_at && new Date(o.created_at) >= start && new Date(o.created_at) < end);
+                            }
+                            if (statsPeriod === '30d') {
+                                const start = new Date(now); start.setDate(start.getDate() - 60);
+                                const end = new Date(now); end.setDate(end.getDate() - 30);
+                                return orders.filter(o => o.created_at && new Date(o.created_at) >= start && new Date(o.created_at) < end);
+                            }
+                            return [];
+                        })();
+                        const prevCostIDR = prevPeriodOrders.reduce((s, o) => s + orderCostIDR(o), 0);
+                        const prevRevenueIDR = Math.round(prevCostIDR * markup);
+                        const prevProfitIDR = prevRevenueIDR - prevCostIDR;
+
+                        const delta = (cur, prev) => {
+                            if (!prev) return null;
+                            const pct = Math.round(((cur - prev) / prev) * 100);
+                            return { pct, up: pct >= 0 };
+                        };
+
+                        // Breakdown per provider
+                        const providerBreakdown = (() => {
+                            const map = {};
+                            for (const o of statsOrders) {
+                                const p = o.provider || 'smmsoc';
+                                if (!map[p]) map[p] = { count: 0, costIDR: 0 };
+                                map[p].count++;
+                                map[p].costIDR += orderCostIDR(o);
+                            }
+                            return Object.entries(map).map(([key, v]) => ({
+                                key,
+                                label: key === 'smmsoc' ? 'SMMSOC' : key === 'buzzer' ? 'BuzzerPanel' : key,
+                                count: v.count,
+                                costIDR: v.costIDR,
+                                revenueIDR: Math.round(v.costIDR * markup),
+                            })).sort((a, b) => b.revenueIDR - a.revenueIDR);
+                        })();
+
+                        // Status breakdown for pie chart
+                        const statusBreakdown = (() => {
+                            const map = {};
+                            for (const o of statsOrders) {
+                                const s = (o.status || 'pending').toLowerCase();
+                                const key = ['completed', 'success'].includes(s) ? 'Selesai'
+                                    : ['in progress', 'inprogress', 'processing'].includes(s) ? 'Berjalan'
+                                        : ['partial'].includes(s) ? 'Sebagian'
+                                            : ['canceled', 'cancelled'].includes(s) ? 'Dibatalkan'
+                                                : 'Menunggu';
+                                map[key] = (map[key] || 0) + 1;
+                            }
+                            const colors = { Selesai: '#059669', Berjalan: 'var(--blue)', Sebagian: '#d97706', Dibatalkan: 'var(--red)', Menunggu: '#94a3b8' };
+                            const total = statsOrders.length || 1;
+                            return Object.entries(map).map(([label, count]) => ({
+                                label, count,
+                                pct: Math.round((count / total) * 100),
+                                color: colors[label] || 'var(--text3)',
+                            })).sort((a, b) => b.count - a.count);
+                        })();
+
+                        // Simple SVG pie chart
+                        const PieChart = ({ data }) => {
+                            const size = 140, cx = 70, cy = 70, r = 54, innerR = 32;
+                            let cumAngle = -Math.PI / 2;
+                            const slices = data.map(d => {
+                                const angle = (d.pct / 100) * 2 * Math.PI;
+                                const start = cumAngle;
+                                cumAngle += angle;
+                                return { ...d, start, end: cumAngle, angle };
+                            });
+                            const arc = (start, end, outerR, innerR) => {
+                                if (end - start >= 2 * Math.PI - 0.001) end = start + 2 * Math.PI - 0.001;
+                                const x1 = cx + outerR * Math.cos(start), y1 = cy + outerR * Math.sin(start);
+                                const x2 = cx + outerR * Math.cos(end), y2 = cy + outerR * Math.sin(end);
+                                const ix1 = cx + innerR * Math.cos(end), iy1 = cy + innerR * Math.sin(end);
+                                const ix2 = cx + innerR * Math.cos(start), iy2 = cy + innerR * Math.sin(start);
+                                const large = end - start > Math.PI ? 1 : 0;
+                                return `M ${x1} ${y1} A ${outerR} ${outerR} 0 ${large} 1 ${x2} ${y2} L ${ix1} ${iy1} A ${innerR} ${innerR} 0 ${large} 0 ${ix2} ${iy2} Z`;
+                            };
+                            return (
+                                <svg viewBox={`0 0 ${size} ${size}`} width={size} height={size}>
+                                    {slices.map((s, i) => s.angle > 0.01 && (
+                                        <path key={i} d={arc(s.start, s.end, r, innerR)}
+                                            fill={s.color} stroke="var(--card-bg, var(--bg))" strokeWidth={1.5} />
+                                    ))}
+                                    <text x={cx} y={cy - 6} textAnchor="middle" fill="var(--text)" fontSize={16} fontWeight={800}>{statsOrders.length}</text>
+                                    <text x={cx} y={cy + 12} textAnchor="middle" fill="var(--text3)" fontSize={9}>order</text>
+                                </svg>
+                            );
+                        };
+
+                        const DeltaBadge = ({ cur, prev }) => {
+                            const d = delta(cur, prev);
+                            if (!d) return null;
+                            return (
+                                <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 20, background: d.up ? 'var(--green-l)' : 'var(--red-l)', color: d.up ? 'var(--green)' : 'var(--red)', marginLeft: 6 }}>
+                                    {d.up ? '▲' : '▼'} {Math.abs(d.pct)}%
+                                </span>
+                            );
+                        };
+
                         return (
                             <div>
                                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 22, flexWrap: 'wrap', gap: 10 }}>
@@ -1950,18 +2207,26 @@ export default function AdminPanel() {
                                     <Dropdown width={170} value={statsPeriod} options={PERIOD_OPTIONS} onChange={setStatsPeriod} />
                                 </div>
 
-                                {/* Stat cards (ringkasan sesuai periode) */}
+                                {/* Stat cards dengan delta periode sebelumnya */}
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16, marginBottom: 20 }}>
                                     {[
-                                        { l: 'Total Modal', v: `Rp ${statsCostIDR.toLocaleString('id-ID')}`, v2: `${statsOrders.length} order`, c: 'var(--red)', iconBg: 'var(--red-l)', icon: <DollarSign size={20} /> },
-                                        { l: 'Total Revenue', v: `Rp ${statsRevenueIDR.toLocaleString('id-ID')}`, v2: `Markup ${markup}x`, c: 'var(--blue)', iconBg: 'var(--blue-l)', icon: <TrendingUp size={20} /> },
-                                        { l: 'Estimasi Profit', v: `Rp ${statsProfitIDR.toLocaleString('id-ID')}`, v2: `Margin ${Math.round((markup - 1) * 100)}%`, c: 'var(--green)', iconBg: 'var(--green-l)', icon: <Zap size={20} /> },
+                                        { l: 'Total Modal', v: `Rp ${statsCostIDR.toLocaleString('id-ID')}`, prev: prevCostIDR, cur: statsCostIDR, v2: `${statsOrders.length} order`, c: 'var(--red)', iconBg: 'var(--red-l)', icon: <DollarSign size={20} /> },
+                                        { l: 'Total Revenue', v: `Rp ${statsRevenueIDR.toLocaleString('id-ID')}`, prev: prevRevenueIDR, cur: statsRevenueIDR, v2: `Markup ${markup}x`, c: 'var(--blue)', iconBg: 'var(--blue-l)', icon: <TrendingUp size={20} /> },
+                                        { l: 'Estimasi Profit', v: `Rp ${statsProfitIDR.toLocaleString('id-ID')}`, prev: prevProfitIDR, cur: statsProfitIDR, v2: `Margin ${Math.round((markup - 1) * 100)}%`, c: 'var(--green)', iconBg: 'var(--green-l)', icon: <Zap size={20} /> },
                                     ].map(s => (
                                         <div key={s.l} className="card" style={{ padding: 22 }}>
                                             <div style={{ width: 42, height: 42, borderRadius: 12, background: s.iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center', color: s.c, marginBottom: 14 }}>{s.icon}</div>
-                                            <div style={{ fontSize: 22, fontWeight: 800, color: s.c, marginBottom: 4 }}>{s.v}</div>
+                                            <div style={{ display: 'flex', alignItems: 'baseline', flexWrap: 'wrap', gap: 4, marginBottom: 4 }}>
+                                                <div style={{ fontSize: 22, fontWeight: 800, color: s.c }}>{s.v}</div>
+                                                <DeltaBadge cur={s.cur} prev={s.prev} />
+                                            </div>
                                             <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 2 }}>{s.l}</div>
                                             <div style={{ fontSize: 12, color: 'var(--text3)' }}>{s.v2}</div>
+                                            {statsPeriod !== 'all' && prevRevenueIDR > 0 && (
+                                                <div style={{ fontSize: 10.5, color: 'var(--text3)', marginTop: 4 }}>
+                                                    Periode sebelumnya: Rp {(s.l === 'Total Modal' ? prevCostIDR : s.l === 'Total Revenue' ? prevRevenueIDR : prevProfitIDR).toLocaleString('id-ID')}
+                                                </div>
+                                            )}
                                         </div>
                                     ))}
                                 </div>
@@ -1975,13 +2240,11 @@ export default function AdminPanel() {
                                                 {PERIOD_OPTIONS.find(o => o.value === statsPeriod)?.label} · data real order
                                             </div>
                                         </div>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                                            <div style={{ textAlign: 'right' }}>
-                                                <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--blue)' }}>
-                                                    Rp {chartData.reduce((s, d) => s + d.revenue, 0).toLocaleString('id-ID')}
-                                                </div>
-                                                <div style={{ fontSize: 11.5, color: 'var(--text3)' }}>Total periode ini</div>
+                                        <div style={{ textAlign: 'right' }}>
+                                            <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--blue)' }}>
+                                                Rp {chartData.reduce((s, d) => s + d.revenue, 0).toLocaleString('id-ID')}
                                             </div>
+                                            <div style={{ fontSize: 11.5, color: 'var(--text3)' }}>Total periode ini</div>
                                         </div>
                                     </div>
                                     <AreaChart
@@ -1991,31 +2254,68 @@ export default function AdminPanel() {
                                         margin={{ top: 20, right: 56, bottom: 40, left: 60 }}
                                     >
                                         <Grid horizontal />
-                                        <Area
-                                            dataKey="revenue"
-                                            fill="#2563EB"
-                                            stroke="#2563EB"
-                                            fillOpacity={0.25}
-                                            strokeWidth={2.5}
-                                        />
-                                        <Area
-                                            dataKey="newUsers"
-                                            secondary
-                                            fill="#10B981"
-                                            stroke="#10B981"
-                                            fillOpacity={0.2}
-                                            strokeWidth={2}
-                                        />
+                                        <Area dataKey="revenue" fill="#2563EB" stroke="#2563EB" fillOpacity={0.25} strokeWidth={2.5} />
+                                        <Area dataKey="newUsers" secondary fill="#10B981" stroke="#10B981" fillOpacity={0.2} strokeWidth={2} />
                                         <XAxis numTicks={6} />
                                         <YAxis numTicks={5} formatValue={(v) => v >= 1000000 ? `${(v / 1000000).toFixed(1)}jt` : v >= 1000 ? `${Math.round(v / 1000)}rb` : Math.round(v).toLocaleString('id-ID')} />
                                         <YAxis secondary numTicks={5} formatValue={(v) => `${Math.round(v)}`} />
-                                        <ChartTooltip
-                                            rows={(point) => [
-                                                { color: '#2563EB', label: 'Pendapatan', value: `Rp ${Number(point.revenue).toLocaleString('id-ID')}` },
-                                                { color: '#10B981', label: 'User Baru', value: `${point._rawUsers ?? 0} orang` },
-                                            ]}
-                                        />
+                                        <ChartTooltip rows={(point) => [
+                                            { color: '#2563EB', label: 'Pendapatan', value: `Rp ${Number(point.revenue).toLocaleString('id-ID')}` },
+                                            { color: '#10B981', label: 'User Baru', value: `${point._rawUsers ?? 0} orang` },
+                                        ]} />
                                     </AreaChart>
+                                </div>
+
+                                {/* Breakdown per Provider + Pie Chart Status */}
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 16, marginBottom: 20 }}>
+                                    {/* Provider breakdown */}
+                                    <div className="card" style={{ padding: 22 }}>
+                                        <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text)', marginBottom: 16 }}>Breakdown per Provider</div>
+                                        {providerBreakdown.length === 0 ? (
+                                            <p style={{ fontSize: 13, color: 'var(--text3)' }}>Belum ada order pada periode ini.</p>
+                                        ) : (
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                                                {providerBreakdown.map(p => {
+                                                    const maxRev = providerBreakdown[0].revenueIDR || 1;
+                                                    const barPct = Math.round((p.revenueIDR / maxRev) * 100);
+                                                    return (
+                                                        <div key={p.key}>
+                                                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                                                                <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>{p.label}</span>
+                                                                <span style={{ fontSize: 12, color: 'var(--blue)', fontWeight: 700 }}>Rp {p.revenueIDR.toLocaleString('id-ID')}</span>
+                                                            </div>
+                                                            <div style={{ height: 7, borderRadius: 4, background: 'var(--bg2)', overflow: 'hidden' }}>
+                                                                <div style={{ width: `${barPct}%`, height: '100%', background: 'var(--blue)', borderRadius: 4, transition: 'width .4s' }} />
+                                                            </div>
+                                                            <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 3 }}>{p.count} order · Modal Rp {p.costIDR.toLocaleString('id-ID')}</div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Pie chart status order */}
+                                    <div className="card" style={{ padding: 22 }}>
+                                        <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text)', marginBottom: 16 }}>Distribusi Status Order</div>
+                                        {statusBreakdown.length === 0 ? (
+                                            <p style={{ fontSize: 13, color: 'var(--text3)' }}>Belum ada order pada periode ini.</p>
+                                        ) : (
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
+                                                <PieChart data={statusBreakdown} />
+                                                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                                    {statusBreakdown.map(s => (
+                                                        <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                            <span style={{ width: 10, height: 10, borderRadius: '50%', background: s.color, flexShrink: 0 }} />
+                                                            <span style={{ fontSize: 12.5, color: 'var(--text)', fontWeight: 600, flex: 1 }}>{s.label}</span>
+                                                            <span style={{ fontSize: 12, color: 'var(--text3)', fontWeight: 700 }}>{s.count}</span>
+                                                            <span style={{ fontSize: 11, color: 'var(--text3)', width: 34, textAlign: 'right' }}>{s.pct}%</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
 
                                 {/* Simulasi Markup */}

@@ -2,6 +2,7 @@ import { useRouter } from 'next/router';
 import Link from 'next/link';
 import Head from 'next/head';
 import { useEffect, useRef, useState } from 'react';
+import { motion } from 'framer-motion';
 import {
   Target, Moon, Sun, ArrowRight, UserPlus, Wallet, ShoppingCart,
   Instagram, Youtube, Twitter, Facebook, Play, Star, Sparkles,
@@ -63,83 +64,65 @@ function CountUp({ end, duration = 2000, decimals = 0, prefix = '', suffix = '' 
   return <span ref={ref}>{prefix}{display}{suffix}</span>;
 }
 
-// ── RevealSection: animasi saat masuk viewport ─────────────────
+// ── RevealSection: animasi saat masuk viewport (Framer Motion) ─
 // variant: 'up' | 'down' | 'left' | 'right' | 'scale' | 'fade'
 // stagger: jarak delay antar direct children (ms)
+const VARIANT_OFFSET = {
+  up: { y: 36 },
+  down: { y: -24 },
+  left: { x: 40 },
+  right: { x: -40 },
+  scale: { scale: 0.92 },
+  fade: {},
+};
+
 function RevealSection({ children, delay = 0, duration = 850, variant = 'up', stagger = 0, className = '', style = {} }) {
-  const ref = useRef(null);
-
-  const getInit = () => {
-    switch (variant) {
-      case 'up': return 'opacity:0;transform:translateY(36px)';
-      case 'down': return 'opacity:0;transform:translateY(-24px)';
-      case 'left': return 'opacity:0;transform:translateX(40px)';
-      case 'right': return 'opacity:0;transform:translateX(-40px)';
-      case 'scale': return 'opacity:0;transform:scale(0.92)';
-      case 'fade': return 'opacity:0';
-      default: return 'opacity:0;transform:translateY(36px)';
-    }
+  const offset = VARIANT_OFFSET[variant] || VARIANT_OFFSET.up;
+  const container = {
+    hidden: {},
+    show: {
+      transition: stagger > 0
+        ? { staggerChildren: stagger / 1000, delayChildren: delay / 1000 }
+        : {},
+    },
   };
-  const getFinal = () => variant === 'scale' ? 'opacity:1;transform:scale(1)' : 'opacity:1;transform:none';
+  const item = {
+    hidden: { opacity: 0, ...offset },
+    show: {
+      opacity: 1, x: 0, y: 0, scale: 1,
+      transition: { duration: duration / 1000, delay: stagger > 0 ? 0 : delay / 1000, ease: [0.16, 1, 0.3, 1] },
+    },
+  };
 
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
+  if (stagger > 0) {
+    return (
+      <motion.div
+        className={className}
+        style={style}
+        variants={container}
+        initial="hidden"
+        whileInView="show"
+        viewport={{ once: true, amount: 0.06, margin: '0px 0px -40px 0px' }}
+      >
+        {Array.isArray(children)
+          ? children.map((child, i) => <motion.div key={i} variants={item}>{child}</motion.div>)
+          : <motion.div variants={item}>{children}</motion.div>}
+      </motion.div>
+    );
+  }
 
-    // Reduced motion: tampilkan langsung, lewati semua animasi
-    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-    if (reduce) {
-      el.style.opacity = '1';
-      el.style.transform = 'none';
-      Array.from(el.children).forEach(c => { c.style.opacity = '1'; c.style.transform = 'none'; });
-      return;
-    }
-
-    // Set initial state
-    const initStyles = getInit().split(';');
-    initStyles.forEach(s => {
-      const [prop, val] = s.split(':');
-      if (prop && val) el.style[prop.trim()] = val.trim();
-    });
-
-    const obs = new IntersectionObserver(([e]) => {
-      if (!e.isIntersecting) return;
-      obs.unobserve(el);
-
-      if (stagger > 0) {
-        // Stagger animasi per child langsung
-        const children = Array.from(el.children);
-        children.forEach((child, i) => {
-          const childDelay = delay + i * stagger;
-          child.style.opacity = '0';
-          child.style.transform = variant === 'left' ? 'translateX(30px)'
-            : variant === 'right' ? 'translateX(-30px)'
-              : variant === 'scale' ? 'scale(0.93)'
-                : 'translateY(28px)';
-          child.style.transition = `opacity ${duration}ms ${EASE.out} ${childDelay}ms, transform ${duration}ms ${EASE.out} ${childDelay}ms`;
-          requestAnimationFrame(() => {
-            child.style.opacity = '1';
-            child.style.transform = 'none';
-          });
-        });
-        // Reset parent
-        el.style.opacity = '1';
-        el.style.transform = 'none';
-      } else {
-        el.style.transition = `opacity ${duration}ms ${EASE.out} ${delay}ms, transform ${duration}ms ${EASE.out} ${delay}ms`;
-        const finalStyles = getFinal().split(';');
-        finalStyles.forEach(s => {
-          const [prop, val] = s.split(':');
-          if (prop && val) el.style[prop.trim()] = val.trim();
-        });
-      }
-    }, { threshold: 0.06, rootMargin: '0px 0px -40px 0px' });
-
-    obs.observe(el);
-    return () => obs.disconnect();
-  }, [delay, duration, variant, stagger]);
-
-  return <div ref={ref} className={className} style={style}>{children}</div>;
+  return (
+    <motion.div
+      className={className}
+      style={style}
+      variants={item}
+      initial="hidden"
+      whileInView="show"
+      viewport={{ once: true, amount: 0.06, margin: '0px 0px -40px 0px' }}
+    >
+      {children}
+    </motion.div>
+  );
 }
 
 // ── useNavbarScroll: navbar solid saat scroll ──────────────────
@@ -445,21 +428,12 @@ export default function Landing() {
         <div style={{ height: '100%', width: `${scrollPct}%`, background: 'linear-gradient(90deg, var(--blue), #60A5FA)', boxShadow: '0 0 8px rgba(37,99,235,.5)', transition: 'width .1s linear' }} />
       </div>
 
-      {/* ── BLOB BG ── */}
+      {/* ── BG ── */}
       <div style={{ position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none', overflow: 'hidden' }}>
-        {/* Light mode: richer gradient base */}
-        {!dark && <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(160deg, #EAF1FF 0%, #F4F8FF 45%, #EAF2FF 100%)' }} />}
-        {/* Dark mode: central hero glow ala fintech landing — kuat & terpusat di atas */}
-        {dark && <div style={{ position: 'absolute', top: -200, left: '50%', transform: 'translateX(-50%)', width: 1100, height: 700, borderRadius: '50%', background: 'radial-gradient(ellipse, rgba(37,99,235,.22) 0%, rgba(37,99,235,.08) 35%, transparent 65%)', filter: 'blur(20px)' }} />}
-        <div style={{ position: 'absolute', top: -120, left: -100, width: 600, height: 600, borderRadius: '50%', background: dark ? 'radial-gradient(circle, rgba(37,99,235,.16) 0%, transparent 70%)' : 'radial-gradient(circle, rgba(37,99,235,.18) 0%, transparent 65%)', animation: 'blobFloat 12s ease-in-out infinite' }} />
-        <div style={{ position: 'absolute', top: 200, right: -150, width: 500, height: 500, borderRadius: '50%', background: dark ? 'radial-gradient(circle, rgba(59,130,246,.12) 0%, transparent 70%)' : 'radial-gradient(circle, rgba(59,130,246,.16) 0%, transparent 65%)', animation: 'blobFloat 15s ease-in-out 2s infinite' }} />
-        <div style={{ position: 'absolute', bottom: -100, left: '30%', width: 400, height: 400, borderRadius: '50%', background: dark ? 'radial-gradient(circle, rgba(99,102,241,.08) 0%, transparent 70%)' : 'radial-gradient(circle, rgba(59,130,246,.1) 0%, transparent 65%)', animation: 'blobFloat 10s ease-in-out 4s infinite' }} />
-        {/* Extra light mode accent blob */}
-        {!dark && <div style={{ position: 'absolute', top: '40%', left: '20%', width: 300, height: 300, borderRadius: '50%', background: 'radial-gradient(circle, rgba(37,99,235,.1) 0%, transparent 70%)', animation: 'blobFloat 18s ease-in-out 3s infinite' }} />}
+        <div style={{ position: 'absolute', inset: 0, background: dark ? '#0A0A0F' : '#FFFFFF' }} />
+        <div style={{ position: 'absolute', top: -300, left: '50%', transform: 'translateX(-50%)', width: 900, height: 500, borderRadius: '50%', background: dark ? 'radial-gradient(ellipse, rgba(37,99,235,.14) 0%, transparent 70%)' : 'radial-gradient(ellipse, rgba(37,99,235,.08) 0%, transparent 70%)', filter: 'blur(40px)' }} />
         <div className="hero-grid" />
-        {/* ── Subtle noise/grain texture — bikin background terasa premium, bukan flat ── */}
         <div className="hero-noise" />
-        {/* ── Spotlight mengikuti kursor (desktop) — efek glow halus di belakang konten ── */}
         <div className="hero-spotlight" />
       </div>
 
@@ -488,12 +462,12 @@ export default function Landing() {
               return href ? (
                 <Link key={label} href={href}
                   className={`nav-link${isActive ? ' active' : ''}`}
-                  style={{ textDecoration: 'none', padding: '7px 16px', borderRadius: 50, cursor: 'pointer' }}>{label}</Link>
+                  style={{ textDecoration: 'none', height: 38, padding: '0 16px', borderRadius: 10, cursor: 'pointer', display: 'flex', alignItems: 'center' }}>{label}</Link>
               ) : (
                 <a key={label} href={`#${id}`}
                   onClick={e => { e.preventDefault(); goTo(id); }}
                   className={`nav-link${isActive ? ' active' : ''}`}
-                  style={{ textDecoration: 'none', padding: '7px 16px', borderRadius: 50, cursor: 'pointer' }}>{label}</a>
+                  style={{ textDecoration: 'none', height: 38, padding: '0 16px', borderRadius: 10, cursor: 'pointer', display: 'flex', alignItems: 'center' }}>{label}</a>
               );
             })}
           </div>
@@ -503,11 +477,11 @@ export default function Landing() {
                 {dark ? <Sun size={16} /> : <Moon size={16} />}
               </span>
             </button>
-            <div className="nav-desktop-only" style={{ alignItems: 'center', gap: 6 }}>
-              <button onClick={() => router.push('/login')} className="nav-auth-outline" style={{ background: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 12, fontFamily: "'Outfit','Plus Jakarta Sans',sans-serif", padding: '6px 14px', borderRadius: 50, whiteSpace: 'nowrap' }}>
+            <div className="nav-desktop-only" style={{ alignItems: 'center', gap: 8 }}>
+              <button onClick={() => router.push('/login')} className="nav-auth-outline" style={{ background: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, fontFamily: "'Outfit','Plus Jakarta Sans',sans-serif", height: 38, padding: '0 18px', borderRadius: 10, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 Masuk
               </button>
-              <button onClick={() => router.push('/register')} className="nav-auth-solid" style={{ border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 12, color: '#fff', fontFamily: "'Outfit','Plus Jakarta Sans',sans-serif", padding: '6px 14px', borderRadius: 50, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 4 }}>
+              <button onClick={() => router.push('/register')} className="nav-auth-solid" style={{ border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, color: '#fff', fontFamily: "'Outfit','Plus Jakarta Sans',sans-serif", height: 38, padding: '0 18px', borderRadius: 10, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
                 Daftar
               </button>
             </div>
@@ -526,11 +500,13 @@ export default function Landing() {
         {/* Panel */}
         <div style={{
           position: 'absolute', top: 0, right: 0, bottom: 0, width: 'min(82vw, 320px)',
-          background: 'var(--white)', borderLeft: '1px solid var(--border)',
+          background: dark ? 'rgba(15,15,20,.98)' : 'rgba(255,255,255,.98)',
+          backdropFilter: 'blur(20px)',
+          borderLeft: '1px solid var(--border)',
           transform: menuOpen ? 'translateX(0)' : 'translateX(100%)',
           transition: 'transform .32s cubic-bezier(0.16,1,0.3,1)',
           display: 'flex', flexDirection: 'column', padding: '16px 14px',
-          boxShadow: '-16px 0 48px rgba(0,0,0,.28)',
+          boxShadow: dark ? '-16px 0 48px rgba(0,0,0,.5)' : '-16px 0 48px rgba(37,99,235,.14)',
           paddingTop: 'calc(16px + env(safe-area-inset-top))',
           paddingBottom: 'calc(16px + env(safe-area-inset-bottom))',
           fontFamily: "'Outfit', sans-serif",
@@ -539,10 +515,10 @@ export default function Landing() {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 6px 14px', borderBottom: '1px solid var(--border)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 800, fontSize: 16, color: 'var(--text)' }}>
               <img src="/logo.png" alt="SS" style={{ width: 26, height: 26, borderRadius: 6, objectFit: 'cover' }} />
-              <span>Suntik<span style={{ color: 'var(--blue)' }}>Sosmed</span></span>
+              <span>Suntik<span style={{ background: 'var(--blue)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Sosmed</span></span>
             </div>
             <button onClick={() => setMenuOpen(false)} aria-label="Tutup menu" className="nav-icon-btn"
-              style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 10, width: 38, height: 38, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--text2)' }}>
+              style={{ background: 'var(--bg2)', border: '1px solid var(--border2)', borderRadius: 10, width: 38, height: 38, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--text2)' }}>
               <X size={18} />
             </button>
           </div>
@@ -553,12 +529,12 @@ export default function Landing() {
               const active = activeSection === id;
               const inner = (
                 <>
-                  <span style={{ width: 34, height: 34, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, background: active ? 'var(--blue)' : 'var(--bg2)', color: active ? '#fff' : 'var(--text3)', transition: 'all .18s' }}>{icon}</span>
+                  <span style={{ width: 34, height: 34, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, background: active ? 'linear-gradient(135deg, var(--blue), var(--blue-d))' : 'var(--bg2)', color: active ? '#fff' : 'var(--text3)', boxShadow: active ? '0 4px 12px rgba(37,99,235,.35)' : 'none', transition: 'all .18s' }}>{icon}</span>
                   {label}
                   {active && <ArrowRight size={15} style={{ marginLeft: 'auto', color: 'var(--blue)' }} />}
                 </>
               );
-              const linkStyle = { display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 12, textDecoration: 'none', fontSize: 14.5, fontWeight: 700, cursor: 'pointer', transition: 'all .18s', background: active ? 'var(--blue-l)' : 'transparent', color: active ? 'var(--blue)' : 'var(--text2)' };
+              const linkStyle = { display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 10, textDecoration: 'none', fontSize: 14.5, fontWeight: 700, cursor: 'pointer', background: active ? 'var(--blue-l)' : 'transparent', color: active ? 'var(--blue)' : 'var(--text2)' };
               return href ? (
                 <Link key={label} href={href} onClick={() => setMenuOpen(false)} style={linkStyle}>
                   {inner}
@@ -573,7 +549,7 @@ export default function Landing() {
           </div>
 
           {/* Kartu sosial-proof */}
-          <div style={{ marginTop: 16, background: dark ? 'var(--bg2)' : 'linear-gradient(135deg,#EEF4FF,#E0EAFF)', border: '1px solid var(--border)', borderRadius: 14, padding: '14px 16px' }}>
+          <div className="card" style={{ marginTop: 16, padding: '14px 16px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
               {[0, 1, 2, 3, 4].map(i => <Star key={i} size={13} fill="#F59E0B" style={{ color: '#F59E0B' }} />)}
               <span style={{ fontSize: 12.5, fontWeight: 800, color: 'var(--text)', marginLeft: 4 }}>4.8/5</span>
@@ -586,7 +562,7 @@ export default function Landing() {
             {SOCIALS.map(s => (
               <a key={s.id} href={s.url} target="_blank" rel="noreferrer" aria-label={s.label}
                 className="social-icon-btn"
-                style={{ width: 40, height: 40, borderRadius: 11, background: 'var(--bg2)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text3)', textDecoration: 'none' }}>
+                style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--bg2)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text3)', textDecoration: 'none' }}>
                 {socialIcon(s.id, 17)}
               </a>
             ))}
@@ -595,11 +571,13 @@ export default function Landing() {
           {/* CTA bawah */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingTop: 14, marginTop: 14, borderTop: '1px solid var(--border)' }}>
             <button onClick={() => { setMenuOpen(false); router.push('/login'); }}
-              style={{ width: '100%', background: 'var(--bg2)', border: '1.5px solid var(--border)', borderRadius: 50, padding: '11px', fontSize: 13.5, fontWeight: 700, color: 'var(--text)', cursor: 'pointer', fontFamily: "'Outfit', sans-serif" }}>
+              className="nav-auth-outline"
+              style={{ width: '100%', background: 'none', borderRadius: 10, height: 44, fontSize: 13.5, fontWeight: 700, color: 'var(--text)', cursor: 'pointer', fontFamily: "'Outfit', sans-serif" }}>
               Masuk
             </button>
             <button onClick={() => { setMenuOpen(false); router.push('/register'); }}
-              style={{ width: '100%', background: 'var(--blue)', border: 'none', borderRadius: 50, padding: '11px', fontSize: 13.5, fontWeight: 800, color: '#fff', cursor: 'pointer', fontFamily: "'Outfit', sans-serif", display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, boxShadow: '0 4px 16px rgba(37,99,235,.35)' }}>
+              className="nav-auth-solid"
+              style={{ width: '100%', border: 'none', borderRadius: 10, height: 44, fontSize: 13.5, fontWeight: 800, color: '#fff', cursor: 'pointer', fontFamily: "'Outfit', sans-serif", display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7 }}>
               <UserPlus size={14} /> Daftar Sekarang Gratis
             </button>
           </div>
@@ -1220,7 +1198,7 @@ export default function Landing() {
           .nav-link.active::after {
             content: '';
             position: absolute;
-            bottom: -7px; left: 50%;
+            bottom: -6px; left: 50%;
             transform: translateX(-50%);
             width: 4px; height: 4px;
             border-radius: 50%;

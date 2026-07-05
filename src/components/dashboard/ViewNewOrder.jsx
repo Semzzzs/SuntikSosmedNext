@@ -205,7 +205,7 @@ export default function ViewNewOrder({ user, setMenu }) {
   // ✅ Fix: hapus guard apiUrl/effectiveApiKey — /api/smm baca SMM_API_KEY dari env server
   // Client tidak perlu tahu API key, cukup kirim auth token user
   useEffect(() => {
-    const CACHE_KEY = 'smm_services_cache_v2';
+    const CACHE_KEY = 'smm_services_cache_v3';
     const TS_KEY = 'smm_services_cache_ts';
     const INVAL_KEY = 'smm_services_invalidated'; // ✅ FIX 6: flag invalidasi dari admin
     const TTL = 1000 * 60 * 60 * 6; // 6 jam — anggap masih segar, skip refetch

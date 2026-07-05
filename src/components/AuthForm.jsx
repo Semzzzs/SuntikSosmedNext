@@ -164,10 +164,10 @@ export default function AuthForm({ type }) {
   ];
 
   return (
-    <div className={`root${dark ? ' dark' : ''}`} style={{ minHeight: '100vh', display: 'flex', fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+    <div className={`root${dark ? ' dark' : ''}`} style={{ display: 'flex', fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
 
       {/* Left Panel — hidden on mobile */}
-      <div className="auth-left-panel" style={{ flex: 1, background: 'linear-gradient(135deg, #1e3a8a 0%, #1d4ed8 40%, #2563eb 70%, #3b82f6 100%)', display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '60px 56px', position: 'relative', overflow: 'hidden', minHeight: '100vh' }}>
+      <div className="auth-left-panel" style={{ flex: 1, background: 'linear-gradient(135deg, #1e3a8a 0%, #1d4ed8 40%, #2563eb 70%, #3b82f6 100%)', display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '60px 56px', position: 'relative', overflow: 'hidden' }}>
         <div style={{ position: 'absolute', top: -120, right: -120, width: 400, height: 400, borderRadius: '50%', background: 'rgba(255,255,255,.06)', pointerEvents: 'none' }} />
         <div style={{ position: 'absolute', bottom: -80, left: -80, width: 300, height: 300, borderRadius: '50%', background: 'rgba(255,255,255,.04)', pointerEvents: 'none' }} />
         <div style={{ position: 'absolute', top: '40%', right: 40, width: 180, height: 180, borderRadius: '50%', border: '1.5px solid rgba(255,255,255,.12)', pointerEvents: 'none' }} />
@@ -211,7 +211,7 @@ export default function AuthForm({ type }) {
       </div>
 
       {/* Right Panel */}
-      <div style={{ flex: 1, background: 'var(--bg)', display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '48px 48px', position: 'relative', overflowY: 'auto' }}>
+      <div className="auth-right-panel" style={{ flex: 1, background: 'var(--bg)', display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '48px 48px', position: 'relative', overflowY: 'auto' }}>
         <button onClick={toggle} style={{ position: 'absolute', top: 24, right: 24, background: 'var(--white)', border: '1px solid var(--border)', borderRadius: 9, padding: '8px 10px', cursor: 'pointer', color: 'var(--text2)', display: 'flex', boxShadow: 'var(--shadow)' }}>
           {dark ? <Sun size={16} /> : <Moon size={16} />}
         </button>
@@ -375,8 +375,21 @@ export default function AuthForm({ type }) {
       </div>
 
       <style>{`
+        .auth-left-panel {
+          min-height: 100vh;
+          min-height: 100dvh;
+        }
         @media (max-width: 768px) {
           .auth-left-panel { display: none !important; }
+        }
+        /* Pastikan form tidak ketutup keyboard/toolbar Android saat input di-fokus */
+        @media (max-width: 768px) {
+          .auth-right-panel {
+            min-height: 100vh;
+            min-height: 100dvh;
+            padding-top: 32px !important;
+            padding-bottom: 32px !important;
+          }
         }
       `}</style>
     </div>

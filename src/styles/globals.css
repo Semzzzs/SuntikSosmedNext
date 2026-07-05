@@ -2113,3 +2113,56 @@ canvas {
     transition: none;
   }
 }
+
+/* ══════════════════════════════════════
+   INTERAKSI GLOBAL — hover/press lembut
+   di semua elemen klik (button & a)
+   ══════════════════════════════════════ */
+button,
+a {
+  transition:
+    transform .18s cubic-bezier(.34, 1.56, .64, 1),
+    box-shadow .18s ease,
+    filter .18s ease,
+    background-color .18s ease,
+    color .18s ease,
+    border-color .18s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (hover: hover) {
+
+  button:hover,
+  a:hover {
+    transform: translateY(-1px) scale(1.02);
+    filter: brightness(1.05);
+  }
+}
+
+button:active,
+a:active {
+  transform: scale(.97);
+}
+
+/* Focus ring aksesibilitas — hanya muncul saat navigasi keyboard */
+button:focus-visible,
+a:focus-visible,
+.inp:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+  button,
+  a {
+    transition: none !important;
+  }
+
+  button:hover,
+  a:hover,
+  button:active,
+  a:active {
+    transform: none !important;
+  }
+}
