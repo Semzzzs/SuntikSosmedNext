@@ -48,6 +48,23 @@ export default function ViewMyOrders() {
   // Fix #2: pakai useRef untuk interval agar tidak ada stale closure / race condition
   const intervalRef = useRef(null);
 
+  // ✅ Fix session expired: kalau API balas 401, token di localStorage sudah basi
+  // (revoked/expired di server) walau getSession() masih anggap valid. Daripada
+  // retry diam-diam tiap 30s pakai token yang sama (loop error tak berkesudahan),
+  // langsung sign-out paksa + stop polling + lempar ke /login.
+  const loggingOutRef = useRef(false); // cegah signOut()/redirect dipanggil berkali-kali
+  const handleAuthExpired = useCallback(() => {
+    if (loggingOutRef.current) return;
+    loggingOutRef.current = true;
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+    supabase.auth.signOut().finally(() => {
+      if (typeof window !== 'undefined') window.location.href = '/login';
+    });
+  }, []);
+
   // Fix: email dari supabase.auth.getSession(), bukan sessionStorage
   const [authEmail, setAuthEmail] = useState('');
   useEffect(() => {
@@ -132,6 +149,8 @@ export default function ViewMyOrders() {
                   `/api/smm?action=status&orders=${ids.join(',')}&provider=${encodeURIComponent(pk)}`,
                   { headers: { 'Authorization': `Bearer ${token}` }, signal: controller.signal }
                 );
+                // ✅ 401 = token sudah tidak valid di server → jangan retry, sign-out saja
+                if (res.status === 401) { handleAuthExpired(); return; }
                 const data = await res.json();
                 // Namespace key dengan provider — order_id TIDAK unik antar provider
                 // (SMMSOC & BuzzerPanel bisa sama-sama punya #1234).
@@ -187,6 +206,8 @@ export default function ViewMyOrders() {
         `/api/smm?action=status&orders=${ids.slice(0, 100).join(',')}`,
         { headers: { 'Authorization': `Bearer ${session?.access_token || ''}` }, signal: controller.signal }
       );
+      // ✅ 401 = token sudah tidak valid di server → jangan retry, sign-out saja
+      if (res.status === 401) { handleAuthExpired(); return; }
       const data = await res.json();
       if (data.error) throw new Error(data.error);
 
@@ -215,7 +236,7 @@ export default function ViewMyOrders() {
 
     // Kembalikan fungsi cleanup AbortController agar bisa dibatalkan dari luar jika perlu
     return () => controller.abort();
-  }, [authEmail, getOrderData, apiUrl, apiKey]);
+  }, [authEmail, getOrderData, apiUrl, apiKey, handleAuthExpired]);
 
   useEffect(() => {
     fetchOrders();

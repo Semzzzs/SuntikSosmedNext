@@ -437,12 +437,22 @@ export default function DashboardPage() {
   if (!user) return null;
 
   return (
-    <div className={`root${dark ? ' dark' : ''}`} style={{ display: 'flex', height: '100vh', overflow: 'hidden', fontFamily: "'Outfit',sans-serif" }}>
+    <div className={`root ns-shell${dark ? ' dark' : ''}`} style={{ display: 'flex', overflow: 'hidden', fontFamily: "'Outfit',sans-serif" }}>
       <Head>
-        {/* Cegah auto-zoom saat tap input di iOS & Android */}
-        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+        {/* Cegah auto-zoom saat tap input di iOS & Android. viewport-fit=cover WAJIB ada
+            supaya env(safe-area-inset-bottom) kebaca (home indicator iPhone) — tanpa ini
+            env() selalu 0 dan padding bawah jadi salah hitung. */}
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
       </Head>
       <style>{`
+        .ns-shell {
+          /* 100vh di iOS Safari dihitung dari viewport TERBESAR (saat address bar ngumpet),
+             jadi kalau address bar lagi kebuka, layout jadi kelebihan tinggi → muncul area
+             kosong yang kebesaran di sidebar (nav flex:1 ikut salah hitung). 100dvh mengikuti
+             tinggi viewport yang BENERAN kelihatan saat itu. */
+          height: 100vh;
+          height: 100dvh;
+        }
         @media (max-width: 600px) {
           .ns-top-btn { width: 34px !important; height: 34px !important; border-radius: 9px !important; }
           .ns-topbar { padding: 0 14px !important; gap: 8px !important; }
@@ -474,7 +484,7 @@ export default function DashboardPage() {
       )}
 
       {/* SIDEBAR */}
-      <aside style={{ width: sideOpen ? 240 : 0, minWidth: sideOpen ? 240 : 0, background: 'var(--white)', borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', overflow: 'hidden', transition: 'all .25s', position: isMobile ? 'fixed' : 'relative', top: 0, left: 0, bottom: 0, zIndex: 40 }}>
+      <aside style={{ width: sideOpen ? 240 : 0, minWidth: sideOpen ? 240 : 0, background: 'var(--white)', borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', overflow: 'hidden', transition: 'all .25s', position: isMobile ? 'fixed' : 'relative', top: 0, left: 0, bottom: 0, zIndex: 150 }}>
         <div style={{ padding: '20px 18px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div onClick={() => router.push('/')} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontWeight: 800, fontSize: 18, color: 'var(--text)' }}>
             <div style={{ width: 30, height: 30, borderRadius: 8, background: 'var(--blue)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -527,7 +537,7 @@ export default function DashboardPage() {
           </div>
         </nav>
 
-        <div style={{ padding: isMobile ? '10px 12px 90px' : '10px 12px 16px', borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <div style={{ padding: isMobile ? '10px 12px calc(64px + env(safe-area-inset-bottom, 0px))' : '10px 12px 16px', borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 4 }}>
           {navBottom.map(item => <SideLink key={item.id} item={item} />)}
           <button onClick={logout} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '11px 14px', borderRadius: 12, border: 'none', cursor: 'pointer', fontFamily: "'Outfit',sans-serif", fontWeight: 600, fontSize: 14, color: 'var(--red)', background: 'transparent', transition: 'background .18s' }}
             onMouseEnter={e => e.currentTarget.style.background = 'var(--red-l)'}
