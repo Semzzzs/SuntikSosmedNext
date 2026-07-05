@@ -171,7 +171,9 @@ export default function AdminPanel() {
     const [apiStatus, setApiStatus] = useState('unknown');
     const [dbOrders, setDbOrders] = useState([]); // orders dari Supabase (akurat, semua user)
     const [servicePage, setServicePage] = useState(0); // pagination services
-    const [disabledServices, setDisabledServices] = useState([]); // service id yang dimatikan admin
+    const [disabledServices, setDisabledServices] = useState([]); // service id yang dimatikan admin (exception saat provider default ON)
+    const [enabledOverrides, setEnabledOverrides] = useState([]); // service id yang di-opt-in aktif (exception saat provider default OFF)
+    const [providerStatus, setProviderStatus] = useState({}); // { [providerKey]: 'on' | 'off' } — status default per-provider
     const [bulkBusy, setBulkBusy] = useState(false); // sedang proses on/off massal per provider
     const SERVICES_PER_PAGE = 100;
 
@@ -431,6 +433,16 @@ export default function AdminPanel() {
             if (Array.isArray(data.disabled)) {
                 const ids = data.disabled.map(String);
                 setDisabledServices(ids);
+                // ✅ FIX: sebelumnya provider_status & enabled_overrides dari response ini
+                // tidak pernah dipakai, padahal itu sumber status "off" untuk bulk toggle
+                // per-provider. Akibatnya, habis "Matikan Semua", disabled_services yang
+                // dibersihkan server bikin state ini kembali menganggap semua service ON.
+                if (data.provider_status && typeof data.provider_status === 'object') {
+                    setProviderStatus(data.provider_status);
+                }
+                if (Array.isArray(data.enabled_overrides)) {
+                    setEnabledOverrides(data.enabled_overrides.map(String));
+                }
                 return ids;
             }
             // Response tidak punya field 'disabled' — jangan reset state, pertahankan yang ada.
@@ -1162,6 +1174,22 @@ export default function AdminPanel() {
 
     // Set untuk lookup O(1) (jauh lebih cepat dari array .includes saat disabled banyak)
     const disabledSet = useMemo(() => new Set(disabledServices.map(String)), [disabledServices]);
+    const enabledOverrideSet = useMemo(() => new Set(enabledOverrides.map(String)), [enabledOverrides]);
+
+    // ✅ FIX: status ON/OFF sebuah service sekarang HARUS mempertimbangkan
+    // providerStatus dulu (sumber kebenaran untuk "Matikan/Aktifkan Semua"),
+    // baru fallback ke exception individual. Logic ini cermin dari backend
+    // (lihat toggle_service di admin-api.js) — jangan diubah sepihak di sini
+    // tanpa mengubah juga di server, supaya keduanya tetap sinkron.
+    const isServiceOff = useCallback((s) => {
+        const id = String(s.service);
+        const providerKey = s._provider || 'smmsoc';
+        const providerDefaultOn = providerStatus[providerKey] !== 'off';
+        if (providerDefaultOn) {
+            return disabledSet.has(id); // default ON, off hanya kalau di-exception-kan
+        }
+        return !enabledOverrideSet.has(id); // default OFF, on hanya kalau di-override
+    }, [providerStatus, disabledSet, enabledOverrideSet]);
 
     const cats = useMemo(() => ['All', ...new Set(services.map(s => s.category))].filter(Boolean), [services]);
 
@@ -1178,7 +1206,7 @@ export default function AdminPanel() {
             const prov = s._provider || 'smmsoc';
             const matchProvider = serviceProviderFilter === 'All' || prov === serviceProviderFilter;
             const matchQ = !q || s.name?.toLowerCase().includes(q) || String(s.service).toLowerCase().includes(q) || String(s._rawId ?? '').toLowerCase().includes(q) || serviceCode(s).toLowerCase().includes(q);
-            const isOff = disabledSet.has(String(s.service));
+            const isOff = isServiceOff(s);
             const matchStatus = serviceStatusFilter === 'All' || (serviceStatusFilter === 'active' && !isOff) || (serviceStatusFilter === 'inactive' && isOff);
             return matchProvider && matchQ && matchStatus;
         });
@@ -1210,7 +1238,7 @@ export default function AdminPanel() {
             if (Number.isFinite(na) && Number.isFinite(nb) && na !== nb) return na - nb;
             return String(a._rawId ?? a.service).localeCompare(String(b._rawId ?? b.service));
         });
-    }, [services, serviceProviderFilter, serviceSearch, serviceStatusFilter, serviceSort, disabledSet, rate]);
+    }, [services, serviceProviderFilter, serviceSearch, serviceStatusFilter, serviceSort, isServiceOff, rate]);
 
     // Clamp service page agar tak pernah out-of-bound (mis. data berubah saat di page tinggi).
     const servicePageCount = Math.max(1, Math.ceil(filteredSvc.length / SERVICES_PER_PAGE));
@@ -1224,10 +1252,10 @@ export default function AdminPanel() {
             const p = s._provider || 'smmsoc';
             if (!m[p]) m[p] = { total: 0, off: 0 };
             m[p].total++;
-            if (disabledSet.has(String(s.service))) m[p].off++;
+            if (isServiceOff(s)) m[p].off++;
         }
         return Object.entries(m).map(([key, v]) => ({ key, ...v })).sort((a, b) => a.key.localeCompare(b.key));
-    }, [services, disabledSet]);
+    }, [services, isServiceOff]);
 
     // ── Orders terfilter + paginated ──
     const filteredOrders = orders.filter(o => {
@@ -2027,7 +2055,7 @@ export default function AdminPanel() {
                                                         <td style={{ padding: '9px 12px', color: 'var(--text3)' }}>{Number(s.max).toLocaleString()}</td>
                                                         <td style={{ padding: '9px 12px' }}>
                                                             {(() => {
-                                                                const isOff = disabledSet.has(String(s.service));
+                                                                const isOff = isServiceOff(s);
                                                                 return (
                                                                     <button onClick={() => toggleService(s.service, isOff)}
                                                                         title={isOff ? 'Layanan dimatikan — klik untuk aktifkan' : 'Layanan aktif — klik untuk matikan'}
