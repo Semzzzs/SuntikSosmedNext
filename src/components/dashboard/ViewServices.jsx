@@ -49,7 +49,8 @@ const ListOuter = forwardRef(function ListOuter({ style, ...rest }, ref) {
         ...style,
         overscrollBehavior: 'contain',
         WebkitOverflowScrolling: 'touch',
-        touchAction: 'pan-y',
+        touchAction: 'pan-x pan-y',
+        overflowX: 'auto',
       }}
     />
   );
@@ -172,7 +173,7 @@ export default function ViewServices() {
 
     if (item.type === 'header') {
       return (
-        <div style={{ ...style, display: 'flex', alignItems: 'center', gap: 8, padding: '0 14px', background: 'var(--bg2)', borderBottom: '1px solid var(--border)', fontFamily: "'Outfit',sans-serif" }}>
+        <div style={{ ...style, minWidth: 802, boxSizing: 'border-box', display: 'flex', alignItems: 'center', gap: 8, padding: '0 14px', background: 'var(--bg2)', borderBottom: '1px solid var(--border)', fontFamily: "'Outfit',sans-serif" }}>
           <span style={{ fontWeight: 800, fontSize: 14, color: 'var(--text)' }}>{item.cat}</span>
           <span style={{ fontWeight: 600, fontSize: 12.5, color: 'var(--text3)' }}>({item.count})</span>
         </div>
@@ -185,7 +186,7 @@ export default function ViewServices() {
     const hasReal = stat && stat.sample_count >= MIN_SAMPLE && stat.avg_seconds > 0;
 
     return (
-      <div style={{ ...style, display: 'grid', gridTemplateColumns: GRID, alignItems: 'center', gap: 8, padding: '0 14px', borderBottom: '1px solid var(--border)', fontSize: 12.5, boxSizing: 'border-box' }}>
+      <div style={{ ...style, minWidth: 802, display: 'grid', gridTemplateColumns: GRID, alignItems: 'center', gap: 8, padding: '0 14px', borderBottom: '1px solid var(--border)', fontSize: 12.5, boxSizing: 'border-box' }}>
         <span style={{ fontFamily: "'JetBrains Mono',monospace", fontWeight: 700, color: 'var(--text3)' }}>{serviceCode(s)}</span>
         <span style={{ color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={cleanName(s.name) || s.name}>{cleanName(s.name) || s.name}</span>
         <span style={{ color: 'var(--blue)', fontWeight: 700, whiteSpace: 'nowrap' }}>{fmt(priceIDR(s))}</span>
@@ -257,9 +258,14 @@ export default function ViewServices() {
       {/* Tabel flat virtualized */}
       {!loading && !error && flatRows.length > 0 && (
         <div style={{ borderRadius: 12, border: '1px solid var(--border)', overflow: 'hidden' }}>
-          {/* Header kolom (sticky di atas list) */}
-          <div style={{ display: 'grid', gridTemplateColumns: GRID, gap: 8, padding: '11px 14px', background: 'var(--bg2)', borderBottom: '1px solid var(--border)', color: 'var(--text3)', fontWeight: 700, fontSize: 11.5, textTransform: 'uppercase', letterSpacing: '.3px' }}>
-            <span>ID</span><span>Layanan</span><span>Harga / 1K</span><span>Min</span><span>Max</span><span>Estimasi</span><span>Refill</span>
+          <div
+            style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}
+            onScroll={e => { if (listRef.current) listRef.current._outerRef.scrollLeft = e.currentTarget.scrollLeft; }}
+          >
+            {/* Header kolom */}
+            <div style={{ display: 'grid', gridTemplateColumns: GRID, gap: 8, padding: '11px 14px', background: 'var(--bg2)', borderBottom: '1px solid var(--border)', color: 'var(--text3)', fontWeight: 700, fontSize: 11.5, textTransform: 'uppercase', letterSpacing: '.3px', minWidth: 802 }}>
+              <span>ID</span><span>Layanan</span><span>Harga / 1K</span><span>Min</span><span>Max</span><span>Estimasi</span><span>Refill</span>
+            </div>
           </div>
           <VariableSizeList
             ref={listRef}
@@ -269,6 +275,7 @@ export default function ViewServices() {
             width="100%"
             overscanCount={6}
             outerElementType={ListOuter}
+            onScroll={({ scrollOffset, scrollUpdateWasRequested }) => { }}
           >
             {Row}
           </VariableSizeList>
