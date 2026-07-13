@@ -191,8 +191,12 @@ export default function ViewNewOrder({ user, setMenu }) {
   // ✅ Fix: hapus guard apiUrl/effectiveApiKey — /api/smm baca SMM_API_KEY dari env server
   // Client tidak perlu tahu API key, cukup kirim auth token user
   useEffect(() => {
-    const CACHE_KEY = 'smm_services_cache_v3';
-    const TS_KEY = 'smm_services_cache_ts';
+    // v3 -> v4: bump karena bentuk data service berubah (id di-encode, _provider
+    // sekarang huruf alias). Ganti key = cache lama otomatis dianggap gak ada,
+    // SEMUA browser langsung fetch ulang pas buka halaman ini — gak perlu
+    // nunggu TTL 6 jam / minta user manual clear localStorage.
+    const CACHE_KEY = 'smm_services_cache_v4';
+    const TS_KEY = 'smm_services_cache_ts_v4';
     const INVAL_KEY = 'smm_services_invalidated'; // ✅ FIX 6: flag invalidasi dari admin
     const TTL = 1000 * 60 * 60 * 6; // 6 jam — anggap masih segar, skip refetch
 
@@ -1040,7 +1044,7 @@ export default function ViewNewOrder({ user, setMenu }) {
                 </div>
               </div>
 
-              <textarea className="inp bulk-textarea" rows={7} placeholder={'Contoh:\n2771|https://instagram.com/username|1000\n302|https://tiktok.com/@user/video/123|5000\n88|https://youtube.com/watch?v=abc|500'} style={{ fontFamily: "'JetBrains Mono',monospace" }} value={bulkText} onChange={e => setBulkText(e.target.value)} />
+              <textarea className="inp bulk-textarea" rows={7} placeholder={'Contoh:\nA2771|https://instagram.com/username|1000\nB302|https://tiktok.com/@user/video/123|5000\nA88|https://youtube.com/watch?v=abc|500'} style={{ fontFamily: "'JetBrains Mono',monospace" }} value={bulkText} onChange={e => setBulkText(e.target.value)} />
               {bulkResults.length > 0 && (
                 <div style={{ margin: '12px 0', display: 'flex', flexDirection: 'column', gap: 6 }}>
                   {bulkResults.map((r, i) => (
