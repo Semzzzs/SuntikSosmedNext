@@ -150,13 +150,13 @@ export function visiblePlatforms(platformCounts = {}) {
 // bisa dipakai di Bulk Order. ➕ Provider baru: tambah satu baris di sini.
 // ─────────────────────────────────────────────────────────────
 export const PROVIDER_ALIAS = { smmsoc: 'A', buzzer: 'B' };
-const ALIAS_TO_PROVIDER = Object.fromEntries(
-    Object.entries(PROVIDER_ALIAS).map(([prov, code]) => [code.toUpperCase(), prov])
-);
 
 // Kode service yang ditampilkan ke user, mis. "B519" (bukan "buzzer:519").
+// CATATAN: sejak /api/smm?action=services (non-admin) mengirim `_provider`
+// yang SUDAH berupa huruf alias (A/B) langsung dari server — bukan nama
+// provider asli — di sini tinggal dipakai apa adanya, tidak lookup lagi.
 export function serviceCode(svc) {
-    const a = PROVIDER_ALIAS[svc?._provider] || 'X';
+    const a = svc?._provider || 'X';
     return `${a}${svc?._rawId ?? svc?.service ?? ''}`;
 }
 
@@ -171,14 +171,13 @@ export function resolveServiceInput(input, services = []) {
     const direct = services.find(s => String(s.service) === raw);
     if (direct) return { id: direct.service };
 
-    // 2) kode alias huruf+angka (mis. "B519")
+    // 2) kode alias huruf+angka (mis. "B519") — svc._provider dari API sudah
+    //    berupa huruf alias, jadi cocokin langsung (gak perlu reverse-lookup lagi).
     const m = raw.match(/^([A-Za-z]+)(\d+)$/);
     if (m) {
-        const prov = ALIAS_TO_PROVIDER[m[1].toUpperCase()];
-        if (prov) {
-            const hit = services.find(s => s._provider === prov && String(s._rawId) === m[2]);
-            if (hit) return { id: hit.service };
-        }
+        const aliasLetter = m[1].toUpperCase();
+        const hit = services.find(s => s._provider === aliasLetter && String(s._rawId) === m[2]);
+        if (hit) return { id: hit.service };
     }
 
     // 3) id mentah angka (mis. "519")

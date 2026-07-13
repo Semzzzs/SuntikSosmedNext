@@ -60,6 +60,12 @@ async function getUsdIdrRate(supa) {
     return rate;
 }
 
+// ── Alias provider buat DITAMPILKAN ke customer (A=SMMSOC, B=BuzzerPanel) —
+//    HARUS PERSIS sama dengan PROVIDER_ALIAS di lib/platforms.jsx, karena
+//    serviceCode()/resolveServiceInput() di sana baca field _provider ini
+//    langsung sebagai huruf alias (bukan nama provider asli lagi).
+const PROVIDER_ALIAS = { smmsoc: 'A', buzzer: 'B' };
+
 function verifyAdminJWT(authHeader) {
     if (!authHeader?.startsWith('Bearer ')) return false;
     const token = authHeader.split(' ')[1];
@@ -210,7 +216,13 @@ export default async function handler(req, res) {
                     console.error('[smm] filter disabled services error:', e.message);
                 }
             }
-            // ── Hitung harga final (sudah markup + fx) & hilangkan jejak provider ──
+            // ── Admin: kirim data mentah apa adanya (provider, id asli, harga modal —
+            //    dipakai buat kolom "Harga Modal", grouping toggle per-provider, dst).
+            if (isAdmin) {
+                return res.status(200).json(services);
+            }
+
+            // ── Non-admin: hitung harga final (sudah markup + fx) & hilangkan jejak provider ──
             const supa2 = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
             let markup = 1, markupRules = { categories: {}, services: {}, providers: {} };
             try {
@@ -234,7 +246,7 @@ export default async function handler(req, res) {
                     ...s,
                     service: encodeServiceId(rawId),          // opaque, gak ada "smmsoc:"/"buzzer:" kelihatan
                     _rawId: rawId.includes(':') ? rawId.split(':')[1] : rawId, // buat display "#123", aman
-                    _provider: undefined,                      // dibuang dari JSON (undefined auto-stripped)
+                    _provider: PROVIDER_ALIAS[provKey] || 'X',  // huruf alias (A/B), bukan nama provider asli, bukan undefined
                     rate: +(parseFloat(s.rate || 0) * fx * effMarkup).toFixed(4), // harga JADI ke user
                     currency: 'IDR',                            // sudah dikonversi, client gak perlu fx lagi
                 };
