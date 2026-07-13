@@ -429,10 +429,9 @@ export default function ViewSettings({ user, onLogout }) {
                               return;
                             }
                             setDeleteLoading(true);
-                            const res = await fetch('/api/admin-api?action=delete_user', {
+                            const res = await fetch('/api/account/delete', {
                               method: 'POST',
                               headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token || ''}` },
-                              body: JSON.stringify({ email: session.user.email }),
                             });
                             setDeleteLoading(false);
                             if (res.ok) { setShowDeleteModal(false); onLogout(); }

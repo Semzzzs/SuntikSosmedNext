@@ -7,6 +7,37 @@ const supabaseAdmin = createClient(
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
 );
 
+const MAX_BODY_BYTES = 1 * 1024 * 1024; // 1mb — dulu ditegakkan Next bodyParser, sekarang manual
+
+// ── Baca raw body SEBELUM di-parse — HMAC HARUS diverifikasi terhadap bytes
+//    asli yang dikirim Paymenku, bukan hasil JSON.stringify(req.body) yang
+//    sudah di-parse-ulang Next (urutan key/angka besar bisa beda -> signature
+//    yang seharusnya valid malah ke-reject, atau sebaliknya jadi gak reliable).
+function readRawBody(req: any): Promise<Buffer> {
+    return new Promise((resolve, reject) => {
+        const chunks: Buffer[] = [];
+        let total = 0;
+        req.on('data', (chunk: Buffer) => {
+            total += chunk.length;
+            if (total > MAX_BODY_BYTES) {
+                reject(new Error('PAYLOAD_TOO_LARGE'));
+                req.destroy();
+                return;
+            }
+            chunks.push(chunk);
+        });
+        req.on('end', () => resolve(Buffer.concat(chunks)));
+        req.on('error', reject);
+    });
+}
+
+// ── Sanitasi sebelum ditempel ke string filter PostgREST .or().
+//    trx_id/reference_id Paymenku seharusnya cuma alfanumerik/underscore/dash;
+//    buang karakter lain (,)(.%*) supaya gak bisa nyisipin klausa filter lain.
+function sanitizeForFilter(s: unknown): string {
+    return String(s ?? '').replace(/[^a-zA-Z0-9_-]/g, '');
+}
+
 // ── Bonus deposit: dihitung DI SERVER (sumber kebenaran), bukan dari client ──
 // Tier diambil dari settings 'deposit_bonus_tiers'. Kalau belum diset, bonus = 0
 // (aman: lebih baik tidak kasih bonus daripada salah kasih).
@@ -55,7 +86,16 @@ export default async function handler(req: any, res: any) {
         return res.status(401).json({ error: 'Request expired or invalid timestamp.' });
     }
 
-    const rawBody = JSON.stringify(req.body);
+    // ✅ Raw body asli (bukan re-serialize) — ini yang dipakai buat HMAC
+    let rawBody: string;
+    try {
+        const buf = await readRawBody(req);
+        rawBody = buf.toString('utf8');
+    } catch (e: any) {
+        if (e?.message === 'PAYLOAD_TOO_LARGE') return res.status(413).json({ error: 'Payload too large' });
+        return res.status(400).json({ error: 'Failed to read request body.' });
+    }
+
     const expected = crypto.createHmac('sha256', WEBHOOK_SECRET)
         .update(timestamp + '.' + rawBody).digest('hex');
 
@@ -68,10 +108,17 @@ export default async function handler(req: any, res: any) {
         return res.status(401).json({ error: 'Invalid signature' });
     }
 
-    const payload = req.body;
+    let payload: any;
+    try {
+        payload = JSON.parse(rawBody);
+    } catch {
+        return res.status(400).json({ error: 'Invalid JSON body.' });
+    }
 
     if (payload.event === 'payment.status_updated' && payload.status === 'paid') {
         const { trx_id, reference_id, amount_received } = payload;
+        const safeTrxId = sanitizeForFilter(trx_id);
+        const safeRefId = sanitizeForFilter(reference_id);
         // 📌 Pemetaan field Paymenku (mode customer menanggung fee):
         //    - payload.amount         = GROSS (nominal deposit + fee yang dibayar customer)
         //    - payload.total_fee      = fee
@@ -94,7 +141,7 @@ export default async function handler(req: any, res: any) {
             .select('id')
             .eq('type', 'deposit')
             .eq('status', 'success')
-            .or(`description.ilike.%${trx_id}%,description.ilike.%${reference_id}%`)
+            .or(`description.ilike.%${safeTrxId}%,description.ilike.%${safeRefId}%`)
             .limit(1);
         const alreadyDone = (dupRows || [])[0];
 
@@ -108,7 +155,7 @@ export default async function handler(req: any, res: any) {
         const { data: pendingRows } = await supabaseAdmin
             .from('transactions')
             .select('id, email, user_id, amount, qr_amount')
-            .or(`qr_trx_id.eq.${trx_id},description.ilike.%QRIS_PENDING_${trx_id}%,description.ilike.%${reference_id}%`)
+            .or(`qr_trx_id.eq.${safeTrxId},description.ilike.%QRIS_PENDING_${safeTrxId}%,description.ilike.%${safeRefId}%`)
             .eq('status', 'qris_pending')
             .order('created_at', { ascending: false })
             .limit(1);
@@ -208,4 +255,4 @@ export default async function handler(req: any, res: any) {
     return res.status(200).json({ received: true });
 }
 
-export const config = { api: { bodyParser: { sizeLimit: '1mb' } } };
+export const config = { api: { bodyParser: false } }; // raw body dibaca manual (lihat readRawBody) — wajib buat verifikasi HMAC yang benar

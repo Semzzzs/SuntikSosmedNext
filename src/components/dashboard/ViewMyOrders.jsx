@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Search, Package, CheckCircle, Clock, Loader, XCircle, AlertTriangle, RefreshCw } from 'lucide-react';
-import { useApi } from '@/context/ApiContext';
 import { supabase } from '@/lib/supabase';
 
 // Fix #4: Tambah 'Refunded' ke STATUS_CONFIG agar status ini punya tampilan yang konsisten
@@ -43,7 +42,6 @@ export default function ViewMyOrders() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [filterStatus, setFilterStatus] = useState('All');
-  const { apiUrl, apiKey } = useApi();
 
   // Fix #2: pakai useRef untuk interval agar tidak ada stale closure / race condition
   const intervalRef = useRef(null);
@@ -101,129 +99,33 @@ export default function ViewMyOrders() {
     const controller = new AbortController();
 
     try {
-      // Baca orders dari Supabase — akurat & persisten lintas device
-      const { data: txRaw, error: txError } = await supabase
-        .from('transactions')
-        .select('*')
-        .eq('email', authEmail)
-        .eq('type', 'order')
-        .order('created_at', { ascending: false })
-        .abortSignal(controller.signal);
-
-      // Filter hanya order SMM asli (punya order_id atau deskripsi "Order #...")
-      const txData = txRaw?.filter(t =>
-        (t.order_id != null && String(t.order_id).trim() !== '') ||
-        (t.description && t.description.startsWith('Order #'))
-      );
-
-      // Baca metadata dari localStorage sebagai tambahan (serviceName, link, qty)
-      const { meta } = getOrderData();
-
-      if (!txError && txData && txData.length > 0) {
-        // Hanya order yang BELUM final (status final tak berubah lagi → hemat call).
-        // Kelompokkan per provider: tiap provider hanya kenal order ID-nya sendiri.
-        const FINAL = new Set(['Completed', 'Canceled', 'Refunded']);
-        const pending = txData.filter(t =>
-          t.order_id != null && String(t.order_id).trim() !== '' &&
-          !FINAL.has(normalizeStatus(t.status))
-        );
-
-        // { providerKey: [orderId, ...] } — provider dari kolom transaksi, default smmsoc.
-        const byProvider = pending.reduce((acc, t) => {
-          const pk = t.provider || 'smmsoc';
-          (acc[pk] ||= []).push(String(t.order_id));
-          return acc;
-        }, {});
-
-        let liveStatus = {};
-        const providerKeys = Object.keys(byProvider);
-        if (providerKeys.length > 0) {
-          try {
-            const { data: { session } } = await supabase.auth.getSession();
-            const token = session?.access_token || '';
-            // Satu request per provider, paralel, lalu gabung hasilnya.
-            await Promise.all(providerKeys.map(async (pk) => {
-              const ids = byProvider[pk].slice(0, 100);
-              try {
-                const res = await fetch(
-                  `/api/smm?action=status&orders=${ids.join(',')}&provider=${encodeURIComponent(pk)}`,
-                  { headers: { 'Authorization': `Bearer ${token}` }, signal: controller.signal }
-                );
-                // ✅ 401 = token sudah tidak valid di server → jangan retry, sign-out saja
-                if (res.status === 401) { handleAuthExpired(); return; }
-                const data = await res.json();
-                // Namespace key dengan provider — order_id TIDAK unik antar provider
-                // (SMMSOC & BuzzerPanel bisa sama-sama punya #1234).
-                if (data && !data.error && typeof data === 'object') {
-                  for (const [oid, info] of Object.entries(data)) {
-                    liveStatus[`${pk}:${oid}`] = info;
-                  }
-                }
-              } catch (e) {
-                if (e.name !== 'AbortError') { /* provider ini gagal → pakai status tersimpan */ }
-              }
-            }));
-          } catch (e) {
-            if (e.name !== 'AbortError') { /* tanpa session → semua pakai status tersimpan */ }
-          }
-        }
-
-        const parsed = txData.map(t => {
-          const pk = t.provider || 'smmsoc';
-          const live = (t.order_id && liveStatus[`${pk}:${t.order_id}`])
-            ? liveStatus[`${pk}:${t.order_id}`]
-            : null;
-          const localMeta = meta[t.order_id] || {};
-          // Kalau live status ada → pakai itu. Kalau gagal/tidak ada → fallback ke status tersimpan
-          const effStatus = live?.status ? normalizeStatus(live.status) : normalizeStatus(t.status);
-          return {
-            id: t.order_id || t.id,
-            status: effStatus,
-            charge: live?.charge ?? t.charge,
-            startCount: live?.start_count ?? null,
-            remains: live?.remains ?? null,
-            error: live?.error,
-            serviceName: localMeta.serviceName || t.description?.replace(/^Order #\d+ - /, '') || '—',
-            link: t.link || localMeta.link || '—',
-            // Fix #3: guard qty agar string kosong/null tidak jadi Number(0)
-            qty: t.qty || localMeta.qty || '—',
-            createdAt: t.created_at,
-            amountIDR: t.amount,
-          };
-        });
-
-        setOrders(parsed);
-        // Fix #1: setLoading hanya di finally — tapi early return path ini masih perlu return
-        return;
-      }
-
-      // Fallback: baca dari localStorage (backward compat)
-      const { ids, meta: metaFallback } = getOrderData();
-      if (!apiUrl || !apiKey || ids.length === 0) { setOrders([]); return; }
-
+      // ✅ Satu fetch ke /api/orders/mine — grouping per-provider & live status
+      // sekarang dikerjakan SERVER-SIDE, jadi browser gak pernah lihat kolom
+      // provider/charge/charge_idr/service_id.
       const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch(
-        `/api/smm?action=status&orders=${ids.slice(0, 100).join(',')}`,
-        { headers: { 'Authorization': `Bearer ${session?.access_token || ''}` }, signal: controller.signal }
-      );
+      const token = session?.access_token || '';
+      const res = await fetch('/api/orders/mine', {
+        headers: { Authorization: `Bearer ${token}` },
+        signal: controller.signal,
+      });
       // ✅ 401 = token sudah tidak valid di server → jangan retry, sign-out saja
       if (res.status === 401) { handleAuthExpired(); return; }
       const data = await res.json();
-      if (data.error) throw new Error(data.error);
+      if (data?.error) throw new Error(data.error);
 
-      const parsed = Object.entries(data).map(([id, info]) => ({
-        id,
-        status: normalizeStatus(info.status),
-        charge: info.charge,
-        startCount: info.start_count,
-        remains: info.remains,
-        error: info.error,
-        serviceName: metaFallback[id]?.serviceName || '—',
-        link: metaFallback[id]?.link || '—',
-        qty: metaFallback[id]?.qty || '—',
-        createdAt: metaFallback[id]?.createdAt || null,
-      }));
-      parsed.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+      // Lengkapi dari localStorage kalau ada metadata lama (serviceName/link/qty)
+      // dari order sebelum kolom-kolom itu ada di DB — server gak bisa baca localStorage.
+      const { meta } = getOrderData();
+      const parsed = (Array.isArray(data) ? data : []).map(o => {
+        const localMeta = meta[o.id] || {};
+        return {
+          ...o,
+          serviceName: o.serviceName && o.serviceName !== '—' ? o.serviceName : (localMeta.serviceName || '—'),
+          link: o.link && o.link !== '—' ? o.link : (localMeta.link || '—'),
+          qty: o.qty && o.qty !== '—' ? o.qty : (localMeta.qty || '—'),
+        };
+      });
+
       setOrders(parsed);
 
     } catch (e) {
@@ -236,7 +138,7 @@ export default function ViewMyOrders() {
 
     // Kembalikan fungsi cleanup AbortController agar bisa dibatalkan dari luar jika perlu
     return () => controller.abort();
-  }, [authEmail, getOrderData, apiUrl, apiKey, handleAuthExpired]);
+  }, [authEmail, getOrderData, handleAuthExpired]);
 
   useEffect(() => {
     fetchOrders();

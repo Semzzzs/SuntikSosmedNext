@@ -19,36 +19,37 @@ export default function ViewAnalytics({ user }) {
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    if (!user?.email) return;
     let alive = true;
 
-    // ✅ Load transactions + order count dari Supabase (akurat & lintas device)
-    supabase.from('transactions').select('*').eq('email', user.email)
-      .order('created_at', { ascending: false })
-      .then(({ data, error }) => {
+    // ✅ Lewat /api/transactions (service role, kolom whitelist) — BUKAN query
+    // Supabase langsung, karena select('*') bocorin provider, service_id mentah,
+    // dan charge/charge_idr (modal provider = margin kelihatan).
+    const load = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) { if (alive) setLoaded(true); return; }
+        const r = await fetch('/api/transactions', {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        const data = await r.json();
         if (!alive) return;
-        if (error) console.error('[Analytics] transactions:', error);
-        setTransactions(Array.isArray(data) ? data : []);
-        setLoaded(true);
-      })
-      .catch((e) => { if (alive) { console.error('[Analytics]', e); setLoaded(true); } });
+        const tx = Array.isArray(data) ? data : [];
+        setTransactions(tx);
 
-    // ✅ Total Order dihitung dari transactions tipe order/purchase di Supabase,
-    //    bukan dari localStorage (yang tidak ikut pindah device).
-    supabase.from('transactions')
-      .select('order_id, type, description')
-      .eq('email', user.email)
-      .in('type', ['order', 'purchase'])
-      .then(({ data, error }) => {
-        if (!alive) return;
-        if (error) console.error('[Analytics] orders:', error);
-        const valid = (Array.isArray(data) ? data : []).filter(t =>
-          (t?.order_id && /^\d+$/.test(String(t.order_id))) ||
-          (t?.description && t.description.startsWith('Order #'))
+        // Total Order dihitung dari tx tipe order/purchase yang sama (satu fetch, gak dobel).
+        const valid = tx.filter(t =>
+          ['order', 'purchase'].includes(t?.type) && (
+            (t?.order_id && /^\d+$/.test(String(t.order_id))) ||
+            (t?.description && t.description.startsWith('Order #'))
+          )
         );
         setOrders(valid);
-      })
-      .catch((e) => { if (alive) console.error('[Analytics]', e); });
+        setLoaded(true);
+      } catch (e) {
+        if (alive) { console.error('[Analytics]', e); setLoaded(true); }
+      }
+    };
+    load();
 
     return () => { alive = false; };
   }, [user?.email]);

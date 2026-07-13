@@ -15,14 +15,15 @@ export default function ViewTransactions({ user }) {
     if (initial) setLoading(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const email = session?.user?.email || user?.email;
-      if (!email) { if (initial) setLoading(false); return; }
-      const { data } = await supabase
-        .from('transactions')
-        .select('*')
-        .eq('email', email)
-        .order('created_at', { ascending: false });
-      setTransactions(data || []);
+      if (!session?.access_token) { if (initial) setLoading(false); return; }
+      // ✅ Lewat /api/transactions (service role, kolom whitelist) — BUKAN query
+      // Supabase langsung dari client, karena select('*') bocorin provider,
+      // service_id mentah, dan charge/charge_idr (modal provider = margin kelihatan).
+      const r = await fetch('/api/transactions', {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      const data = await r.json();
+      setTransactions(Array.isArray(data) ? data : []);
     } catch { }
     if (initial) setLoading(false);
   };

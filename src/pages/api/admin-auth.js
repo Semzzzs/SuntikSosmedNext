@@ -107,9 +107,12 @@ export default async function handler(req, res) {
     // Login gagal
     recordFailure(ip);
 
-    // Tambah sedikit delay konstan (bukan setTimeout async) — cukup untuk cegah timing oracle
-    const start = Date.now();
-    while (Date.now() - start < 300) { /* busy wait 300ms */ }
+    // Delay konstan buat cegah timing oracle. HARUS async (setTimeout), BUKAN busy-wait —
+    // busy-wait (while loop) mengunci event loop Node SATU-SATUNYA thread selama 300ms,
+    // yang berarti SEMUA request lain (bukan cuma admin panel — seluruh situs, semua user)
+    // ikut freeze tiap ada 1 percobaan login admin yang gagal. setTimeout async menunda
+    // response ke request INI SAJA tanpa memblokir request lain yang jalan bersamaan.
+    await new Promise(r => setTimeout(r, 300));
 
     return res.status(401).json({ ok: false, error: 'Username atau password salah.' });
 }

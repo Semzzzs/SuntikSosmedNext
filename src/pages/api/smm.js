@@ -26,6 +26,40 @@ import {
     PROVIDERS,
 } from './providers';
 
+// ── Opaque service id — biar "smmsoc:123"/"buzzer:456" gak literal kelihatan di Network tab ──
+function encodeServiceId(prefixedId) {
+    return Buffer.from(String(prefixedId), 'utf8').toString('base64url');
+}
+function decodeServiceId(opaqueId) {
+    try {
+        const decoded = Buffer.from(String(opaqueId), 'base64url').toString('utf8');
+        // sanity check: hasil decode harus mengandung ':' (format provider:id)
+        return decoded.includes(':') ? decoded : String(opaqueId);
+    } catch {
+        return String(opaqueId); // fallback kompatibilitas kalau bukan base64
+    }
+}
+
+// ── Kurs USD->IDR dengan cache 5 menit (dipakai buat itung rate final di listing) ──
+let _rateCache = { value: 17689, ts: 0 };
+async function getUsdIdrRate(supa) {
+    if (Date.now() - _rateCache.ts < 5 * 60 * 1000) return _rateCache.value;
+    let rate = 17689;
+    try {
+        const { data: rOverride } = await supa.from('settings').select('value').eq('key', 'rate_override').maybeSingle();
+        const ov = rOverride?.value ? parseInt(rOverride.value, 10) : 0;
+        if (ov && ov >= 1000) {
+            rate = ov;
+        } else {
+            const rr = await fetch('https://open.er-api.com/v6/latest/USD');
+            const rd = await rr.json();
+            if (rd?.result === 'success' && rd?.rates?.IDR) rate = Math.round(rd.rates.IDR);
+        }
+    } catch { }
+    _rateCache = { value: rate, ts: Date.now() };
+    return rate;
+}
+
 function verifyAdminJWT(authHeader) {
     if (!authHeader?.startsWith('Bearer ')) return false;
     const token = authHeader.split(' ')[1];
@@ -59,8 +93,12 @@ export default async function handler(req, res) {
             const { data: rl } = await supa.from('settings').select('value').eq('key', 'markup_rules').maybeSingle();
             let markup = mk?.value ? parseFloat(mk.value) : 1;
             if (isNaN(markup) || markup < 1) markup = 1;
-            let rules = { categories: {}, services: {}, providers: {} };
-            try { if (rl?.value) { const p = JSON.parse(rl.value); rules = { categories: p.categories || {}, services: p.services || {}, providers: p.providers || {} }; } } catch { }
+            // 'providers' SENGAJA tidak dikirim ke client — itu nama provider (smmsoc/buzzer)
+            // + rasio markup per-provider, gak boleh keliatan di Network tab publik.
+            // Harga final sekarang sudah dihitung server-side di action=services, jadi
+            // client sebetulnya gak perlu lagi endpoint ini buat itung harga sendiri.
+            let rules = { categories: {}, services: {} };
+            try { if (rl?.value) { const p = JSON.parse(rl.value); rules = { categories: p.categories || {}, services: p.services || {} }; } } catch { }
             return res.status(200).json({ markup, rules });
         } catch (e) {
             return res.status(200).json({ markup: 1, rules: { categories: {}, services: {} } });
@@ -84,6 +122,7 @@ export default async function handler(req, res) {
 
     // ── Auth user (kecuali action=services yang publik) ──
     const publicAction = req.query.action === 'services';
+    let requestUserEmail = null; // dipakai buat ownership check di action status/refill/cancel
     if (!isAdmin && !publicAction) {
         if (!authHeader || !authHeader.startsWith('Bearer ')) {
             return res.status(401).json({ error: 'Unauthorized. Silakan login terlebih dahulu.' });
@@ -94,6 +133,7 @@ export default async function handler(req, res) {
         if (error || !user) {
             return res.status(401).json({ error: 'Sesi tidak valid. Silakan login ulang.' });
         }
+        requestUserEmail = user.email || null;
         try {
             const supaSvc = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
             const { data: blk } = await supaSvc.from('settings').select('value').eq('key', 'blocked_emails').maybeSingle();
@@ -170,7 +210,37 @@ export default async function handler(req, res) {
                     console.error('[smm] filter disabled services error:', e.message);
                 }
             }
-            return res.status(200).json(services);
+            // ── Hitung harga final (sudah markup + fx) & hilangkan jejak provider ──
+            const supa2 = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+            let markup = 1, markupRules = { categories: {}, services: {}, providers: {} };
+            try {
+                const { data: mk } = await supa2.from('settings').select('value').eq('key', 'markup').maybeSingle();
+                const { data: rl } = await supa2.from('settings').select('value').eq('key', 'markup_rules').maybeSingle();
+                if (mk?.value) markup = parseFloat(mk.value) || 1;
+                if (rl?.value) { const p = JSON.parse(rl.value); markupRules = { categories: p.categories || {}, services: p.services || {}, providers: p.providers || {} }; }
+            } catch { }
+            const fxRate = await getUsdIdrRate(supa2);
+
+            const safe = services.map((s) => {
+                const rawId = String(s.service);
+                const provKey = s._provider || rawId.split(':')[0];
+                const effMarkup =
+                    markupRules.services?.[rawId] ??
+                    markupRules.categories?.[s.category] ??
+                    markupRules.providers?.[provKey] ??
+                    markup;
+                const fx = String(s.currency || 'USD').toUpperCase() === 'IDR' ? 1 : fxRate;
+                return {
+                    ...s,
+                    service: encodeServiceId(rawId),          // opaque, gak ada "smmsoc:"/"buzzer:" kelihatan
+                    _rawId: rawId.includes(':') ? rawId.split(':')[1] : rawId, // buat display "#123", aman
+                    _provider: undefined,                      // dibuang dari JSON (undefined auto-stripped)
+                    rate: +(parseFloat(s.rate || 0) * fx * effMarkup).toFixed(4), // harga JADI ke user
+                    currency: 'IDR',                            // sudah dikonversi, client gak perlu fx lagi
+                };
+            });
+
+            return res.status(200).json(safe);
         } catch (e) {
             console.error('[smm] listAllServices error:', e.message);
             return res.status(502).json({ error: 'Gagal mengambil daftar layanan.' });
@@ -188,7 +258,7 @@ export default async function handler(req, res) {
         const src = (req.method === 'POST' && req.body && typeof req.body === 'object')
             ? req.body
             : req.query;
-        const serviceId = src.service;              // prefixed, mis. "buzzer:5678"
+        const serviceId = decodeServiceId(src.service); // decode opaque id balik ke "buzzer:5678"
         const link = src.link;
         const quantity = src.quantity;
         const comments = src.comments;
@@ -398,6 +468,7 @@ export default async function handler(req, res) {
     //   provider terpisah). Default smmsoc; pakai ?provider=buzzer untuk yang lain.
     // ─────────────────────────────────────────────────────────
     if (action === 'balance') {
+        if (!isAdmin) return res.status(403).json({ error: 'Hanya admin.' });
         const providerKey = req.query.provider || 'smmsoc';
         try {
             const b = await getBalance(providerKey);
@@ -486,6 +557,36 @@ export default async function handler(req, res) {
         if (!providerKey) providerKey = 'smmsoc'; // fallback data lama
 
         const provDef = PROVIDERS[providerKey];
+
+        // ── Ownership check — TANPA ini, user A bisa lihat/refill/cancel order user B
+        //    cuma dengan tebak order_id (IDOR). Admin dikecualikan (butuh lihat semua).
+        if (!isAdmin) {
+            const idsToCheck = action === 'status' && ordersCsv
+                ? String(ordersCsv).split(',').map(s => s.trim()).filter(Boolean)
+                : (orderId ? [String(orderId)] : []);
+            if (idsToCheck.length === 0) {
+                return res.status(400).json({ error: 'Order ID wajib diisi.' });
+            }
+            try {
+                const supaCheck = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+                let q = supaCheck
+                    .from('transactions')
+                    .select('order_id')
+                    .eq('email', requestUserEmail)
+                    .in('order_id', idsToCheck);
+                // Order lama (sebelum kolom `provider` ada) nilainya NULL, dianggap smmsoc.
+                q = providerKey === 'smmsoc' ? q.or('provider.eq.smmsoc,provider.is.null') : q.eq('provider', providerKey);
+                const { data: owned } = await q;
+                const ownedSet = new Set((owned || []).map(r => String(r.order_id)));
+                const notOwned = idsToCheck.filter(id => !ownedSet.has(id));
+                if (notOwned.length > 0) {
+                    return res.status(403).json({ error: 'Order tidak ditemukan atau bukan milikmu.' });
+                }
+            } catch (e) {
+                console.error('[smm] ownership check error:', e.message);
+                return res.status(500).json({ error: 'Gagal memverifikasi kepemilikan order.' });
+            }
+        }
 
         try {
             // ── STATUS MULTI (orders=csv) ──

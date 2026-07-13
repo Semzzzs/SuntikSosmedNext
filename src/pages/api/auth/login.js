@@ -12,30 +12,35 @@
 
 import { createClient } from '@supabase/supabase-js';
 
-// Rate limiting in-memory
-const loginAttempts = new Map();
+// Rate limiting via Supabase — persisten & ke-share lintas PM2 worker/instance.
+// (In-memory Map sebelumnya cuma jalan bener kalau PM2 fork mode / instances: 1;
+// di cluster mode tiap worker punya Map sendiri, jadi limit bisa ditembus.)
 const MAX_LOGIN_ATTEMPTS = 10;
 const LOGIN_WINDOW_MS = 15 * 60 * 1000; // 15 menit
 
-function isLoginRateLimited(ip) {
-    const now = Date.now();
-    const entry = loginAttempts.get(ip);
-    if (!entry || now > entry.resetAt) {
-        loginAttempts.set(ip, { count: 0, resetAt: now + LOGIN_WINDOW_MS });
-        return false;
-    }
-    return entry.count >= MAX_LOGIN_ATTEMPTS;
+async function isLoginRateLimited(supabase, ip) {
+    const key = `login_rl:${ip}`;
+    const { data } = await supabase.from('settings').select('value').eq('key', key).maybeSingle();
+    if (!data?.value) return false;
+    try {
+        const entry = JSON.parse(data.value);
+        if (Date.now() > entry.resetAt) return false;
+        return entry.count >= MAX_LOGIN_ATTEMPTS;
+    } catch { return false; }
 }
 
-function recordLoginFailure(ip) {
+async function recordLoginFailure(supabase, ip) {
+    const key = `login_rl:${ip}`;
     const now = Date.now();
-    const entry = loginAttempts.get(ip) || { count: 0, resetAt: now + LOGIN_WINDOW_MS };
+    const { data } = await supabase.from('settings').select('value').eq('key', key).maybeSingle();
+    let entry = { count: 0, resetAt: now + LOGIN_WINDOW_MS };
+    try { if (data?.value) { const p = JSON.parse(data.value); if (now <= p.resetAt) entry = p; } } catch { }
     entry.count += 1;
-    loginAttempts.set(ip, entry);
+    await supabase.from('settings').upsert({ key, value: JSON.stringify(entry), updated_at: new Date().toISOString() }, { onConflict: 'key' });
 }
 
-function resetLoginAttempts(ip) {
-    loginAttempts.delete(ip);
+async function resetLoginAttempts(supabase, ip) {
+    await supabase.from('settings').delete().eq('key', `login_rl:${ip}`);
 }
 
 // Supabase admin — untuk signInWithPassword server-side
@@ -50,7 +55,7 @@ export default async function handler(req, res) {
     // Rate limiting
     const ip = (req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown')
         .split(',')[0].trim();
-    if (isLoginRateLimited(ip)) {
+    if (await isLoginRateLimited(supabaseAdmin, ip)) {
         return res.status(429).json({ error: 'Terlalu banyak percobaan login. Tunggu 15 menit.' });
     }
 
@@ -91,11 +96,11 @@ export default async function handler(req, res) {
     const { data, error } = await supabaseAuth.auth.signInWithPassword({ email, password });
 
     if (error || !data?.session) {
-        recordLoginFailure(ip);
+        await recordLoginFailure(supabaseAdmin, ip);
         await new Promise(r => setTimeout(r, 300));
         return res.status(401).json({ error: 'Email atau password salah.' });
     }
-    resetLoginAttempts(ip);
+    await resetLoginAttempts(supabaseAdmin, ip);
 
     // ✅ Return session tokens ke client — client set session via supabase.auth.setSession()
     return res.status(200).json({

@@ -94,9 +94,6 @@ export default function ViewNewOrder({ user, setMenu }) {
   const [apiKeyLocal, setApiKeyLocal] = useState(apiKey);
   const effectiveApiKey = apiKeyLocal || apiKey;
   const api = useSmmApi();
-  const [rate, setRate] = useState(17687); // fallback IDR rate
-  const [markup, setMarkup] = useState(1); // markup global dari admin, default 1x (no markup)
-  const [markupRules, setMarkupRules] = useState({ categories: {}, services: {}, providers: {} }); // markup per-service/kategori/provider
   const [searchQuery, setSearchQuery] = useState('');
   const [bulkText, setBulkText] = useState('');
   const [bulkLoading, setBulkLoading] = useState(false);
@@ -131,22 +128,11 @@ export default function ViewNewOrder({ user, setMenu }) {
     return { type: 'link', label: 'Link', placeholder: 'https://... atau @username' };
   };
 
-  useEffect(() => {
-    fetch('/api/rate').then(r => r.json()).then(d => { if (d.rate) setRate(d.rate); }).catch(() => { });
-  }, []);
-
-  // Load markup + rules via server endpoint (pakai service role, lolos RLS).
-  // smm_api_url tetap dari Supabase (bukan rahasia).
+  // smm_api_url dari Supabase (bukan rahasia). Markup & fx SUDAH dihitung
+  // server-side di action=services (field `rate` = harga jadi ke user),
+  // jadi client tidak perlu lagi fetch/hitung markup sendiri.
   useEffect(() => {
     const loadSettings = async () => {
-      // markup global + per-service/kategori dari server (konsisten dgn /api/smm)
-      try {
-        const r = await fetch('/api/smm?action=get_public_markup');
-        const d = await r.json();
-        if (d?.markup) setMarkup(parseFloat(d.markup));
-        if (d?.rules) setMarkupRules(d.rules);
-      } catch { }
-      // smm_api_url (non-rahasia) — boleh dari Supabase
       try {
         const { data } = await supabase.from('settings').select('key, value').in('key', ['smm_api_url']);
         data?.forEach(row => { if (row.key === 'smm_api_url' && row.value) setConfig(row.value); });
@@ -302,7 +288,7 @@ export default function ViewNewOrder({ user, setMenu }) {
       setError('Harga layanan belum tersedia. Coba refresh atau pilih layanan lain.');
       orderingRef.current = false; return;
     }
-    const totalIDRCheck = Math.round(effectiveQty * svcRate / 1000 * fxFor(selectedService) * resolveMarkup(selectedService));
+    const totalIDRCheck = Math.round(effectiveQty * svcRate / 1000);
     if (balance !== null && totalIDRCheck > balance) {
       setError(`Saldo tidak cukup. Saldo kamu Rp ${Math.round(balance).toLocaleString('id-ID')}, dibutuhkan Rp ${totalIDRCheck.toLocaleString('id-ID')}.`);
       orderingRef.current = false; return;
@@ -438,7 +424,7 @@ export default function ViewNewOrder({ user, setMenu }) {
           results.push({ line, status: 'error', msg: `Quantity ${parsedQty.toLocaleString('id-ID')} di luar batas (Min: ${minQ.toLocaleString('id-ID')}, Max: ${maxQ.toLocaleString('id-ID')}).` });
           continue;
         }
-        const costIDR = Math.round(parsedQty * parseFloat(svcObj.rate || 0) / 1000 * fxFor(svcObj) * resolveMarkup(svcObj));
+        const costIDR = Math.round(parsedQty * parseFloat(svcObj.rate || 0) / 1000);
         // Pakai runningBalance (bukan state `balance`) agar cek saldo akurat tiap iterasi loop
         if (runningBalance !== null && costIDR > runningBalance) {
           results.push({ line, status: 'error', msg: `Saldo tidak cukup. Dibutuhkan Rp ${costIDR.toLocaleString('id-ID')}, sisa saldo Rp ${Math.round(runningBalance).toLocaleString('id-ID')}.` });
@@ -458,7 +444,7 @@ export default function ViewNewOrder({ user, setMenu }) {
         //    Karena server motong saldo atomik tiap request, bulk over-spend gak mungkin lagi.
         const successSvc = services.find(s => String(s.service) === String(resolvedId));
         if (successSvc && runningBalance !== null) {
-          const deducted = Math.round(parsedQty * parseFloat(successSvc.rate || 0) / 1000 * fxFor(successSvc) * resolveMarkup(successSvc));
+          const deducted = Math.round(parsedQty * parseFloat(successSvc.rate || 0) / 1000);
           runningBalance = Math.max(0, runningBalance - deducted);
         }
         results.push({ line, status: 'success', msg: `Order #${res.order} berhasil!` });
@@ -513,33 +499,10 @@ export default function ViewNewOrder({ user, setMenu }) {
     return out;
   }, [services, searchQuery]);
 
+  // `rate` per service SUDAH final (markup + konversi USD->IDR sudah dihitung
+  // server-side di /api/smm?action=services). Client tinggal pakai apa adanya,
+  // tidak perlu fxFor()/resolveMarkup() lagi.
   const price = selectedService ? (parseFloat(selectedService.rate || 0) / 1000) : 0;
-  const toIDR = (usd) => Math.round(usd * rate);
-
-  // Markup efektif untuk sebuah service: service → kategori → global (sama logika dengan server /api/smm)
-  const resolveMarkup = (svc) => {
-    if (!svc) return markup;
-    const sid = String(svc.service);
-    if (markupRules.services && markupRules.services[sid] != null) return parseFloat(markupRules.services[sid]);
-    if (svc.category && markupRules.categories && markupRules.categories[svc.category] != null) return parseFloat(markupRules.categories[svc.category]);
-    const prov = svc._provider || String(svc.service).split(':')[0];
-    if (prov && markupRules.providers && markupRules.providers[prov] != null) return parseFloat(markupRules.providers[prov]);
-    return markup;
-  };
-
-  // ⚡ Faktor konversi harga ke IDR berdasar currency provider.
-  //   - Service USD (mis. SMMSOC): rate-nya per 1000 dalam USD -> kali kurs USD->IDR.
-  //   - Service IDR (mis. BuzzerPanel): rate sudah Rupiah -> faktor 1 (JANGAN dikali kurs).
-  //   Field `currency` dikirim server dari providers.js. Default 'USD' untuk
-  //   data lama tanpa field (kompatibilitas service SMMSOC sebelum multi-provider).
-  const fxFor = (svc) => {
-    const cur = String(svc?.currency || 'USD').toUpperCase();
-    return cur === 'IDR' ? 1 : (rate || 17687);
-  };
-  const formatIDR = (usd) => {
-    const val = toIDR(usd);
-    return val > 0 ? `Rp ${val.toLocaleString('id-ID')}` : 'Rp 0';
-  };
   // Kategori untuk dropdown: kunci = kategori bersih (cleanCategory) dari service
   // yang lolos filter platform → near-duplicate nyatu, di-sort A–Z biar rapih.
   const categories = useMemo(
@@ -754,7 +717,7 @@ export default function ViewNewOrder({ user, setMenu }) {
                     <div>
                       <div style={{ fontSize: 11, color: 'var(--text3)', fontWeight: 600, marginBottom: 2 }}>Harga layanan</div>
                       <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--blue)' }}>
-                        Rp {Math.round(parseFloat(selectedService.rate || 0) * fxFor(selectedService) * resolveMarkup(selectedService)).toLocaleString('id-ID')}
+                        Rp {Math.round(parseFloat(selectedService.rate || 0)).toLocaleString('id-ID')}
                         <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text3)', marginLeft: 4 }}>/ 1.000</span>
                       </div>
                     </div>
@@ -990,8 +953,7 @@ export default function ViewNewOrder({ user, setMenu }) {
                     const isCC = isCustomCommentsSvc(selectedService);
                     const q = isCC ? comments.split('\n').map(s => s.trim()).filter(Boolean).length : (parseInt(qty) || 0);
                     const p = selectedService ? parseFloat(selectedService.rate || 0) / 1000 : 0;
-                    const r = fxFor(selectedService);
-                    const total = Math.round(q * p * r * resolveMarkup(selectedService));
+                    const total = Math.round(q * p);
                     return q > 0 && p > 0 ? `Rp ${total.toLocaleString('id-ID')}` : 'Rp 0';
                   })()}
                 </span>
@@ -1030,7 +992,7 @@ export default function ViewNewOrder({ user, setMenu }) {
                     onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg2)'; e.currentTarget.style.borderColor = 'var(--border)'; }}>
                     <div>
                       <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', marginBottom: 2 }}>{cleanName(s.name) || s.name}</div>
-                      <div style={{ fontSize: 11.5, color: 'var(--text3)' }}>ID: <span style={{ fontFamily: "'JetBrains Mono',monospace", color: 'var(--text2)', fontWeight: 700 }}>{serviceCode(s)}</span> · Rp {Math.round(parseFloat(s.rate || 0) * fxFor(s) * resolveMarkup(s) / 1000).toLocaleString('id-ID')}/1K · Min: {s.min} | Max: {s.max}</div>
+                      <div style={{ fontSize: 11.5, color: 'var(--text3)' }}>ID: <span style={{ fontFamily: "'JetBrains Mono',monospace", color: 'var(--text2)', fontWeight: 700 }}>{serviceCode(s)}</span> · Rp {Math.round(parseFloat(s.rate || 0) / 1000).toLocaleString('id-ID')}/1K · Min: {s.min} | Max: {s.max}</div>
                     </div>
                     <ArrowRight size={14} style={{ color: 'var(--text3)', flexShrink: 0 }} />
                   </div>
@@ -1154,7 +1116,7 @@ export default function ViewNewOrder({ user, setMenu }) {
                 {/* Harga */}
                 <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: 6 }}>
                   <span style={{ fontSize: 22, fontWeight: 800, color: 'var(--blue)', letterSpacing: '-.02em' }}>
-                    Rp {Math.round(parseFloat(selectedService.rate || 0) * fxFor(selectedService) * resolveMarkup(selectedService)).toLocaleString('id-ID')}
+                    Rp {Math.round(parseFloat(selectedService.rate || 0)).toLocaleString('id-ID')}
                   </span>
                   <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text3)' }}>/ 1.000</span>
                 </div>
