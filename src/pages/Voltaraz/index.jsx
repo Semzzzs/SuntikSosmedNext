@@ -1415,6 +1415,18 @@ export default function AdminPanel() {
                     .adm-bento-top { grid-template-columns: 1fr !important; }
                     .adm-bento-top > .adm-hero-card { grid-column: auto !important; }
                 }
+                .admin-shell .card { box-shadow: 0 1px 2px rgba(0,0,0,.04); transition: box-shadow .18s ease, border-color .18s ease; }
+                .admin-shell .card:hover { box-shadow: 0 4px 16px rgba(0,0,0,.06); }
+                .admin-shell table tbody tr { transition: background .12s ease; }
+                .admin-shell table tbody tr:hover td { background: color-mix(in srgb, var(--blue) 5%, transparent); }
+                .admin-shell ::-webkit-scrollbar { width: 9px; height: 9px; }
+                .admin-shell ::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--text3) 35%, transparent); border-radius: 20px; }
+                .admin-shell ::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--text3) 55%, transparent); }
+                .admin-shell ::-webkit-scrollbar-track { background: transparent; }
+                .admin-shell .btn { transition: filter .15s ease, transform .12s ease, box-shadow .15s ease; }
+                .admin-shell .btn:hover { filter: brightness(1.06); }
+                .admin-shell .btn:active { transform: translateY(1px); }
+                .admin-shell .btn-blue { box-shadow: 0 4px 14px rgba(37,99,235,.25); }
             `}</style>
 
             {/* Backdrop mobile saat sidebar terbuka */}
@@ -1426,47 +1438,50 @@ export default function AdminPanel() {
             <aside style={{ width: sideOpen ? 220 : 0, minWidth: sideOpen ? 220 : 0, background: 'var(--white)', borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', overflow: 'hidden', transition: 'all .25s', position: isMobile ? 'fixed' : 'relative', top: 0, left: 0, height: '100%', zIndex: isMobile ? 60 : 40, boxShadow: isMobile && sideOpen ? '4px 0 24px rgba(0,0,0,.18)' : 'none' }}>
 
                 {/* Logo */}
-                <div style={{ padding: '20px 18px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 800, fontSize: 17, color: 'var(--text)' }}>
-                        <div style={{ width: 30, height: 30, borderRadius: 8, background: 'var(--blue-l)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <Target size={17} style={{ color: 'var(--blue)' }} strokeWidth={2.5} />
+                <div style={{ padding: '20px 18px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 9, fontWeight: 800, fontSize: 17, color: 'var(--text)', letterSpacing: '-.3px' }}>
+                        <div style={{ width: 32, height: 32, borderRadius: 9, background: 'linear-gradient(135deg,#3b82f6,#1d4ed8)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 12px rgba(37,99,235,.35), inset 0 1px 0 rgba(255,255,255,.2)' }}>
+                            <Target size={17} style={{ color: '#fff' }} strokeWidth={2.5} />
                         </div>
                         SuntikSosmed
                     </div>
-                    <button onClick={() => setSideOpen(false)} style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 8, padding: '5px 6px', cursor: 'pointer', color: 'var(--text3)', display: 'flex' }}>
+                    <button onClick={() => setSideOpen(false)} style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 8, padding: '5px 6px', cursor: 'pointer', color: 'var(--text3)', display: 'flex', transition: 'background .15s' }}>
                         <ChevronLeft size={15} />
                     </button>
                 </div>
 
                 {/* Admin badge card */}
-                <div style={{ margin: '0 12px 12px' }}>
-                    <div style={{ background: 'linear-gradient(135deg,#2563EB,#1D4ED8)', borderRadius: 13, padding: '12px 14px' }}>
-                        <div style={{ fontSize: 10, color: 'rgba(255,255,255,.65)', fontWeight: 700, letterSpacing: '.06em', marginBottom: 3 }}>ADMIN PANEL</div>
-                        <div style={{ fontSize: 14, fontWeight: 800, color: '#fff' }}>Full Access</div>
-                        <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 5 }}>
+                <div style={{ margin: '0 12px 14px' }}>
+                    <div style={{ background: 'linear-gradient(135deg,#2563EB,#1D4ED8)', borderRadius: 14, padding: '13px 15px', position: 'relative', overflow: 'hidden', boxShadow: '0 4px 12px rgba(37,99,235,.18)' }}>
+                        <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(120% 140% at 100% 0%, rgba(255,255,255,.1), transparent 55%)', pointerEvents: 'none' }} />
+                        <div style={{ position: 'relative', fontSize: 10, color: 'rgba(255,255,255,.7)', fontWeight: 700, letterSpacing: '.07em', marginBottom: 4 }}>ADMIN PANEL</div>
+                        <div style={{ position: 'relative', fontSize: 14.5, fontWeight: 800, color: '#fff' }}>Full Access</div>
+                        <div style={{ position: 'relative', marginTop: 7, display: 'flex', alignItems: 'center', gap: 6 }}>
                             <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#4ADE80' }} />
-                            <span style={{ fontSize: 11, color: 'rgba(255,255,255,.7)', fontWeight: 600 }}>{apiUrl ? new URL(apiUrl).hostname : 'Multi-provider'}</span>
+                            <span style={{ fontSize: 11, color: 'rgba(255,255,255,.75)', fontWeight: 600 }}>{apiUrl ? new URL(apiUrl).hostname : 'Multi-provider'}</span>
                         </div>
                     </div>
                 </div>
 
                 {/* Nav */}
-                <nav style={{ flex: 1, padding: '4px 10px', display: 'flex', flexDirection: 'column', gap: 2, overflowY: 'auto' }}>
+                <nav style={{ flex: 1, padding: '4px 10px', display: 'flex', flexDirection: 'column', gap: 3, overflowY: 'auto' }}>
                     {navItems.map(n => {
                         const badge = n.badgeKey ? (pendingCounts[n.badgeKey] || 0) : 0;
+                        const active = menu === n.id;
                         return (
                             <button key={n.id} onClick={() => { setMenu(n.id); if (isMobile) setSideOpen(false); }}
-                                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 11px', borderRadius: 10, border: 'none', cursor: 'pointer', background: menu === n.id ? 'var(--blue)' : 'transparent', color: menu === n.id ? '#fff' : 'var(--text2)', fontWeight: menu === n.id ? 700 : 600, fontSize: 13.5, fontFamily: "'Plus Jakarta Sans',sans-serif", transition: 'all .15s', whiteSpace: 'nowrap', textAlign: 'left' }}
-                                onMouseEnter={e => { if (menu !== n.id) e.currentTarget.style.background = 'var(--bg2)'; }}
-                                onMouseLeave={e => { if (menu !== n.id) e.currentTarget.style.background = 'transparent'; }}>
-                                <span style={{ color: menu === n.id ? 'rgba(255,255,255,.8)' : 'var(--text3)' }}>{n.icon}</span>
+                                style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 10, padding: '9px 11px 9px 13px', borderRadius: 10, border: 'none', cursor: 'pointer', background: active ? 'color-mix(in srgb, var(--blue) 12%, transparent)' : 'transparent', color: active ? 'var(--blue)' : 'var(--text2)', fontWeight: active ? 700 : 600, fontSize: 13.5, fontFamily: "'Plus Jakarta Sans',sans-serif", transition: 'background .15s, color .15s', whiteSpace: 'nowrap', textAlign: 'left' }}
+                                onMouseEnter={e => { if (!active) e.currentTarget.style.background = 'var(--bg2)'; }}
+                                onMouseLeave={e => { if (!active) e.currentTarget.style.background = 'transparent'; }}>
+                                {active && <span style={{ position: 'absolute', left: 0, top: 6, bottom: 6, width: 3, borderRadius: 3, background: 'var(--blue)' }} />}
+                                <span style={{ color: active ? 'var(--blue)' : 'var(--text3)', display: 'flex' }}>{n.icon}</span>
                                 {n.id}
                                 {badge > 0 && (
-                                    <span style={{ marginLeft: 'auto', minWidth: 18, height: 18, padding: '0 5px', borderRadius: 9, background: menu === n.id ? 'rgba(255,255,255,.25)' : 'var(--red)', color: '#fff', fontSize: 10.5, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    <span style={{ marginLeft: 'auto', minWidth: 18, height: 18, padding: '0 5px', borderRadius: 9, background: active ? 'var(--blue)' : 'var(--red)', color: '#fff', fontSize: 10.5, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                         {badge > 99 ? '99+' : badge}
                                     </span>
                                 )}
-                                {menu === n.id && badge === 0 && <ChevronRight size={13} style={{ marginLeft: 'auto', color: 'rgba(255,255,255,.6)' }} />}
+                                {active && badge === 0 && <ChevronRight size={13} style={{ marginLeft: 'auto', color: 'var(--blue)' }} />}
                             </button>
                         );
                     })}
@@ -1474,13 +1489,13 @@ export default function AdminPanel() {
 
                 {/* Bottom */}
                 <div style={{ padding: '10px 10px 16px', borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 3 }}>
-                    <button onClick={toggle} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 11px', borderRadius: 9, border: 'none', cursor: 'pointer', background: 'transparent', color: 'var(--text3)', fontSize: 13.5, fontFamily: "'Plus Jakarta Sans',sans-serif", fontWeight: 600 }}
+                    <button onClick={toggle} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 11px', borderRadius: 9, border: 'none', cursor: 'pointer', background: 'transparent', color: 'var(--text3)', fontSize: 13.5, fontFamily: "'Plus Jakarta Sans',sans-serif", fontWeight: 600, transition: 'background .15s', width: '100%', boxSizing: 'border-box' }}
                         onMouseEnter={e => e.currentTarget.style.background = 'var(--bg2)'}
                         onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                         {dark ? <Sun size={15} /> : <Moon size={15} />}
                         {dark ? 'Light Mode' : 'Dark Mode'}
                     </button>
-                    <button onClick={logout} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 11px', borderRadius: 9, border: 'none', cursor: 'pointer', background: 'transparent', color: 'var(--red)', fontSize: 13.5, fontFamily: "'Plus Jakarta Sans',sans-serif", fontWeight: 700 }}
+                    <button onClick={logout} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 11px', borderRadius: 9, border: 'none', cursor: 'pointer', background: 'transparent', color: 'var(--red)', fontSize: 13.5, fontFamily: "'Plus Jakarta Sans',sans-serif", fontWeight: 700, transition: 'background .15s', width: '100%', boxSizing: 'border-box' }}
                         onMouseEnter={e => e.currentTarget.style.background = 'var(--red-l)'}
                         onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                         <LogOut size={15} /> Sign Out Admin
@@ -1491,17 +1506,17 @@ export default function AdminPanel() {
             {/* MAIN */}
             <div style={{ flex: 1, overflowY: 'auto', background: 'var(--bg)', display: 'flex', flexDirection: 'column' }}>
                 {/* Topbar */}
-                <div style={{ height: 56, background: 'var(--white)', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', padding: '0 22px', gap: 12, position: 'sticky', top: 0, zIndex: 10, flexShrink: 0 }}>
+                <div style={{ height: 58, background: 'var(--white)', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', padding: '0 22px', gap: 12, position: 'sticky', top: 0, zIndex: 10, flexShrink: 0, boxShadow: '0 1px 0 rgba(0,0,0,.02)' }}>
                     {!sideOpen && (
                         <button onClick={() => setSideOpen(true)} style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 8, padding: '7px 8px', cursor: 'pointer', color: 'var(--text2)', display: 'flex', marginRight: 4 }}>
                             <Menu size={16} />
                         </button>
                     )}
-                    <span style={{ fontSize: 13, color: 'var(--text3)' }}>Admin</span>
+                    <span style={{ fontSize: 13, color: 'var(--text3)', fontWeight: 500 }}>Admin</span>
                     <ChevronRight size={13} style={{ color: 'var(--text3)' }} />
                     <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>{menu}</span>
                     <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: apiStatus === 'error' ? 'var(--red)' : apiStatus === 'ok' ? 'var(--green)' : 'var(--text3)', background: apiStatus === 'error' ? 'var(--red-l)' : apiStatus === 'ok' ? 'var(--green-l)' : 'var(--bg2)', padding: '4px 12px', borderRadius: 20, display: 'flex', alignItems: 'center', gap: 5 }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: apiStatus === 'error' ? 'var(--red)' : apiStatus === 'ok' ? 'var(--green)' : 'var(--text3)', background: apiStatus === 'error' ? 'var(--red-l)' : apiStatus === 'ok' ? 'var(--green-l)' : 'var(--bg2)', border: `1px solid color-mix(in srgb, ${apiStatus === 'error' ? 'var(--red)' : apiStatus === 'ok' ? 'var(--green)' : 'var(--text3)'} 20%, transparent)`, padding: '5px 13px', borderRadius: 20, display: 'flex', alignItems: 'center', gap: 6 }}>
                             <div style={{ width: 6, height: 6, borderRadius: '50%', background: apiStatus === 'error' ? 'var(--red)' : apiStatus === 'ok' ? 'var(--green)' : 'var(--text3)' }} />
                             {apiStatus === 'error' ? 'API Error' : apiStatus === 'ok' ? 'API Connected' : 'Checking...'}
                         </div>
@@ -1513,9 +1528,11 @@ export default function AdminPanel() {
                     {/* ── OVERVIEW ── */}
                     {menu === 'Overview' && (
                         <div>
-                            <div style={{ marginBottom: 22 }}>
-                                <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text)', marginBottom: 3 }}>Overview</h1>
-                                <p style={{ fontSize: 13.5, color: 'var(--text2)' }}>Data real-time dari API provider.</p>
+                            <div style={{ marginBottom: 22, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+                                <div>
+                                    <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text)', marginBottom: 3, letterSpacing: '-.3px' }}>Overview</h1>
+                                    <p style={{ fontSize: 13.5, color: 'var(--text2)' }}>Data real-time dari API provider.</p>
+                                </div>
                             </div>
 
                             {/* ✅ Error banner */}
@@ -1557,7 +1574,7 @@ export default function AdminPanel() {
                                     { label: 'Markup Aktif', value: `${markup}x`, sub: `+${Math.round((markup - 1) * 100)}% keuntungan`, icon: <Percent size={19} />, iconBg: 'rgba(233,30,99,.1)', iconColor: '#E91E63' },
                                 ].map(s => (
                                     <div key={s.label} className="card adm-kpi-card" style={{ padding: 18, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', minHeight: 150, borderRadius: 16 }}>
-                                        <div style={{ width: 42, height: 42, borderRadius: 12, background: s.iconBg, color: s.iconColor, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{s.icon}</div>
+                                        <div style={{ width: 42, height: 42, borderRadius: 12, background: s.iconBg, color: s.iconColor, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: 'inset 0 0 0 1px rgba(0,0,0,.03)' }}>{s.icon}</div>
                                         <div>
                                             <div style={{ fontSize: 26, fontWeight: 800, color: 'var(--text)', letterSpacing: '-.02em', marginBottom: 2 }}>{s.value}</div>
                                             <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text2)', marginBottom: 2 }}>{s.label}</div>
@@ -1575,7 +1592,7 @@ export default function AdminPanel() {
                                 ].map((s) => (
                                     <div key={s.label} className="card adm-kpi-card" style={{ padding: 18, borderRadius: 16 }}>
                                         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 14 }}>
-                                            <div style={{ width: 42, height: 42, borderRadius: 12, background: s.iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center', color: s.iconColor, flexShrink: 0 }}>{s.icon}</div>
+                                            <div style={{ width: 42, height: 42, borderRadius: 12, background: s.iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center', color: s.iconColor, flexShrink: 0, boxShadow: 'inset 0 0 0 1px rgba(0,0,0,.03)' }}>{s.icon}</div>
                                             <div style={{ marginLeft: 'auto', fontSize: 10.5, fontWeight: 700, color: s.badge === 'Error' ? 'var(--red)' : 'var(--blue)', background: s.badge === 'Error' ? 'var(--red-l)' : 'var(--blue-l)', padding: '3px 9px', borderRadius: 20 }}>{s.badge}</div>
                                         </div>
                                         <div style={{ fontSize: 23, fontWeight: 800, color: 'var(--text)', marginBottom: 2, letterSpacing: '-.02em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.value}</div>
@@ -1597,7 +1614,7 @@ export default function AdminPanel() {
                                         { l: 'Revenue (Harga User)', v: `Rp ${statsRevenueIDR.toLocaleString('id-ID')}`, v2: `${markup}x markup`, c: 'var(--blue)' },
                                         { l: 'Estimasi Profit', v: `Rp ${statsProfitIDR.toLocaleString('id-ID')}`, v2: `${Math.round((markup - 1) * 100)}% margin`, c: 'var(--green)' },
                                     ].map(r => (
-                                        <div key={r.l} style={{ background: 'var(--bg2)', borderRadius: 12, padding: '16px 18px' }}>
+                                        <div key={r.l} style={{ background: 'var(--bg2)', borderRadius: 12, padding: '16px 18px', borderLeft: `3px solid ${r.c}` }}>
                                             <div style={{ fontSize: 12, color: 'var(--text3)', fontWeight: 600, marginBottom: 8 }}>{r.l}</div>
                                             <div style={{ fontSize: 20, fontWeight: 800, color: r.c, marginBottom: 3 }}>{r.v}</div>
                                             <div style={{ fontSize: 12, color: 'var(--text3)' }}>{r.v2}</div>
@@ -1617,9 +1634,14 @@ export default function AdminPanel() {
                                         { l: 'Completed Orders', v: orders.filter(o => o.status?.toLowerCase() === 'completed').length, c: 'var(--green)' },
                                         { l: 'Active Orders', v: orders.filter(o => o.status?.toLowerCase() === 'processing').length, c: 'var(--yellow)' },
                                     ].map(r => (
-                                        <div key={r.l} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border)', fontSize: 13 }}>
-                                            <span style={{ color: 'var(--text2)' }}>{r.l}</span>
-                                            <span style={{ fontWeight: 700, color: r.c }}>{r.v}</span>
+                                        <div key={r.l} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 4px', borderBottom: '1px solid var(--border)', fontSize: 13, borderRadius: 8, transition: 'background .12s' }}
+                                            onMouseEnter={e => e.currentTarget.style.background = 'var(--bg2)'}
+                                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                                            <span style={{ color: 'var(--text2)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                <span style={{ width: 6, height: 6, borderRadius: '50%', background: r.c, flexShrink: 0 }} />
+                                                {r.l}
+                                            </span>
+                                            <span style={{ fontWeight: 800, color: r.c, fontVariantNumeric: 'tabular-nums' }}>{r.v}</span>
                                         </div>
                                     ))}
                                 </div>
@@ -1633,11 +1655,13 @@ export default function AdminPanel() {
                                         { l: 'Markup', v: `${markup}x (${Math.round((markup - 1) * 100)}% profit)` },
                                         { l: 'Kurs USD/IDR', v: `Rp ${rate.toLocaleString('id-ID')}` },
                                     ].map(r => (
-                                        <div key={r.l} style={{ display: 'flex', gap: 12, padding: '8px 0', borderBottom: '1px solid var(--border)', fontSize: 13, alignItems: 'flex-start' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: 5, width: 140, flexShrink: 0, color: 'var(--text3)', fontWeight: 600 }}>
-                                                <CheckCircle size={11} style={{ color: 'var(--green)', flexShrink: 0 }} />{r.l}
+                                        <div key={r.l} style={{ display: 'flex', gap: 12, padding: '9px 4px', borderBottom: '1px solid var(--border)', fontSize: 13, alignItems: 'center', borderRadius: 8, transition: 'background .12s' }}
+                                            onMouseEnter={e => e.currentTarget.style.background = 'var(--bg2)'}
+                                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, width: 140, flexShrink: 0, color: 'var(--text3)', fontWeight: 600 }}>
+                                                <CheckCircle size={12} style={{ color: 'var(--green)', flexShrink: 0 }} />{r.l}
                                             </div>
-                                            <div style={{ color: 'var(--text)', fontFamily: "'JetBrains Mono',monospace", fontSize: 12, wordBreak: 'break-all' }}>{r.v}</div>
+                                            <div style={{ color: 'var(--text)', fontFamily: "'JetBrains Mono',monospace", fontSize: 11.5, wordBreak: 'break-all', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 7, padding: '3px 9px', flex: 1 }}>{r.v}</div>
                                         </div>
                                     ))}
                                 </div>

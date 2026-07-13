@@ -172,6 +172,9 @@ export default function AuthForm({ type }) {
         <div style={{ position: 'absolute', bottom: -80, left: -80, width: 300, height: 300, borderRadius: '50%', background: 'rgba(255,255,255,.04)', pointerEvents: 'none' }} />
         <div style={{ position: 'absolute', top: '40%', right: 40, width: 180, height: 180, borderRadius: '50%', border: '1.5px solid rgba(255,255,255,.12)', pointerEvents: 'none' }} />
         <div style={{ position: 'absolute', top: '42%', right: 50, width: 140, height: 140, borderRadius: '50%', border: '1px solid rgba(255,255,255,.08)', pointerEvents: 'none' }} />
+        <div style={{ position: 'absolute', width: 6, height: 6, borderRadius: '50%', background: 'rgba(255,255,255,.5)', top: '18%', left: '55%' }} />
+        <div style={{ position: 'absolute', width: 4, height: 4, borderRadius: '50%', background: 'rgba(255,255,255,.35)', top: '65%', left: '68%' }} />
+        <div style={{ position: 'absolute', width: 8, height: 8, borderRadius: '50%', background: 'rgba(255,255,255,.25)', top: '75%', left: '30%' }} />
 
         <div onClick={() => router.push('/')} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 64, cursor: 'pointer' }}>
           <div style={{ width: 38, height: 38, borderRadius: 10, background: 'rgba(255,255,255,.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid rgba(255,255,255,.2)' }}>
@@ -200,10 +203,10 @@ export default function AuthForm({ type }) {
           ))}
         </div>
 
-        <div style={{ marginTop: 56, display: 'flex', gap: 32 }}>
-          {[['10K+', 'Users aktif'], ['500K+', 'Order selesai'], ['99.9%', 'Uptime']].map(([v, l]) => (
-            <div key={l}>
-              <div style={{ fontSize: 20, fontWeight: 800, color: '#fff' }}>{v}</div>
+        <div style={{ marginTop: 56, display: 'flex', gap: 0 }}>
+          {[['10K+', 'Users aktif'], ['500K+', 'Order selesai'], ['99.9%', 'Uptime']].map(([v, l], i) => (
+            <div key={l} style={{ paddingRight: 32, marginRight: 32, borderRight: i < 2 ? '1px solid rgba(255,255,255,.15)' : 'none' }}>
+              <div className="stat-num" style={{ fontSize: 20, fontWeight: 800, color: '#fff' }}>{v}</div>
               <div style={{ fontSize: 12, color: 'rgba(255,255,255,.55)', fontWeight: 500 }}>{l}</div>
             </div>
           ))}
@@ -212,7 +215,7 @@ export default function AuthForm({ type }) {
 
       {/* Right Panel */}
       <div className="auth-right-panel" style={{ flex: 1, background: 'var(--bg)', display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '48px 48px', position: 'relative', overflowY: 'auto' }}>
-        <button onClick={toggle} style={{ position: 'absolute', top: 24, right: 24, background: 'var(--white)', border: '1px solid var(--border)', borderRadius: 9, padding: '8px 10px', cursor: 'pointer', color: 'var(--text2)', display: 'flex', boxShadow: 'var(--shadow)' }}>
+        <button onClick={toggle} className="theme-toggle-btn" style={{ position: 'absolute', top: 24, right: 24, background: 'var(--white)', border: '1px solid var(--border)', borderRadius: 9, padding: '8px 10px', cursor: 'pointer', color: 'var(--text2)', display: 'flex', boxShadow: 'var(--shadow)' }}>
           {dark ? <Sun size={16} /> : <Moon size={16} />}
         </button>
 
@@ -272,7 +275,7 @@ export default function AuthForm({ type }) {
               <div style={{ background: 'var(--red-l)', border: '1px solid rgba(239,68,68,.2)', borderRadius: 9, padding: '10px 13px', fontSize: 13, fontWeight: 600, color: 'var(--red)' }}>{error}</div>
             )}
 
-            <button className="btn btn-blue" type="submit" disabled={loading} style={{ width: '100%', padding: '13px', borderRadius: 11, fontSize: 14.5, marginTop: 4, gap: 8 }}>
+            <button className="btn btn-blue submit-btn" type="submit" disabled={loading} style={{ width: '100%', padding: '13px', borderRadius: 11, fontSize: 14.5, marginTop: 4, gap: 8, background: 'linear-gradient(135deg,#3b82f6,#2563eb)', boxShadow: '0 4px 14px rgba(59,130,246,.3)' }}>
               {loading ? <span style={{ width: 16, height: 16, border: '2px solid rgba(255,255,255,.4)', borderTop: '2px solid #fff', borderRadius: '50%' }} className="spin" /> : isLogin ? 'Masuk' : 'Daftar Sekarang'}
               {!loading && <ArrowRight size={16} />}
             </button>
@@ -364,9 +367,9 @@ export default function AuthForm({ type }) {
             </div>
           )}
 
-          <div style={{ display: 'flex', justifyContent: 'center', gap: 18, marginTop: 32 }}>
+          <div style={{ display: 'flex', justifyContent: 'center', gap: 10, marginTop: 32, flexWrap: 'wrap' }}>
             {['Aman & Terpercaya', 'Data Terenkripsi', '24/7 Support'].map(t => (
-              <div key={t} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--text3)', fontWeight: 600 }}>
+              <div key={t} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--text3)', fontWeight: 600, padding: '4px 10px', background: 'var(--green-l)', borderRadius: 20 }}>
                 <CheckCircle size={11} style={{ color: 'var(--green)', flexShrink: 0 }} /> {t}
               </div>
             ))}
@@ -390,6 +393,34 @@ export default function AuthForm({ type }) {
             padding-top: 32px !important;
             padding-bottom: 32px !important;
           }
+        }
+        .inp {
+          transition: border-color .2s, box-shadow .2s;
+        }
+        .inp:focus {
+          border-color: var(--blue) !important;
+          box-shadow: 0 0 0 3px rgba(59,130,246,.15);
+          outline: none;
+        }
+        .theme-toggle-btn {
+          transition: transform .15s, box-shadow .15s;
+        }
+        .theme-toggle-btn:hover {
+          transform: translateY(-1px);
+        }
+        .submit-btn {
+          transition: transform .15s, box-shadow .15s;
+        }
+        .submit-btn:hover:not(:disabled) {
+          transform: translateY(-1px);
+          box-shadow: 0 6px 20px rgba(59,130,246,.4) !important;
+        }
+        .stat-num {
+          animation: countUp .6s ease-out;
+        }
+        @keyframes countUp {
+          from { opacity: 0; transform: translateY(6px); }
+          to { opacity: 1; transform: translateY(0); }
         }
       `}</style>
     </div>

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback, forwardRef } from 'react';
 import { Search, Inbox, Zap, Clock } from 'lucide-react';
 import { VariableSizeList } from 'react-window';
 import { cleanName, cleanCategory, serviceCode } from '@/lib/platforms';
@@ -36,6 +36,24 @@ function fmtDuration(sec) {
   const day = Math.round(hr / 24);
   return `~${day} hari`;
 }
+
+// Wrapper scroll khusus utk react-window: cegah scroll "bocor"/chaining ke
+// halaman induk pas mentok di ujung list (penyebab utama scroll kacau di
+// Android/iOS), plus locking gesture jadi vertical-only dan momentum scroll iOS.
+const ListOuter = forwardRef(function ListOuter({ style, ...rest }, ref) {
+  return (
+    <div
+      ref={ref}
+      {...rest}
+      style={{
+        ...style,
+        overscrollBehavior: 'contain',
+        WebkitOverflowScrolling: 'touch',
+        touchAction: 'pan-y',
+      }}
+    />
+  );
+});
 
 export default function ViewServices() {
   const [services, setServices] = useState([]);
@@ -250,6 +268,7 @@ export default function ViewServices() {
             itemSize={itemSize}
             width="100%"
             overscanCount={6}
+            outerElementType={ListOuter}
           >
             {Row}
           </VariableSizeList>

@@ -273,31 +273,33 @@ export default function AdminUsers() {
                     display: flex;
                     align-items: center;
                     justify-content: space-between;
-                    margin-bottom: 24px;
+                    margin-bottom: 22px;
                     gap: 16px;
                     flex-wrap: wrap;
+                    padding-bottom: 18px;
+                    border-bottom: 1px solid var(--border);
                 }
-                .au-title { font-size: 24px; font-weight: 900; color: var(--text); letter-spacing: -.5px; margin: 0 0 2px; }
+                .au-title { display: flex; align-items: center; font-size: 22px; font-weight: 800; color: var(--text); letter-spacing: -.4px; margin: 0 0 4px; }
                 .au-subtitle { font-size: 13px; color: var(--text3); margin: 0; font-weight: 500; }
                 .au-badge {
                     display: inline-flex;
                     align-items: center;
                     gap: 5px;
-                    font-size: 11.5px;
+                    font-size: 11px;
                     font-weight: 700;
                     color: var(--blue);
-                    background: color-mix(in srgb, var(--blue) 12%, transparent);
-                    border: 1px solid color-mix(in srgb, var(--blue) 25%, transparent);
-                    padding: 3px 10px;
+                    background: color-mix(in srgb, var(--blue) 10%, transparent);
+                    border: 1px solid color-mix(in srgb, var(--blue) 22%, transparent);
+                    padding: 4px 11px;
                     border-radius: 20px;
-                    margin-left: 10px;
+                    margin-left: 12px;
                     vertical-align: middle;
                 }
                 .au-search-wrap { position: relative; }
-                .au-search-wrap svg.search-ic { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text3); pointer-events: none; }
+                .au-search-wrap svg.search-ic { position: absolute; left: 13px; top: 50%; transform: translateY(-50%); color: var(--text3); pointer-events: none; }
                 .au-search { 
-                    padding: 10px 14px 10px 36px; 
-                    border-radius: 12px; 
+                    padding: 10px 14px 10px 38px; 
+                    border-radius: 24px; 
                     border: 1.5px solid var(--border); 
                     background: var(--bg2); 
                     color: var(--text);
@@ -306,112 +308,118 @@ export default function AdminUsers() {
                     font-weight: 500;
                     width: 260px;
                     outline: none;
-                    transition: border-color .15s, box-shadow .15s;
+                    transition: border-color .15s, box-shadow .15s, width .15s;
                 }
-                .au-search:focus { border-color: var(--blue); box-shadow: 0 0 0 3px color-mix(in srgb, var(--blue) 15%, transparent); }
+                .au-search:focus { border-color: var(--blue); box-shadow: 0 0 0 4px color-mix(in srgb, var(--blue) 14%, transparent); width: 300px; }
                 .au-search::placeholder { color: var(--text3); }
 
                 /* ── Table ── */
-                .au-table-wrap { border-radius: 16px; border: 1px solid var(--border); overflow: hidden; background: var(--bg); }
+                .au-table-wrap { border-radius: 16px; border: 1px solid var(--border); overflow: hidden; background: var(--bg); box-shadow: 0 1px 2px rgba(0,0,0,.06); }
                 .au-table { width: 100%; border-collapse: collapse; font-size: 13px; }
                 .au-thead th {
-                    padding: 12px 16px;
+                    padding: 13px 16px;
                     text-align: left;
-                    font-size: 11px;
+                    font-size: 10.5px;
                     font-weight: 700;
                     color: var(--text3);
-                    letter-spacing: .06em;
+                    letter-spacing: .07em;
                     text-transform: uppercase;
                     background: var(--bg2);
                     border-bottom: 1px solid var(--border);
                     white-space: nowrap;
                 }
-                .usr-tr { cursor: pointer; transition: background .1s; }
-                .usr-tr:hover td { background: color-mix(in srgb, var(--blue) 5%, var(--bg2)); }
-                .au-td { padding: 13px 16px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+                .usr-tr { cursor: pointer; transition: background .12s; }
+                .usr-tr:hover td { background: color-mix(in srgb, var(--blue) 6%, var(--bg2)); }
+                .au-td { padding: 14px 16px; border-bottom: 1px solid var(--border); vertical-align: middle; }
                 .usr-tr:last-child .au-td { border-bottom: none; }
 
                 /* Avatar */
                 .au-avatar {
-                    width: 36px; height: 36px;
-                    border-radius: 10px;
+                    width: 38px; height: 38px;
+                    border-radius: 11px;
                     display: flex; align-items: center; justify-content: center;
                     font-weight: 800; font-size: 14px; color: #fff; flex-shrink: 0;
                     background: linear-gradient(135deg, #2563eb, #1d4ed8);
-                    box-shadow: 0 2px 8px rgba(37,99,235,.3);
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,.12);
                 }
-                .au-avatar.blocked { background: linear-gradient(135deg, #6b7280, #4b5563); box-shadow: none; }
+                .au-avatar.blocked { background: linear-gradient(135deg, #6b7280, #4b5563); box-shadow: inset 0 1px 0 rgba(255,255,255,.1); }
                 .au-name { font-weight: 700; color: var(--text); font-size: 13.5px; }
                 .au-email { color: var(--text2); font-family: 'JetBrains Mono', monospace; font-size: 11.5px; letter-spacing: -.2px; }
                 .au-balance { font-weight: 800; color: var(--green); font-size: 13.5px; font-variant-numeric: tabular-nums; }
 
                 /* Status pill */
-                .au-pill { font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 20px; white-space: nowrap; }
-                .au-pill-active { color: var(--green); background: var(--green-l); border: 1px solid color-mix(in srgb, var(--green) 20%, transparent); }
-                .au-pill-blocked { color: var(--red); background: var(--red-l); border: 1px solid color-mix(in srgb, var(--red) 20%, transparent); }
+                .au-pill { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700; padding: 4px 11px; border-radius: 20px; white-space: nowrap; }
+                .au-pill-active { color: var(--green); background: var(--green-l); border: 1px solid color-mix(in srgb, var(--green) 18%, transparent); }
+                .au-pill-blocked { color: var(--red); background: var(--red-l); border: 1px solid color-mix(in srgb, var(--red) 18%, transparent); }
 
                 /* Action buttons */
                 .usr-act {
                     display: inline-flex; align-items: center; gap: 5px;
                     font-size: 11.5px; font-weight: 700;
-                    padding: 6px 11px; border-radius: 9px; cursor: pointer;
+                    padding: 7px 12px; border-radius: 9px; cursor: pointer;
                     font-family: 'Inter', sans-serif;
-                    transition: filter .15s, transform .12s, box-shadow .15s;
+                    transition: filter .15s, box-shadow .15s;
                     white-space: nowrap;
                 }
-                .usr-act:hover { filter: brightness(1.08); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,.15); }
-                .usr-act:active { transform: translateY(0); box-shadow: none; }
+                .usr-act:hover { filter: brightness(1.04); box-shadow: 0 2px 6px rgba(0,0,0,.1); }
+                .usr-act:active { filter: brightness(0.98); box-shadow: none; }
 
                 /* ── Detail Modal ── */
-                .au-modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.6); backdrop-filter: blur(4px); z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 20px; }
-                .au-modal { background: var(--bg); border-radius: 20px; width: 100%; max-width: 460px; overflow: hidden; box-shadow: 0 24px 80px rgba(0,0,0,.4); border: 1px solid var(--border); }
-                .au-modal-header { padding: 24px 26px 20px; display: flex; align-items: center; gap: 16px; }
-                .au-modal-avatar { width: 52px; height: 52px; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 22px; color: #fff; flex-shrink: 0; background: rgba(255,255,255,.2); }
-                .au-modal-name { font-size: 17px; font-weight: 800; color: #fff; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-                .au-modal-email { font-size: 12px; color: rgba(255,255,255,.75); font-family: 'JetBrains Mono', monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-                .au-modal-body { padding: 20px 24px 24px; }
+                .au-modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.68); backdrop-filter: blur(6px); z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 20px; animation: fadeIn .15s ease; }
+                .au-modal { background: var(--bg); border-radius: 22px; width: 100%; max-width: 460px; overflow: hidden; box-shadow: 0 30px 90px rgba(0,0,0,.5); border: 1px solid var(--border); animation: popIn .18s cubic-bezier(.2,.9,.3,1); }
+                .au-modal-header { padding: 26px 26px 22px; display: flex; align-items: center; gap: 16px; position: relative; overflow: hidden; }
+                .au-modal-header::after { content: ''; position: absolute; inset: 0; background: radial-gradient(120% 140% at 100% 0%, rgba(255,255,255,.14), transparent 55%); pointer-events: none; }
+                .au-modal-avatar { width: 54px; height: 54px; border-radius: 15px; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 22px; color: #fff; flex-shrink: 0; background: rgba(255,255,255,.18); border: 1px solid rgba(255,255,255,.25); box-shadow: inset 0 1px 0 rgba(255,255,255,.2); position: relative; z-index: 1; }
+                .au-modal-name { font-size: 17.5px; font-weight: 800; color: #fff; margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; position: relative; z-index: 1; }
+                .au-modal-email { font-size: 12px; color: rgba(255,255,255,.8); font-family: 'JetBrains Mono', monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; position: relative; z-index: 1; }
+                .au-modal-body { padding: 22px 24px 24px; }
                 .au-stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 18px; }
-                .au-stat { background: var(--bg2); border: 1px solid var(--border); border-radius: 14px; padding: 14px 10px; text-align: center; }
-                .au-stat-label { font-size: 10px; font-weight: 700; color: var(--text3); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 6px; }
+                .au-stat { background: var(--bg2); border: 1px solid var(--border); border-radius: 14px; padding: 15px 10px; text-align: center; transition: border-color .15s, transform .15s; }
+                .au-stat:hover { border-color: color-mix(in srgb, var(--blue) 30%, var(--border)); transform: translateY(-1px); }
+                .au-stat-label { font-size: 10px; font-weight: 700; color: var(--text3); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 7px; }
                 .au-stat-val { font-size: 13px; font-weight: 800; line-height: 1.2; word-break: break-word; }
                 .au-meta-row { display: flex; align-items: center; justify-content: space-between; font-size: 12.5px; color: var(--text3); margin-bottom: 18px; }
                 .au-actions-row { display: flex; gap: 8px; margin-bottom: 16px; }
-                .au-divider { border: none; border-top: 1px solid var(--border); margin: 0 0 14px; }
+                .au-divider { border: none; border-top: 1px solid var(--border); margin: 0 0 16px; }
                 .au-tx-toggle { width: 100%; display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-radius: 12px; border: 1.5px solid var(--border); background: var(--bg2); color: var(--text2); font-weight: 700; font-size: 13px; cursor: pointer; font-family: 'Inter',sans-serif; transition: background .15s, border-color .15s; }
                 .au-tx-toggle.open { background: color-mix(in srgb, var(--blue) 10%, var(--bg2)); border-color: color-mix(in srgb, var(--blue) 35%, transparent); color: var(--blue); }
-                .au-tx-list { margin-top: 10px; max-height: 280px; overflow-y: auto; border-radius: 12px; border: 1px solid var(--border); scrollbar-width: thin; }
+                .au-tx-list { margin-top: 10px; max-height: 280px; overflow-y: auto; border-radius: 12px; border: 1px solid var(--border); scrollbar-width: thin; background: var(--bg2); }
                 .au-tx-item { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--border); transition: background .1s; }
                 .au-tx-item:last-child { border-bottom: none; }
-                .au-tx-item:hover { background: var(--bg2); }
-                .au-close-btn { width: 100%; margin-top: 12px; padding: 10px 0; border-radius: 12px; border: 1.5px solid var(--border); background: transparent; color: var(--text2); font-weight: 700; font-size: 13.5px; cursor: pointer; font-family: 'Inter',sans-serif; transition: background .15s; }
+                .au-tx-item:hover { background: color-mix(in srgb, var(--blue) 4%, var(--bg2)); }
+                .au-close-btn { width: 100%; margin-top: 14px; padding: 11px 0; border-radius: 12px; border: 1.5px solid var(--border); background: transparent; color: var(--text2); font-weight: 700; font-size: 13.5px; cursor: pointer; font-family: 'Inter',sans-serif; transition: background .15s; }
                 .au-close-btn:hover { background: var(--bg2); }
 
                 /* ── Saldo Modal ── */
-                .au-saldo-modal { background: var(--bg); border-radius: 20px; width: 100%; max-width: 400px; overflow: hidden; box-shadow: 0 24px 80px rgba(0,0,0,.4); border: 1px solid var(--border); }
-                .au-saldo-header { padding: 22px 26px; }
-                .au-saldo-header-label { font-size: 10.5px; font-weight: 700; color: rgba(255,255,255,.65); letter-spacing: .08em; text-transform: uppercase; margin-bottom: 4px; }
-                .au-saldo-header-email { font-size: 13px; font-weight: 700; color: #fff; margin-bottom: 10px; opacity: .9; }
-                .au-saldo-curr { display: flex; align-items: baseline; gap: 6px; }
-                .au-saldo-curr-label { font-size: 11px; color: rgba(255,255,255,.6); font-weight: 600; }
-                .au-saldo-curr-val { font-size: 24px; font-weight: 900; color: #fff; letter-spacing: -.5px; }
+                .au-saldo-modal { background: var(--bg); border-radius: 22px; width: 100%; max-width: 400px; overflow: hidden; box-shadow: 0 30px 90px rgba(0,0,0,.5); border: 1px solid var(--border); animation: popIn .18s cubic-bezier(.2,.9,.3,1); }
+                .au-saldo-header { padding: 24px 26px; position: relative; overflow: hidden; }
+                .au-saldo-header::after { content: ''; position: absolute; inset: 0; background: radial-gradient(120% 140% at 100% 0%, rgba(255,255,255,.14), transparent 55%); pointer-events: none; }
+                .au-saldo-header-label { font-size: 10.5px; font-weight: 700; color: rgba(255,255,255,.7); letter-spacing: .08em; text-transform: uppercase; margin-bottom: 5px; position: relative; z-index: 1; }
+                .au-saldo-header-email { font-size: 13px; font-weight: 700; color: #fff; margin-bottom: 12px; opacity: .92; position: relative; z-index: 1; }
+                .au-saldo-curr { display: flex; align-items: baseline; gap: 6px; position: relative; z-index: 1; }
+                .au-saldo-curr-label { font-size: 11px; color: rgba(255,255,255,.65); font-weight: 600; }
+                .au-saldo-curr-val { font-size: 25px; font-weight: 900; color: #fff; letter-spacing: -.5px; }
                 .au-saldo-body { padding: 22px 24px 24px; }
                 .au-inp-label { display: block; font-size: 11.5px; font-weight: 700; color: var(--text2); margin-bottom: 8px; letter-spacing: .03em; text-transform: uppercase; }
-                .au-inp { width: 100%; padding: 12px 14px; border-radius: 12px; border: 1.5px solid var(--border); background: var(--bg2); color: var(--text); font-size: 20px; font-weight: 800; font-family: 'Inter',sans-serif; outline: none; box-sizing: border-box; margin-bottom: 14px; transition: border-color .15s; }
-                .au-inp:focus { border-color: var(--blue); }
+                .au-inp { width: 100%; padding: 13px 14px; border-radius: 12px; border: 1.5px solid var(--border); background: var(--bg2); color: var(--text); font-size: 20px; font-weight: 800; font-family: 'Inter',sans-serif; outline: none; box-sizing: border-box; margin-bottom: 14px; transition: border-color .15s, box-shadow .15s; }
+                .au-inp:focus { border-color: var(--blue); box-shadow: 0 0 0 4px color-mix(in srgb, var(--blue) 14%, transparent); }
                 .au-presets { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 18px; }
-                .au-preset { padding: 9px 0; border-radius: 10px; font-size: 12.5px; font-weight: 700; cursor: pointer; font-family: 'Inter',sans-serif; text-align: center; transition: all .12s; border-width: 1.5px; border-style: solid; }
+                .au-preset { padding: 10px 0; border-radius: 10px; font-size: 12.5px; font-weight: 700; cursor: pointer; font-family: 'Inter',sans-serif; text-align: center; transition: all .12s; border-width: 1.5px; border-style: solid; }
+                .au-preset:hover { transform: translateY(-1px); }
                 .au-btn-row { display: flex; gap: 10px; }
-                .au-btn-cancel { flex: 1; padding: 12px 0; border-radius: 12px; border: 1.5px solid var(--border); background: transparent; color: var(--text2); font-weight: 700; font-size: 14px; cursor: pointer; font-family: 'Inter',sans-serif; transition: background .15s; }
+                .au-btn-cancel { flex: 1; padding: 13px 0; border-radius: 12px; border: 1.5px solid var(--border); background: transparent; color: var(--text2); font-weight: 700; font-size: 14px; cursor: pointer; font-family: 'Inter',sans-serif; transition: background .15s; }
                 .au-btn-cancel:hover { background: var(--bg2); }
-                .au-btn-confirm { flex: 2; padding: 12px 0; border-radius: 12px; border: none; color: #fff; font-weight: 800; font-size: 14px; cursor: pointer; font-family: 'Inter',sans-serif; display: flex; align-items: center; justify-content: center; gap: 7px; transition: opacity .15s, transform .1s; }
-                .au-btn-confirm:hover { opacity: .9; transform: translateY(-1px); }
-                .au-btn-confirm:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+                .au-btn-confirm { flex: 2; padding: 13px 0; border-radius: 12px; border: none; color: #fff; font-weight: 800; font-size: 14px; cursor: pointer; font-family: 'Inter',sans-serif; display: flex; align-items: center; justify-content: center; gap: 7px; transition: opacity .15s, transform .1s, box-shadow .15s; box-shadow: 0 6px 16px rgba(0,0,0,.2); }
+                .au-btn-confirm:hover { opacity: .92; transform: translateY(-1px); }
+                .au-btn-confirm:disabled { opacity: .5; cursor: not-allowed; transform: none; box-shadow: none; }
 
                 /* ── Empty / Loading ── */
                 .au-empty { padding: 60px 32px; text-align: center; }
                 .au-loading { padding: 52px 32px; text-align: center; }
                 .spin { animation: spin .7s linear infinite; display: inline-block; }
                 @keyframes spin { to { transform: rotate(360deg); } }
+                @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+                @keyframes popIn { from { opacity: 0; transform: scale(.94) translateY(6px); } to { opacity: 1; transform: scale(1) translateY(0); } }
             ` }} />
 
             <div className="admin-users-wrap">
@@ -432,7 +440,7 @@ export default function AdminUsers() {
                 {detailUser && (
                     <div className="au-modal-backdrop" onClick={() => setDetailUser(null)}>
                         <div className="au-modal" onClick={e => e.stopPropagation()}>
-                            <div className="au-modal-header" style={{ background: detailUser.blocked ? 'linear-gradient(135deg,#374151,#1f2937)' : 'linear-gradient(135deg,#1e40af,#2563eb)' }}>
+                            <div className="au-modal-header" style={{ background: detailUser.blocked ? 'linear-gradient(135deg,#374151,#1f2937)' : 'linear-gradient(135deg,#2563eb,#1e40af)' }}>
                                 <div className="au-modal-avatar">{(detailUser.name || detailUser.email || 'U').charAt(0).toUpperCase()}</div>
                                 <div style={{ minWidth: 0, flex: 1 }}>
                                     <div className="au-modal-name">{detailUser.name || '—'}</div>
@@ -459,9 +467,9 @@ export default function AdminUsers() {
                                     <span>Terdaftar: {detailUser.createdAt ? new Date(detailUser.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : '—'}</span>
                                 </div>
                                 <div className="au-actions-row">
-                                    <button className="usr-act" onClick={() => { setModal({ type: 'add', email: detailUser.email }); setAmount(''); setDetailUser(null); }} style={{ flex: 1, justifyContent: 'center', padding: '10px 0', background: 'var(--green-l)', color: 'var(--green)', border: '1.5px solid color-mix(in srgb, var(--green) 28%, transparent)' }}><DollarSign size={13} /> Tambah</button>
-                                    <button className="usr-act" onClick={() => { setModal({ type: 'kurang', email: detailUser.email }); setAmount(''); setDetailUser(null); }} style={{ flex: 1, justifyContent: 'center', padding: '10px 0', background: 'var(--red-l)', color: 'var(--red)', border: '1.5px solid color-mix(in srgb, var(--red) 28%, transparent)' }}><MinusCircle size={13} /> Kurangi</button>
-                                    <button className="usr-act" onClick={() => { toggleBlock(detailUser.email); setDetailUser(d => d ? { ...d, blocked: !d.blocked } : d); }} style={{ flex: 1, justifyContent: 'center', padding: '10px 0', background: detailUser.blocked ? 'var(--green-l)' : 'var(--yellow-l)', color: detailUser.blocked ? 'var(--green)' : 'var(--yellow)', border: `1.5px solid color-mix(in srgb, ${detailUser.blocked ? 'var(--green)' : 'var(--yellow)'} 28%, transparent)` }}>{detailUser.blocked ? <CheckCircle size={13} /> : <Ban size={13} />} {detailUser.blocked ? 'Unblock' : 'Blokir'}</button>
+                                    <button className="usr-act" onClick={() => { setModal({ type: 'add', email: detailUser.email }); setAmount(''); setDetailUser(null); }} style={{ flex: 1, justifyContent: 'center', padding: '10px 0', background: 'var(--green-l)', color: 'var(--green)', border: '1.5px solid color-mix(in srgb, var(--green) 16%, transparent)' }}><DollarSign size={13} /> Tambah</button>
+                                    <button className="usr-act" onClick={() => { setModal({ type: 'kurang', email: detailUser.email }); setAmount(''); setDetailUser(null); }} style={{ flex: 1, justifyContent: 'center', padding: '10px 0', background: 'var(--red-l)', color: 'var(--red)', border: '1.5px solid color-mix(in srgb, var(--red) 16%, transparent)' }}><MinusCircle size={13} /> Kurangi</button>
+                                    <button className="usr-act" onClick={() => { toggleBlock(detailUser.email); setDetailUser(d => d ? { ...d, blocked: !d.blocked } : d); }} style={{ flex: 1, justifyContent: 'center', padding: '10px 0', background: detailUser.blocked ? 'var(--green-l)' : 'var(--yellow-l)', color: detailUser.blocked ? 'var(--green)' : 'var(--yellow)', border: `1.5px solid color-mix(in srgb, ${detailUser.blocked ? 'var(--green)' : 'var(--yellow)'} 16%, transparent)` }}>{detailUser.blocked ? <CheckCircle size={13} /> : <Ban size={13} />} {detailUser.blocked ? 'Unblock' : 'Blokir'}</button>
                                 </div>
                                 <hr className="au-divider" />
 
@@ -547,7 +555,7 @@ export default function AdminUsers() {
                 {modal && (
                     <div className="au-modal-backdrop" onClick={() => { setModal(null); setAmount(''); setMsg(''); setCreditNote(''); }}>
                         <div className="au-saldo-modal" onClick={e => e.stopPropagation()}>
-                            <div className="au-saldo-header" style={{ background: modal.type === 'add' ? 'linear-gradient(135deg,#15803d,#16a34a)' : 'linear-gradient(135deg,#b91c1c,#dc2626)' }}>
+                            <div className="au-saldo-header" style={{ background: modal.type === 'add' ? 'linear-gradient(135deg,#15803d,#166534)' : 'linear-gradient(135deg,#b91c1c,#991b1b)' }}>
                                 <div className="au-saldo-header-label">{modal.type === 'add' ? '✦ Tambah Saldo' : '✦ Kurangi Saldo'}</div>
                                 <div className="au-saldo-header-email">{modal.email}</div>
                                 <div className="au-saldo-curr">
@@ -638,14 +646,14 @@ export default function AdminUsers() {
                                             </span>
                                         </td>
                                         <td className="au-td">
-                                            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                                                <button className="usr-act" onClick={(e) => { e.stopPropagation(); setModal({ type: 'add', email: u.email }); setAmount(''); }} style={{ background: 'var(--green-l)', color: 'var(--green)', border: '1.5px solid color-mix(in srgb, var(--green) 28%, transparent)' }}>
+                                            <div style={{ display: 'flex', gap: 6, flexWrap: 'nowrap' }}>
+                                                <button className="usr-act" onClick={(e) => { e.stopPropagation(); setModal({ type: 'add', email: u.email }); setAmount(''); }} style={{ background: 'var(--green-l)', color: 'var(--green)', border: '1.5px solid color-mix(in srgb, var(--green) 16%, transparent)' }}>
                                                     <DollarSign size={11} /> Saldo
                                                 </button>
-                                                <button className="usr-act" onClick={(e) => { e.stopPropagation(); setModal({ type: 'kurang', email: u.email }); setAmount(''); }} style={{ background: 'var(--red-l)', color: 'var(--red)', border: '1.5px solid color-mix(in srgb, var(--red) 28%, transparent)' }}>
+                                                <button className="usr-act" onClick={(e) => { e.stopPropagation(); setModal({ type: 'kurang', email: u.email }); setAmount(''); }} style={{ background: 'var(--red-l)', color: 'var(--red)', border: '1.5px solid color-mix(in srgb, var(--red) 16%, transparent)' }}>
                                                     <MinusCircle size={11} /> Kurangi
                                                 </button>
-                                                <button className="usr-act" onClick={(e) => { e.stopPropagation(); toggleBlock(u.email); }} style={{ background: u.blocked ? 'var(--green-l)' : 'var(--yellow-l)', color: u.blocked ? 'var(--green)' : 'var(--yellow)', border: `1.5px solid color-mix(in srgb, ${u.blocked ? 'var(--green)' : 'var(--yellow)'} 28%, transparent)` }}>
+                                                <button className="usr-act" onClick={(e) => { e.stopPropagation(); toggleBlock(u.email); }} style={{ background: u.blocked ? 'var(--green-l)' : 'var(--yellow-l)', color: u.blocked ? 'var(--green)' : 'var(--yellow)', border: `1.5px solid color-mix(in srgb, ${u.blocked ? 'var(--green)' : 'var(--yellow)'} 16%, transparent)` }}>
                                                     {u.blocked ? <CheckCircle size={11} /> : <Ban size={11} />} {u.blocked ? 'Unblock' : 'Blokir'}
                                                 </button>
                                             </div>

@@ -4,6 +4,17 @@ const path = require('path');
 const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false, // Sembunyikan X-Powered-By: Next.js
+  logging: {
+    incomingRequests: {
+      // Sembunyiin log request yang paling berisik di terminal dev
+      // (polling status order & admin panel). Route lain tetep ke-log.
+      ignore: [
+        /^\/api\/smm/,
+        /^\/api\/admin-api/,
+        /^\/api\/check-blocked/,
+      ],
+    },
+  },
   webpack(config) {
     config.resolve.alias['@'] = path.join(__dirname, 'src');
     return config;
