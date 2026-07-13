@@ -1,11 +1,9 @@
-import { useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import { Component } from 'react';
 import { ThemeProvider } from '@/context/ThemeContext';
 import { ApiProvider } from '@/context/ApiContext';
 import { AuthProvider } from '@/context/AuthContext';
-import { supabase } from '@/lib/supabase';
 import '@/styles/globals.css';
 
 // ✅ Structured Data (JSON-LD) — bantu Google paham brand & munculin sitelinks
@@ -68,21 +66,6 @@ class ErrorBoundary extends Component {
 export default function MyApp({ Component, pageProps }) {
   const router = useRouter();
   const isAdmin = router.pathname.startsWith('/Voltaraz');
-
-  // ✅ Auto-bersihin sesi lokal yang korup. "Invalid Refresh Token: Refresh
-  // Token Not Found" muncul kalau localStorage masih nyimpen sesi lama yang
-  // refresh token-nya udah gak valid (mis. rotate karena login di tab/device
-  // lain, atau server cabut sesi). Tanpa ini, error itu numpuk tiap reload
-  // sampai user manual clear localStorage. `scope: 'local'` cuma bersihin
-  // browser ini — TIDAK ikut nge-logout sesi user di device lain.
-  useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_OUT' || (event === 'INITIAL_SESSION' && !session)) {
-        supabase.auth.signOut({ scope: 'local' }).catch(() => { });
-      }
-    });
-    return () => subscription.unsubscribe();
-  }, []);
 
   // ✅ URL kanonik & og:url dinamis — ikut halaman aktif, bukan selalu homepage.
   // Page individual masih bisa override title/description sendiri lewat <Head> di komponennya;

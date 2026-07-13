@@ -19,28 +19,40 @@ const MAX_LOGIN_ATTEMPTS = 10;
 const LOGIN_WINDOW_MS = 15 * 60 * 1000; // 15 menit
 
 async function isLoginRateLimited(supabase, ip) {
-    const key = `login_rl:${ip}`;
-    const { data } = await supabase.from('settings').select('value').eq('key', key).maybeSingle();
-    if (!data?.value) return false;
     try {
+        const key = `login_rl:${ip}`;
+        const { data } = await supabase.from('settings').select('value').eq('key', key).maybeSingle();
+        if (!data?.value) return false;
         const entry = JSON.parse(data.value);
         if (Date.now() > entry.resetAt) return false;
         return entry.count >= MAX_LOGIN_ATTEMPTS;
-    } catch { return false; }
+    } catch (e) {
+        console.error('[auth/login] rate-limit check gagal, fail-open:', e.message);
+        return false; // gagal cek -> jangan block login (fail-open, bukan fail-closed)
+    }
 }
 
 async function recordLoginFailure(supabase, ip) {
-    const key = `login_rl:${ip}`;
-    const now = Date.now();
-    const { data } = await supabase.from('settings').select('value').eq('key', key).maybeSingle();
-    let entry = { count: 0, resetAt: now + LOGIN_WINDOW_MS };
-    try { if (data?.value) { const p = JSON.parse(data.value); if (now <= p.resetAt) entry = p; } } catch { }
-    entry.count += 1;
-    await supabase.from('settings').upsert({ key, value: JSON.stringify(entry), updated_at: new Date().toISOString() }, { onConflict: 'key' });
+    try {
+        const key = `login_rl:${ip}`;
+        const now = Date.now();
+        const { data } = await supabase.from('settings').select('value').eq('key', key).maybeSingle();
+        let entry = { count: 0, resetAt: now + LOGIN_WINDOW_MS };
+        try { if (data?.value) { const p = JSON.parse(data.value); if (now <= p.resetAt) entry = p; } } catch { }
+        entry.count += 1;
+        await supabase.from('settings').upsert({ key, value: JSON.stringify(entry), updated_at: new Date().toISOString() }, { onConflict: 'key' });
+    } catch (e) {
+        console.error('[auth/login] gagal catat percobaan gagal:', e.message);
+        // diamkan — jangan gagalkan response login cuma karena rate-limiter error
+    }
 }
 
 async function resetLoginAttempts(supabase, ip) {
-    await supabase.from('settings').delete().eq('key', `login_rl:${ip}`);
+    try {
+        await supabase.from('settings').delete().eq('key', `login_rl:${ip}`);
+    } catch (e) {
+        console.error('[auth/login] gagal reset rate-limit:', e.message);
+    }
 }
 
 // Supabase admin — untuk signInWithPassword server-side
