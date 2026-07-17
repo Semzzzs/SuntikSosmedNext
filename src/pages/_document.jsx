@@ -27,7 +27,10 @@ const noFlashScript = `
 
 export default function Document() {
   return (
-    <Html lang="id">
+    // ✅ data-scroll-behavior="smooth" — kasih tau Next.js smooth scroll memang disengaja.
+    //    Menghilangkan warning "Detected scroll-behavior: smooth" dan otomatis matiin
+    //    smooth scroll saat pindah route (tetap smooth untuk anchor #section).
+    <Html lang="id" data-scroll-behavior="smooth">
       <Head>
         {/* ✅ Anti-flash tema — HARUS paling atas, jalan sebelum CSS/font lain dimuat */}
         <script dangerouslySetInnerHTML={{ __html: noFlashScript }} />
@@ -40,7 +43,7 @@ export default function Document() {
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="SuntikSosmed" />
-        <meta name="theme-color" content="#2563EB" />
+        <meta name="theme-color" content="#2f6bff" />
 
         {/* ✅ SEO statis (sitewide, tidak berubah per-halaman) */}
         <meta name="keywords" content="jasa smm, panel smm, beli followers, followers murah, tambah followers instagram, jasa followers tiktok, views youtube, smm panel indonesia, suntiksosmed" />
@@ -65,10 +68,11 @@ export default function Document() {
         {/* ✅ Google Search Console */}
         <meta name="google-site-verification" content="e1LldDJ8ItgQUcLStZOtTdyFfib-7gjgPUDQGK6iGO8" />
 
-        {/* ✅ Fonts — Sora untuk headline (body tetap Plus Jakarta Sans) */}
+        {/* ✅ Fonts — Inter untuk seluruh site (samain sama desain admin & landing).
+            Dimuat di sini sekali, jadi @import di komponen cuma fallback. */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&display=swap" rel="stylesheet" />
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
 
         {/* ✅ Favicon — pakai file yang ada di /public (favicon.ico sudah ≥48px) */}
         <link rel="icon" href="/favicon.ico" sizes="any" />

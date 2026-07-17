@@ -27,7 +27,7 @@ function SearchSelect({ options, value, onChange, placeholder, disabled }) {
   return (
     <div ref={ref} style={{ position: 'relative' }}>
       <button type="button" disabled={disabled} onClick={() => { setOpen(v => !v); setQ(''); }}
-        style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '11px 14px', background: 'var(--bg2)', border: '1.5px solid var(--border)', borderRadius: 10, cursor: disabled ? 'not-allowed' : 'pointer', fontFamily: "'Outfit',sans-serif", fontSize: 13.5, color: selected ? 'var(--text)' : 'var(--text3)', fontWeight: selected ? 600 : 400, opacity: disabled ? 0.5 : 1, textAlign: 'left' }}>
+        style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '11px 14px', background: 'var(--bg2)', border: '1.5px solid var(--border)', borderRadius: 10, cursor: disabled ? 'not-allowed' : 'pointer', fontFamily: "'Inter',sans-serif", fontSize: 13.5, color: selected ? 'var(--text)' : 'var(--text3)', fontWeight: selected ? 600 : 400, opacity: disabled ? 0.5 : 1, textAlign: 'left' }}>
         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
           {selected ? selected.label : placeholder}
         </span>
@@ -39,7 +39,7 @@ function SearchSelect({ options, value, onChange, placeholder, disabled }) {
           <div style={{ padding: '10px 10px 6px', borderBottom: '1px solid var(--border)' }}>
             <div style={{ position: 'relative' }}>
               <Search size={13} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text3)' }} />
-              <input autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder="Ketik nama atau ID service..." className="svc-search-input" style={{ width: '100%', padding: '7px 10px 7px 30px', border: '1.5px solid var(--border)', borderRadius: 8, fontFamily: "'Outfit',sans-serif", background: 'var(--bg2)', color: 'var(--text)', outline: 'none' }} />
+              <input autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder="Ketik nama atau ID service..." className="svc-search-input" style={{ width: '100%', padding: '7px 10px 7px 30px', border: '1.5px solid var(--border)', borderRadius: 8, fontFamily: "'Inter',sans-serif", background: 'var(--bg2)', color: 'var(--text)', outline: 'none' }} />
             </div>
             {!q && <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 6, paddingLeft: 2 }}>{options.length} layanan — ketik untuk cari</div>}
           </div>
@@ -570,7 +570,7 @@ export default function ViewNewOrder({ user, setMenu }) {
             <Package size={22} />
           </div>
         </div>
-        <button onClick={() => document.getElementById('ns-order-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' })} style={{ width: '100%', marginTop: 16, padding: '11px 16px', background: 'rgba(255,255,255,.16)', border: '1px solid rgba(255,255,255,.22)', borderRadius: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontFamily: "'Outfit',sans-serif", fontWeight: 700, fontSize: 13, color: '#fff' }}>
+        <button onClick={() => document.getElementById('ns-order-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' })} style={{ width: '100%', marginTop: 16, padding: '11px 16px', background: 'rgba(255,255,255,.16)', border: '1px solid rgba(255,255,255,.22)', borderRadius: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontFamily: "'Inter',sans-serif", fontWeight: 700, fontSize: 13, color: '#fff' }}>
           Buat Order <ArrowRight size={14} />
         </button>
       </div>
@@ -621,7 +621,7 @@ export default function ViewNewOrder({ user, setMenu }) {
 
           <div style={{ display: 'flex', background: 'var(--bg2)', borderRadius: 10, padding: 4, gap: 2, marginBottom: 20 }}>
             {['New Order', 'Search', 'Bulk Order'].map(t => (
-              <button key={t} onClick={() => setTab(t)} style={{ flex: 1, padding: '8px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', fontFamily: "'Outfit',sans-serif", fontWeight: 600, fontSize: 13, background: tab === t ? 'var(--white)' : 'transparent', color: tab === t ? 'var(--text)' : 'var(--text3)', boxShadow: tab === t ? '0 1px 4px rgba(0,0,0,.08)' : 'none', transition: 'all .18s' }}>{t}</button>
+              <button key={t} onClick={() => setTab(t)} style={{ flex: 1, padding: '8px 10px', borderRadius: 7, border: 'none', cursor: 'pointer', fontFamily: "'Inter',sans-serif", fontWeight: 600, fontSize: 13, background: tab === t ? 'var(--white)' : 'transparent', color: tab === t ? 'var(--text)' : 'var(--text3)', boxShadow: tab === t ? '0 1px 4px rgba(0,0,0,.08)' : 'none', transition: 'all .18s' }}>{t}</button>
             ))}
           </div>
 
@@ -674,7 +674,7 @@ export default function ViewNewOrder({ user, setMenu }) {
                           display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '8px 10px',
                           borderRadius: 10, border: `1.5px solid ${isActive ? p.color : 'var(--border)'}`,
                           background: isActive ? (dark ? p.darkBg : p.bg) : 'var(--bg2)',
-                          cursor: 'pointer', fontFamily: "'Outfit',sans-serif",
+                          cursor: 'pointer', fontFamily: "'Inter',sans-serif",
                           fontWeight: isActive ? 700 : 600, fontSize: 12,
                           color: isActive ? (p.id === 'twitter' && dark ? '#fff' : p.color) : 'var(--text2)',
                           transition: 'all .15s', width: '100%',
@@ -890,7 +890,7 @@ export default function ViewNewOrder({ user, setMenu }) {
                           <div style={{ display: 'flex', background: 'var(--bg2)', borderRadius: 8, padding: 2, border: '1px solid var(--border)' }}>
                             {['link', 'username'].map(t => (
                               <div key={t}
-                                style={{ fontSize: 11, padding: '3px 10px', borderRadius: 6, background: inputInfo.type === t ? 'var(--blue)' : 'transparent', color: inputInfo.type === t ? '#fff' : 'var(--text3)', fontWeight: 700, fontFamily: "'Outfit',sans-serif" }}>
+                                style={{ fontSize: 11, padding: '3px 10px', borderRadius: 6, background: inputInfo.type === t ? 'var(--blue)' : 'transparent', color: inputInfo.type === t ? '#fff' : 'var(--text3)', fontWeight: 700, fontFamily: "'Inter',sans-serif" }}>
                                 {t === 'link' ? 'Link' : 'Username'}
                               </div>
                             ))}
@@ -926,7 +926,7 @@ export default function ViewNewOrder({ user, setMenu }) {
                         placeholder={'Tulis satu komentar per baris:\nKeren banget kak! 🔥\nProduknya bagus, recommended\nMantap, langganan terus'}
                         value={comments}
                         onChange={e => setComments(e.target.value)}
-                        style={{ resize: 'vertical', lineHeight: 1.6, fontFamily: "'Outfit',sans-serif" }}
+                        style={{ resize: 'vertical', lineHeight: 1.6, fontFamily: "'Inter',sans-serif" }}
                       />
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6, fontSize: 11.5, color: 'var(--text3)' }}>
                         <span>Jumlah komentar: <strong style={{ color: overMax ? 'var(--red)' : 'var(--blue)' }}>{ccLines.length}</strong></span>
@@ -950,7 +950,7 @@ export default function ViewNewOrder({ user, setMenu }) {
                   </div>
                 );
               })()}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--blue-l)', border: '1px solid rgba(37,99,235,.15)', borderRadius: 12, padding: '12px 16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--blue-l)', border: '1px solid rgba(47,107,255,.15)', borderRadius: 12, padding: '12px 16px' }}>
                 <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text2)' }}>Total Pembayaran</span>
                 <span style={{ fontSize: 18, fontWeight: 800, color: 'var(--blue)' }}>
                   {(() => {
@@ -1034,7 +1034,7 @@ export default function ViewNewOrder({ user, setMenu }) {
               {/* Format box */}
               <div style={{ background: 'var(--blue-l)', border: '1px solid var(--border2)', borderRadius: 10, padding: '12px 14px', marginBottom: 12 }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--blue)', marginBottom: 8 }}>Format penulisan:</div>
-                <code style={{ display: 'block', fontFamily: "'JetBrains Mono',monospace", fontSize: 12.5, color: 'var(--blue)', background: 'rgba(37,99,235,.1)', padding: '8px 12px', borderRadius: 8, marginBottom: 8 }}>
+                <code style={{ display: 'block', fontFamily: "'JetBrains Mono',monospace", fontSize: 12.5, color: 'var(--blue)', background: 'rgba(47,107,255,.1)', padding: '8px 12px', borderRadius: 8, marginBottom: 8 }}>
                   service_id|link|quantity
                 </code>
                 <div style={{ fontSize: 12, color: 'var(--text3)', lineHeight: 1.8 }}>
@@ -1176,7 +1176,7 @@ export default function ViewNewOrder({ user, setMenu }) {
         .ns-welcome-blob-a {
           top: -70px; right: -40px;
           width: 220px; height: 220px;
-          background: radial-gradient(circle, rgba(37,99,235,.18) 0%, transparent 70%);
+          background: radial-gradient(circle, rgba(47,107,255,.18) 0%, transparent 70%);
         }
         .ns-welcome-blob-b {
           bottom: -90px; right: 120px;

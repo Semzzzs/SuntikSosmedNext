@@ -248,7 +248,7 @@ const FAQS = [
 function TestiCard({ t, dark }) {
   return (
     <div className="card" style={{ padding: '22px 20px', position: 'relative', overflow: 'hidden', height: '100%', background: dark ? 'var(--bg2)' : 'var(--white)', border: dark ? '1px solid var(--border2)' : '1px solid var(--border)', borderRadius: 18 }}>
-      <div aria-hidden style={{ position: 'absolute', top: 6, right: 16, fontSize: 56, lineHeight: 1, fontFamily: 'Georgia, serif', color: dark ? 'rgba(255,255,255,.05)' : 'rgba(37,99,235,.08)', pointerEvents: 'none' }}>{'\u201D'}</div>
+      <div aria-hidden style={{ position: 'absolute', top: 6, right: 16, fontSize: 56, lineHeight: 1, fontFamily: 'Georgia, serif', color: dark ? 'rgba(255,255,255,.05)' : 'rgba(47,107,255,.08)', pointerEvents: 'none' }}>{'\u201D'}</div>
       <div style={{ display: 'flex', gap: 2, marginBottom: 12 }}>
         {[0, 1, 2, 3, 4].map(i => <Star key={i} size={13} fill="#F59E0B" style={{ color: '#F59E0B' }} />)}
       </div>
@@ -270,7 +270,7 @@ function FaqItem({ q, a, dark }) {
   return (
     <div style={{ background: 'var(--white)', border: `1px solid ${open ? 'var(--blue)' : 'var(--border)'}`, borderRadius: 14, overflow: 'hidden', transition: 'border-color .2s' }}>
       <button onClick={() => setOpen(o => !o)}
-        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, width: '100%', padding: '18px 20px', background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left', fontFamily: "'Outfit','Plus Jakarta Sans',sans-serif" }}>
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, width: '100%', padding: '18px 20px', background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left', fontFamily: "'Inter',sans-serif" }}>
         <span style={{ fontSize: 14.5, fontWeight: 700, color: 'var(--text)' }}>{q}</span>
         <ChevronDown size={18} style={{ color: open ? 'var(--blue)' : 'var(--text3)', flexShrink: 0, transform: open ? 'rotate(180deg)' : 'rotate(0)', transition: 'transform .25s' }} />
       </button>
@@ -425,13 +425,13 @@ export default function Landing() {
 
       {/* ── Reading progress bar ── */}
       <div style={{ position: 'fixed', top: 0, left: 0, right: 0, height: 3, zIndex: 9999, pointerEvents: 'none' }}>
-        <div style={{ height: '100%', width: `${scrollPct}%`, background: 'linear-gradient(90deg, var(--blue), #60A5FA)', boxShadow: '0 0 8px rgba(37,99,235,.5)', transition: 'width .1s linear' }} />
+        <div style={{ height: '100%', width: `${scrollPct}%`, background: 'linear-gradient(90deg, var(--blue), #7da4ff)', boxShadow: '0 0 8px rgba(47,107,255,.5)', transition: 'width .1s linear' }} />
       </div>
 
       {/* ── BG ── */}
       <div style={{ position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none', overflow: 'hidden' }}>
         <div style={{ position: 'absolute', inset: 0, background: dark ? '#0A0A0F' : '#FFFFFF' }} />
-        <div style={{ position: 'absolute', top: -300, left: '50%', transform: 'translateX(-50%)', width: 900, height: 500, borderRadius: '50%', background: dark ? 'radial-gradient(ellipse, rgba(37,99,235,.14) 0%, transparent 70%)' : 'radial-gradient(ellipse, rgba(37,99,235,.08) 0%, transparent 70%)', filter: 'blur(40px)' }} />
+        <div style={{ position: 'absolute', top: -300, left: '50%', transform: 'translateX(-50%)', width: 900, height: 500, borderRadius: '50%', background: dark ? 'radial-gradient(ellipse, rgba(47,107,255,.14) 0%, transparent 70%)' : 'radial-gradient(ellipse, rgba(47,107,255,.08) 0%, transparent 70%)', filter: 'blur(40px)' }} />
         <div className="hero-grid" />
         <div className="hero-noise" />
         <div className="hero-spotlight" />
@@ -442,14 +442,14 @@ export default function Landing() {
         <div style={{
           background: dark ? 'rgba(15,15,20,.97)' : 'rgba(255,255,255,.96)',
           backdropFilter: 'blur(20px)',
-          border: dark ? '1px solid var(--border)' : '1px solid rgba(37,99,235,.12)',
+          border: dark ? '1px solid var(--border)' : '1px solid rgba(47,107,255,.12)',
           borderRadius: 14,
           padding: '10px 14px',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           overflow: 'hidden',
           boxShadow: navScrolled
-            ? (dark ? '0 8px 32px rgba(0,0,0,.4)' : '0 8px 40px rgba(37,99,235,.18), 0 1px 0 rgba(255,255,255,.8)')
-            : (dark ? '0 4px 24px rgba(37,99,235,.08)' : '0 4px 24px rgba(37,99,235,.12), 0 1px 0 rgba(255,255,255,.8)'),
+            ? (dark ? '0 8px 32px rgba(0,0,0,.4)' : '0 8px 40px rgba(47,107,255,.18), 0 1px 0 rgba(255,255,255,.8)')
+            : (dark ? '0 4px 24px rgba(47,107,255,.08)' : '0 4px 24px rgba(47,107,255,.12), 0 1px 0 rgba(255,255,255,.8)'),
           transition: 'box-shadow 0.3s ease, background 0.3s ease',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontWeight: 800, fontSize: 16, color: 'var(--text)', flexShrink: 0 }}>
@@ -478,14 +478,14 @@ export default function Landing() {
               </span>
             </button>
             <div className="nav-desktop-only" style={{ alignItems: 'center', gap: 8 }}>
-              <button onClick={() => router.push('/login')} className="nav-auth-outline" style={{ background: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, fontFamily: "'Outfit','Plus Jakarta Sans',sans-serif", height: 38, padding: '0 18px', borderRadius: 10, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <button onClick={() => router.push('/login')} className="nav-auth-outline" style={{ background: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, fontFamily: "'Inter',sans-serif", height: 38, padding: '0 18px', borderRadius: 10, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 Masuk
               </button>
-              <button onClick={() => router.push('/register')} className="nav-auth-solid" style={{ border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, color: '#fff', fontFamily: "'Outfit','Plus Jakarta Sans',sans-serif", height: 38, padding: '0 18px', borderRadius: 10, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
+              <button onClick={() => router.push('/register')} className="nav-auth-solid" style={{ border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, color: '#fff', fontFamily: "'Inter',sans-serif", height: 38, padding: '0 18px', borderRadius: 10, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
                 Daftar
               </button>
             </div>
-            <button className="nav-mobile-only nav-icon-btn" aria-label="Buka menu" onClick={() => setMenuOpen(true)} style={{ background: 'var(--blue-l)', border: '1px solid rgba(37,99,235,.22)', cursor: 'pointer', color: 'var(--blue)', alignItems: 'center', justifyContent: 'center', width: 40, height: 40, borderRadius: 11, flexShrink: 0 }}>
+            <button className="nav-mobile-only nav-icon-btn" aria-label="Buka menu" onClick={() => setMenuOpen(true)} style={{ background: 'var(--blue-l)', border: '1px solid rgba(47,107,255,.22)', cursor: 'pointer', color: 'var(--blue)', alignItems: 'center', justifyContent: 'center', width: 40, height: 40, borderRadius: 11, flexShrink: 0 }}>
               <Menu size={19} />
             </button>
           </div>
@@ -506,10 +506,10 @@ export default function Landing() {
           transform: menuOpen ? 'translateX(0)' : 'translateX(100%)',
           transition: 'transform .32s cubic-bezier(0.16,1,0.3,1)',
           display: 'flex', flexDirection: 'column', padding: '16px 14px',
-          boxShadow: dark ? '-16px 0 48px rgba(0,0,0,.5)' : '-16px 0 48px rgba(37,99,235,.14)',
+          boxShadow: dark ? '-16px 0 48px rgba(0,0,0,.5)' : '-16px 0 48px rgba(47,107,255,.14)',
           paddingTop: 'calc(16px + env(safe-area-inset-top))',
           paddingBottom: 'calc(16px + env(safe-area-inset-bottom))',
-          fontFamily: "'Outfit', sans-serif",
+          fontFamily: "'Inter',sans-serif",
         }}>
           {/* Header */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 6px 14px', borderBottom: '1px solid var(--border)' }}>
@@ -529,7 +529,7 @@ export default function Landing() {
               const active = activeSection === id;
               const inner = (
                 <>
-                  <span style={{ width: 34, height: 34, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, background: active ? 'linear-gradient(135deg, var(--blue), var(--blue-d))' : 'var(--bg2)', color: active ? '#fff' : 'var(--text3)', boxShadow: active ? '0 4px 12px rgba(37,99,235,.35)' : 'none', transition: 'all .18s' }}>{icon}</span>
+                  <span style={{ width: 34, height: 34, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, background: active ? 'linear-gradient(135deg, var(--blue), var(--blue-d))' : 'var(--bg2)', color: active ? '#fff' : 'var(--text3)', boxShadow: active ? '0 4px 12px rgba(47,107,255,.35)' : 'none', transition: 'all .18s' }}>{icon}</span>
                   {label}
                   {active && <ArrowRight size={15} style={{ marginLeft: 'auto', color: 'var(--blue)' }} />}
                 </>
@@ -572,12 +572,12 @@ export default function Landing() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingTop: 14, marginTop: 14, borderTop: '1px solid var(--border)' }}>
             <button onClick={() => { setMenuOpen(false); router.push('/login'); }}
               className="nav-auth-outline"
-              style={{ width: '100%', background: 'none', borderRadius: 10, height: 44, fontSize: 13.5, fontWeight: 700, color: 'var(--text)', cursor: 'pointer', fontFamily: "'Outfit', sans-serif" }}>
+              style={{ width: '100%', background: 'none', borderRadius: 10, height: 44, fontSize: 13.5, fontWeight: 700, color: 'var(--text)', cursor: 'pointer', fontFamily: "'Inter',sans-serif" }}>
               Masuk
             </button>
             <button onClick={() => { setMenuOpen(false); router.push('/register'); }}
               className="nav-auth-solid"
-              style={{ width: '100%', border: 'none', borderRadius: 10, height: 44, fontSize: 13.5, fontWeight: 800, color: '#fff', cursor: 'pointer', fontFamily: "'Outfit', sans-serif", display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7 }}>
+              style={{ width: '100%', border: 'none', borderRadius: 10, height: 44, fontSize: 13.5, fontWeight: 800, color: '#fff', cursor: 'pointer', fontFamily: "'Inter',sans-serif", display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7 }}>
               <UserPlus size={14} /> Daftar Sekarang Gratis
             </button>
           </div>
@@ -593,31 +593,31 @@ export default function Landing() {
           <div className="hero-badge" style={{
             display: 'inline-flex', alignItems: 'center', gap: 9,
             background: dark
-              ? 'linear-gradient(135deg, rgba(37,99,235,.20), rgba(37,99,235,.07))'
+              ? 'linear-gradient(135deg, rgba(47,107,255,.20), rgba(47,107,255,.07))'
               : 'linear-gradient(135deg, #FFFFFF, #EAF1FF)',
-            border: dark ? '1px solid rgba(96,165,250,.28)' : '1px solid rgba(37,99,235,.24)',
+            border: dark ? '1px solid rgba(96,165,250,.28)' : '1px solid rgba(47,107,255,.24)',
             borderRadius: 30, padding: '4px 13px 4px 4px',
             fontSize: 12, fontWeight: 700, marginBottom: 24,
             boxShadow: dark
-              ? '0 4px 22px rgba(37,99,235,.24), inset 0 1px 0 rgba(255,255,255,.06)'
-              : '0 6px 22px rgba(37,99,235,.20), inset 0 1px 0 rgba(255,255,255,.9)',
+              ? '0 4px 22px rgba(47,107,255,.24), inset 0 1px 0 rgba(255,255,255,.06)'
+              : '0 6px 22px rgba(47,107,255,.20), inset 0 1px 0 rgba(255,255,255,.9)',
           }}>
             <span className="badge-shine" aria-hidden />
             <span style={{
               display: 'inline-flex', alignItems: 'center', gap: 7,
-              background: 'linear-gradient(135deg, #3B82F6, #2563EB)',
+              background: 'linear-gradient(135deg, #5286ff, #2f6bff)',
               color: '#fff', borderRadius: 30, padding: '4px 11px', fontSize: 11,
-              boxShadow: '0 2px 9px rgba(37,99,235,.45), inset 0 1px 0 rgba(255,255,255,.28)',
+              boxShadow: '0 2px 9px rgba(47,107,255,.45), inset 0 1px 0 rgba(255,255,255,.28)',
               whiteSpace: 'nowrap', flexShrink: 0,
             }}>
               <span className="badge-dot" aria-hidden />
               Termurah!
             </span>
-            <span style={{ color: dark ? '#93C5FD' : 'var(--blue)' }}>Panel SMM Terpercaya</span>
-            <ArrowRight className="badge-chevron" size={13} style={{ color: dark ? '#93C5FD' : 'var(--blue)', flexShrink: 0 }} />
+            <span style={{ color: dark ? '#a9c0ff' : 'var(--blue)' }}>Panel SMM Terpercaya</span>
+            <ArrowRight className="badge-chevron" size={13} style={{ color: dark ? '#a9c0ff' : 'var(--blue)', flexShrink: 0 }} />
           </div>
 
-          <h1 style={{ fontSize: 'clamp(34px, 8.5vw, 56px)', fontWeight: 800, textShadow: dark ? 'none' : '0 2px 8px rgba(37,99,235,.08)', lineHeight: 1.1, color: 'var(--text)', marginBottom: 18, letterSpacing: '-1.5px' }}>
+          <h1 style={{ fontSize: 'clamp(34px, 8.5vw, 56px)', fontWeight: 800, textShadow: dark ? 'none' : '0 2px 8px rgba(47,107,255,.08)', lineHeight: 1.1, color: 'var(--text)', marginBottom: 18, letterSpacing: '-1.5px' }}>
             Bikin Sosmed Kamu<br /><span className="grad-text">Meledak</span> Hari Ini
           </h1>
           <p style={{ color: 'var(--text2)', fontSize: 16, lineHeight: 1.7, marginBottom: 28, maxWidth: 480, margin: '0 auto 28px' }}>
@@ -625,10 +625,10 @@ export default function Landing() {
           </p>
 
           <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginBottom: 36, flexWrap: 'wrap' }}>
-            <button onClick={() => router.push('/register')} className="hero-cta hero-cta-main" style={{ background: 'var(--blue)', border: 'none', borderRadius: 50, padding: '13px 26px', fontSize: 14.5, fontWeight: 800, color: '#fff', cursor: 'pointer', fontFamily: "'Outfit','Plus Jakarta Sans',sans-serif", display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, boxShadow: '0 8px 30px rgba(37,99,235,.5), 0 0 0 1px rgba(59,130,246,.3)', transition: 'transform .2s, box-shadow .2s', width: 'fit-content' }}>
+            <button onClick={() => router.push('/register')} className="hero-cta hero-cta-main" style={{ background: 'var(--blue)', border: 'none', borderRadius: 50, padding: '13px 26px', fontSize: 14.5, fontWeight: 800, color: '#fff', cursor: 'pointer', fontFamily: "'Inter',sans-serif", display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, boxShadow: '0 8px 30px rgba(47,107,255,.5), 0 0 0 1px rgba(59,130,246,.3)', transition: 'transform .2s, box-shadow .2s', width: 'fit-content' }}>
               Daftar Sekarang Gratis! <UserPlus size={15} />
             </button>
-            <button onClick={() => router.push('/login')} className="hero-cta-sub" style={{ background: 'var(--white)', border: '1.5px solid var(--border)', borderRadius: 50, padding: '13px 26px', fontSize: 14.5, fontWeight: 700, cursor: 'pointer', color: 'var(--text)', fontFamily: "'Outfit','Plus Jakarta Sans',sans-serif", boxShadow: 'var(--shadow)', width: 'fit-content', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+            <button onClick={() => router.push('/login')} className="hero-cta-sub" style={{ background: 'var(--white)', border: '1.5px solid var(--border)', borderRadius: 50, padding: '13px 26px', fontSize: 14.5, fontWeight: 700, cursor: 'pointer', color: 'var(--text)', fontFamily: "'Inter',sans-serif", boxShadow: 'var(--shadow)', width: 'fit-content', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
               Masuk
             </button>
           </div>
@@ -658,7 +658,7 @@ export default function Landing() {
               { icon: <RefreshCw size={13} style={{ color: '#10B981' }} />, t: 'Garansi refill' },
               { icon: <Globe size={13} style={{ color: '#8B5CF6' }} />, t: 'Support 24/7' },
             ].map(t => (
-              <div key={t.t} className="hero-trust-pill" style={{ display: 'flex', alignItems: 'center', gap: 6, background: dark ? 'var(--white)' : 'rgba(255,255,255,.9)', border: dark ? '1px solid var(--border)' : '1px solid rgba(37,99,235,.12)', borderRadius: 20, padding: '6px 14px', fontSize: 12.5, fontWeight: 600, color: 'var(--text)', boxShadow: dark ? 'var(--shadow)' : '0 2px 12px rgba(37,99,235,.08), 0 1px 0 rgba(255,255,255,.9)' }}>
+              <div key={t.t} className="hero-trust-pill" style={{ display: 'flex', alignItems: 'center', gap: 6, background: dark ? 'var(--white)' : 'rgba(255,255,255,.9)', border: dark ? '1px solid var(--border)' : '1px solid rgba(47,107,255,.12)', borderRadius: 20, padding: '6px 14px', fontSize: 12.5, fontWeight: 600, color: 'var(--text)', boxShadow: dark ? 'var(--shadow)' : '0 2px 12px rgba(47,107,255,.08), 0 1px 0 rgba(255,255,255,.9)' }}>
                 {t.icon}
                 {t.t}
               </div>
@@ -724,7 +724,7 @@ export default function Landing() {
             {[
               { icon: <Star size={22} />, c: '#E1306C', bg: 'rgba(225,48,108,.1)', title: 'Influencer & Kreator', desc: 'Naikkan followers, likes, dan views biar konten makin dilirik brand dan masuk FYP.' },
               { icon: <Store size={22} />, c: '#10B981', bg: 'rgba(16,185,129,.1)', title: 'UMKM & Bisnis', desc: 'Bangun kredibilitas toko online — akun yang ramai bikin calon pembeli lebih percaya.' },
-              { icon: <Repeat size={22} />, c: '#2563EB', bg: 'rgba(37,99,235,.1)', title: 'Reseller', desc: 'Harga modal murah + panel otomatis. Jual lagi ke klien kamu dengan markup sendiri.' },
+              { icon: <Repeat size={22} />, c: '#2f6bff', bg: 'rgba(47,107,255,.1)', title: 'Reseller', desc: 'Harga modal murah + panel otomatis. Jual lagi ke klien kamu dengan markup sendiri.' },
               { icon: <Music size={22} />, c: '#1DB954', bg: 'rgba(29,185,84,.1)', title: 'Musisi & Artis', desc: 'Dongkrak plays Spotify, views YouTube, dan engagement biar karya makin terdengar.' },
             ].map((b, i) => (
               <RevealSection key={i} delay={i * 100} variant="scale" duration={850}>
@@ -743,7 +743,7 @@ export default function Landing() {
       <RevealSection variant="scale" duration={950}>
         <div style={{ position: 'relative', zIndex: 10, maxWidth: 1160, margin: '0 auto', padding: '0 16px 60px' }}>
           <div className="reseller-card" style={{ position: 'relative', overflow: 'hidden', borderRadius: 28, padding: 'clamp(28px, 5vw, 52px)', background: dark ? 'linear-gradient(135deg, #0F172A 0%, #1E293B 100%)' : 'linear-gradient(135deg, #EFF5FF 0%, #DBEAFE 100%)', border: '1px solid var(--border)' }}>
-            <div style={{ position: 'absolute', top: -70, right: -50, width: 240, height: 240, borderRadius: '50%', background: 'radial-gradient(circle, rgba(37,99,235,.18) 0%, transparent 70%)', pointerEvents: 'none' }} />
+            <div style={{ position: 'absolute', top: -70, right: -50, width: 240, height: 240, borderRadius: '50%', background: 'radial-gradient(circle, rgba(47,107,255,.18) 0%, transparent 70%)', pointerEvents: 'none' }} />
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 32, alignItems: 'center', position: 'relative', zIndex: 1 }}>
               <div>
                 <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'var(--blue)', borderRadius: 50, padding: '5px 14px', fontSize: 12, fontWeight: 700, color: '#fff', marginBottom: 16 }}>
@@ -784,7 +784,7 @@ export default function Landing() {
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16 }}>
             {[
-              { icon: <TrendingUp size={22} />, c: '#2563EB', bg: 'rgba(37,99,235,.1)', title: 'Skala Besar, Harga Efisien', desc: 'Volume order yang besar bikin biaya per layanan jadi lebih rendah — dan hematnya kami teruskan langsung ke kamu.' },
+              { icon: <TrendingUp size={22} />, c: '#2f6bff', bg: 'rgba(47,107,255,.1)', title: 'Skala Besar, Harga Efisien', desc: 'Volume order yang besar bikin biaya per layanan jadi lebih rendah — dan hematnya kami teruskan langsung ke kamu.' },
               { icon: <Zap size={22} />, c: '#F59E0B', bg: 'rgba(245,158,11,.1)', title: 'Sistem Otomatis Penuh', desc: 'Order diproses mesin 24 jam tanpa admin manual. Biaya operasional kecil, jadi harga bisa ditekan tanpa korbankan kualitas.' },
               { icon: <ShieldCheck size={22} />, c: '#10B981', bg: 'rgba(16,185,129,.1)', title: 'Tanpa Biaya Tersembunyi', desc: 'Harga yang kamu lihat itu harga final. Tidak ada markup mendadak, tidak ada jebakan saat checkout.' },
             ].map((b, i) => (
@@ -889,7 +889,7 @@ export default function Landing() {
                         <span style={{ fontWeight: 800, fontSize: 16, background: 'var(--blue)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>{sv.price}</span>
                       </td>
                       <td style={{ padding: '15px 20px', textAlign: 'center' }}>
-                        <button onClick={() => router.push('/register')} style={{ background: 'var(--blue-l)', border: 'none', borderRadius: 50, padding: '6px 16px', fontSize: 12.5, fontWeight: 700, color: '#4F46E5', cursor: 'pointer', fontFamily: "'Outfit','Plus Jakarta Sans',sans-serif" }}>Order</button>
+                        <button onClick={() => router.push('/register')} style={{ background: 'var(--blue-l)', border: 'none', borderRadius: 50, padding: '6px 16px', fontSize: 12.5, fontWeight: 700, color: '#4F46E5', cursor: 'pointer', fontFamily: "'Inter',sans-serif" }}>Order</button>
                       </td>
                     </tr>
                   ))}
@@ -904,7 +904,7 @@ export default function Landing() {
               </table>
             </div>
             <div style={{ padding: '16px 20px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'center' }}>
-              <button onClick={() => router.push('/register')} style={{ background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13.5, fontFamily: "'Outfit','Plus Jakarta Sans',sans-serif", display: 'inline-flex', alignItems: 'center', gap: 7, color: 'var(--blue)' }}>
+              <button onClick={() => router.push('/register')} style={{ background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13.5, fontFamily: "'Inter',sans-serif", display: 'inline-flex', alignItems: 'center', gap: 7, color: 'var(--blue)' }}>
                 <span onClick={() => router.push('/register')} style={{ cursor: 'pointer' }}>Lihat 2.000+ layanan — Daftar gratis <ArrowRight size={14} style={{ color: 'var(--blue)', display: 'inline-block', verticalAlign: 'middle' }} /></span>
               </button>
             </div>
@@ -914,11 +914,11 @@ export default function Landing() {
         {/* ── TESTIMONIALS (Animated Scroll) ── */}
         <div id="testimoni" style={{ position: 'relative', zIndex: 10, padding: '80px 0', overflow: 'hidden' }}>
           {/* Blob decorations */}
-          <div style={{ position: 'absolute', top: '10%', left: '-5%', width: 400, height: 400, borderRadius: '50%', background: 'radial-gradient(circle, rgba(37,99,235,.08) 0%, transparent 70%)', filter: 'blur(40px)', pointerEvents: 'none' }} />
+          <div style={{ position: 'absolute', top: '10%', left: '-5%', width: 400, height: 400, borderRadius: '50%', background: 'radial-gradient(circle, rgba(47,107,255,.08) 0%, transparent 70%)', filter: 'blur(40px)', pointerEvents: 'none' }} />
           <div style={{ position: 'absolute', top: '40%', right: '-5%', width: 350, height: 350, borderRadius: '50%', background: 'radial-gradient(circle, rgba(16,185,129,.07) 0%, transparent 70%)', filter: 'blur(40px)', pointerEvents: 'none' }} />
           <div style={{ position: 'absolute', bottom: '10%', left: '30%', width: 300, height: 300, borderRadius: '50%', background: 'radial-gradient(circle, rgba(139,92,246,.06) 0%, transparent 70%)', filter: 'blur(50px)', pointerEvents: 'none' }} />
           <div style={{ maxWidth: 1160, margin: '0 auto', padding: '0 24px', textAlign: 'center', marginBottom: 52 }}>
-            <div style={{ display: 'inline-block', background: 'linear-gradient(135deg,rgba(37,99,235,.1),rgba(37,99,235,.05))', border: '1px solid rgba(37,99,235,.2)', borderRadius: 50, padding: '5px 16px', fontSize: 12.5, fontWeight: 700, color: 'var(--blue)', marginBottom: 14 }}>TESTIMONI</div>
+            <div style={{ display: 'inline-block', background: 'linear-gradient(135deg,rgba(47,107,255,.1),rgba(47,107,255,.05))', border: '1px solid rgba(47,107,255,.2)', borderRadius: 50, padding: '5px 16px', fontSize: 12.5, fontWeight: 700, color: 'var(--blue)', marginBottom: 14 }}>TESTIMONI</div>
             <h2 style={{ fontSize: 'clamp(24px, 4vw, 38px)', fontWeight: 800, color: 'var(--text)', letterSpacing: '-.5px', marginBottom: 10 }}>Apa Kata Pengguna Kami</h2>
             <p style={{ fontSize: 15, color: 'var(--text2)' }}>Ribuan kreator dan bisnis sudah mempercayakan pertumbuhan sosial media mereka ke SuntikSosmed.</p>
           </div>
@@ -949,6 +949,7 @@ export default function Landing() {
           </div>
           <style dangerouslySetInnerHTML={{
             __html: `
+          @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
           @keyframes scrollUp35 { 0% { transform: translateY(0); } 100% { transform: translateY(-50%); } }
           @keyframes scrollUp50 { 0% { transform: translateY(0); } 100% { transform: translateY(-50%); } }
           @keyframes scrollUp42 { 0% { transform: translateY(0); } 100% { transform: translateY(-50%); } }
@@ -980,14 +981,14 @@ export default function Landing() {
             .testi-desktop [style*="scrollUp"] { animation: none !important; }
           }
           html { scroll-behavior: smooth; }
-          .root h1, .root h2 { font-family: 'Sora','Plus Jakarta Sans',sans-serif; }
-          /* Teks kecil/body landing pakai Outfit (judul tetap Sora di atas) */
-          .root { font-family: 'Outfit','Plus Jakarta Sans',sans-serif; }
+          /* Samain sama admin panel — semua teks pakai Inter */
+          .root, .root h1, .root h2 { font-family: 'Inter',sans-serif; }
+          .root h1, .root h2 { letter-spacing: -.02em; }
 
           /* ── Hero CTA hover ── */
           .hero-cta:hover {
             transform: translateY(-2px) scale(1.02);
-            box-shadow: 0 12px 38px rgba(37,99,235,.6), 0 0 0 1px rgba(59,130,246,.4) !important;
+            box-shadow: 0 12px 38px rgba(47,107,255,.6), 0 0 0 1px rgba(59,130,246,.4) !important;
           }
           .hero-cta:active { transform: translateY(0) scale(.99); }
 
@@ -1019,8 +1020,8 @@ export default function Landing() {
           .hero-grid {
             position: absolute; inset: 0; pointer-events: none; z-index: 1;
             background-image:
-              linear-gradient(to right, rgba(37,99,235,.06) 1px, transparent 1px),
-              linear-gradient(to bottom, rgba(37,99,235,.06) 1px, transparent 1px);
+              linear-gradient(to right, rgba(47,107,255,.06) 1px, transparent 1px),
+              linear-gradient(to bottom, rgba(47,107,255,.06) 1px, transparent 1px);
             background-size: 56px 56px;
             -webkit-mask-image: radial-gradient(ellipse 70% 55% at 50% 22%, #000 0%, transparent 75%);
             mask-image: radial-gradient(ellipse 70% 55% at 50% 22%, #000 0%, transparent 75%);
@@ -1073,11 +1074,11 @@ export default function Landing() {
           }
           .hero-badge:hover {
             transform: translateY(-2px);
-            border-color: rgba(37,99,235,.4) !important;
+            border-color: rgba(47,107,255,.4) !important;
           }
           .hero-badge .badge-shine {
             position: absolute; top: 0; left: 0; width: 35%; height: 100%;
-            background: linear-gradient(90deg, transparent, rgba(37,99,235,.20), transparent);
+            background: linear-gradient(90deg, transparent, rgba(47,107,255,.20), transparent);
             transform: translateX(-130%) skewX(-20deg);
             animation: badgeShine 4.8s ease-in-out infinite; pointer-events: none;
           }
@@ -1118,7 +1119,7 @@ export default function Landing() {
               font-size: 12px !important;
               font-weight: 700 !important;
               white-space: nowrap !important;
-              box-shadow: 0 4px 14px rgba(37,99,235,.3) !important;
+              box-shadow: 0 4px 14px rgba(47,107,255,.3) !important;
             }
             .hero-cta-sub { box-shadow: none !important; }
             .hero-cta-main { gap: 5px !important; }
@@ -1164,7 +1165,7 @@ export default function Landing() {
           .nav-mobile-only { display: none; }
           .nav-icon-btn { transition: transform .12s ease, border-color .15s ease, background .15s ease; -webkit-tap-highlight-color: transparent; }
           @media (hover: hover) {
-            .nav-icon-btn:hover { border-color: rgba(37,99,235,.45); }
+            .nav-icon-btn:hover { border-color: rgba(47,107,255,.45); }
           }
           .nav-icon-btn:active { transform: scale(.92); }
           .theme-icon { animation: themeIconIn .32s cubic-bezier(.34,1.56,.64,1); }
@@ -1191,9 +1192,9 @@ export default function Landing() {
             -webkit-tap-highlight-color: transparent;
           }
           @media (hover: hover) {
-            .social-icon-btn:hover { color: var(--blue); border-color: rgba(37,99,235,.4); }
+            .social-icon-btn:hover { color: var(--blue); border-color: rgba(47,107,255,.4); }
           }
-          .social-icon-btn:active { transform: scale(.9); color: var(--blue); border-color: rgba(37,99,235,.4); }
+          .social-icon-btn:active { transform: scale(.9); color: var(--blue); border-color: rgba(47,107,255,.4); }
           .nav-link.active { color: var(--blue); font-weight: 800; background: var(--blue-l); }
           .nav-link.active::after {
             content: '';
@@ -1209,13 +1210,13 @@ export default function Landing() {
             border: 1.5px solid var(--border2);
             transition: border-color .15s ease, color .15s ease, background .15s ease;
           }
-          .nav-auth-outline:hover { border-color: rgba(37,99,235,.5); color: var(--text); background: var(--bg2); }
+          .nav-auth-outline:hover { border-color: rgba(47,107,255,.5); color: var(--text); background: var(--bg2); }
           .nav-auth-solid {
             background: linear-gradient(135deg, var(--blue), var(--blue-d));
-            box-shadow: 0 2px 10px rgba(37,99,235,.35);
+            box-shadow: 0 2px 10px rgba(47,107,255,.35);
             transition: transform .15s ease, box-shadow .15s ease;
           }
-          .nav-auth-solid:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(37,99,235,.45); }
+          .nav-auth-solid:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(47,107,255,.45); }
           .testi-desktop { display: grid; }
           .testi-mobile { display: none; }
           @media (max-width: 768px) {
@@ -1226,7 +1227,7 @@ export default function Landing() {
             .nav-desktop-only { display: none !important; }
             .nav-mobile-only { display: flex !important; }
           }
-          .hero-btn-main:hover { transform: translateY(-2px) scale(1.03); box-shadow: 0 12px 32px rgba(37,99,235,.45) !important; }
+          .hero-btn-main:hover { transform: translateY(-2px) scale(1.03); box-shadow: 0 12px 32px rgba(47,107,255,.45) !important; }
           .feature-card { 
             background: var(--white); border: 1px solid var(--border); border-radius: 20px; padding: 28px 24px;
             transition: transform 0.3s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.3s ease, border-color 0.3s ease;
@@ -1244,7 +1245,7 @@ export default function Landing() {
           @property --angle { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
           @keyframes cardBorderSpin { to { --angle: 360deg; } }
           .root.dark .feature-card { background: var(--bg2); border-color: var(--border2); }
-          .feature-card:hover { transform: translateY(-6px) scale(1.01); box-shadow: 0 20px 48px rgba(37,99,235,.12); border-color: transparent; }
+          .feature-card:hover { transform: translateY(-6px) scale(1.01); box-shadow: 0 20px 48px rgba(47,107,255,.12); border-color: transparent; }
           @media (prefers-reduced-motion: reduce) {
             .feature-card:hover::before { animation: none; }
           }
@@ -1304,7 +1305,7 @@ export default function Landing() {
               { file: 'Bri', alt: 'BRI' },
               { file: 'Mandiri', alt: 'Mandiri' },
             ].map(m => (
-              <div key={m.file} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 104, height: 56, padding: '0 16px', background: '#fff', border: '1px solid var(--border)', borderRadius: 12, boxShadow: dark ? 'none' : '0 2px 10px rgba(37,99,235,.06)' }}>
+              <div key={m.file} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 104, height: 56, padding: '0 16px', background: '#fff', border: '1px solid var(--border)', borderRadius: 12, boxShadow: dark ? 'none' : '0 2px 10px rgba(47,107,255,.06)' }}>
                 <img src={`/payments/${m.file}.png`} alt={m.alt} loading="lazy" style={{ maxWidth: '100%', maxHeight: 30, objectFit: 'contain' }} />
               </div>
             ))}
@@ -1316,7 +1317,7 @@ export default function Landing() {
       <RevealSection variant="up" duration={950}>
         <div id="faq" style={{ position: 'relative', zIndex: 10, maxWidth: 760, margin: '0 auto', padding: '40px 16px 64px' }}>
           <div style={{ textAlign: 'center', marginBottom: 36 }}>
-            <div style={{ display: 'inline-block', background: 'linear-gradient(135deg,rgba(37,99,235,.1),rgba(37,99,235,.05))', border: '1px solid rgba(37,99,235,.2)', borderRadius: 50, padding: '5px 16px', fontSize: 12.5, fontWeight: 700, color: 'var(--blue)', marginBottom: 14 }}>FAQ</div>
+            <div style={{ display: 'inline-block', background: 'linear-gradient(135deg,rgba(47,107,255,.1),rgba(47,107,255,.05))', border: '1px solid rgba(47,107,255,.2)', borderRadius: 50, padding: '5px 16px', fontSize: 12.5, fontWeight: 700, color: 'var(--blue)', marginBottom: 14 }}>FAQ</div>
             <h2 style={{ fontSize: 'clamp(22px, 4vw, 34px)', fontWeight: 800, color: 'var(--text)', letterSpacing: '-.5px', marginBottom: 10 }}>Pertanyaan Umum</h2>
             <p style={{ fontSize: 15, color: 'var(--text2)' }}>Hal-hal yang sering ditanyakan sebelum mulai order.</p>
           </div>
@@ -1342,10 +1343,10 @@ export default function Landing() {
               <h2 style={{ fontSize: 'clamp(24px, 6vw, 44px)', fontWeight: 800, color: '#fff', marginBottom: 14, letterSpacing: '-.5px', lineHeight: 1.15 }}>Siap meningkatkan<br />jangkauan kamu?</h2>
               <p style={{ fontSize: 'clamp(13px, 3vw, 16px)', color: 'rgba(255,255,255,.75)', marginBottom: 32, maxWidth: 420, margin: '0 auto 32px', lineHeight: 1.7 }}>Daftar gratis, top up saldo, dan langsung order ribuan layanan SMM dalam hitungan menit.</p>
               <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
-                <button onClick={() => router.push('/register')} style={{ background: '#fff', border: 'none', borderRadius: 50, padding: '12px 28px', fontSize: 'clamp(13px, 3vw, 15px)', fontWeight: 800, color: 'var(--blue)', cursor: 'pointer', fontFamily: "'Outfit','Plus Jakarta Sans',sans-serif", display: 'inline-flex', alignItems: 'center', gap: 8, boxShadow: '0 8px 32px rgba(0,0,0,.2)', transition: 'transform .2s' }}>
+                <button onClick={() => router.push('/register')} style={{ background: '#fff', border: 'none', borderRadius: 50, padding: '12px 28px', fontSize: 'clamp(13px, 3vw, 15px)', fontWeight: 800, color: 'var(--blue)', cursor: 'pointer', fontFamily: "'Inter',sans-serif", display: 'inline-flex', alignItems: 'center', gap: 8, boxShadow: '0 8px 32px rgba(0,0,0,.2)', transition: 'transform .2s' }}>
                   Mulai Sekarang <ArrowRight size={16} />
                 </button>
-                <button onClick={() => router.push('/login')} style={{ background: 'rgba(255,255,255,.15)', border: '1.5px solid rgba(255,255,255,.3)', borderRadius: 50, padding: '12px 24px', fontSize: 'clamp(13px, 3vw, 15px)', fontWeight: 700, color: '#fff', cursor: 'pointer', fontFamily: "'Outfit','Plus Jakarta Sans',sans-serif", backdropFilter: 'blur(8px)' }}>
+                <button onClick={() => router.push('/login')} style={{ background: 'rgba(255,255,255,.15)', border: '1.5px solid rgba(255,255,255,.3)', borderRadius: 50, padding: '12px 24px', fontSize: 'clamp(13px, 3vw, 15px)', fontWeight: 700, color: '#fff', cursor: 'pointer', fontFamily: "'Inter',sans-serif", backdropFilter: 'blur(8px)' }}>
                   Sign In
                 </button>
               </div>

@@ -17,6 +17,17 @@ import AdminDeposits from '@/components/admin/AdminDeposits';
 import AdminAnnouncement from '@/components/admin/AdminAnnouncement';
 import { serviceCode, PROVIDER_ALIAS } from '@/lib/platforms';
 
+// ── SegBars — segmented progress bar kecil di bawah stat card (match desain baru) ──
+function SegBars({ color = 'var(--blue)', filled = 4, total = 6 }) {
+    return (
+        <div className="adm-segbars">
+            {Array.from({ length: total }).map((_, i) => (
+                <i key={i} style={i < filled ? { background: color } : undefined} />
+            ))}
+        </div>
+    );
+}
+
 // ── Dropdown custom — pengganti <select> native agar match tema dark & tidak numpuk ──
 function Dropdown({ value, options, onChange, width = 180, placeholder = 'Pilih...', maxHeight = 320 }) {
     const [open, setOpen] = useState(false);
@@ -42,7 +53,7 @@ function Dropdown({ value, options, onChange, width = 180, placeholder = 'Pilih.
                     border: `1.5px solid ${open ? 'var(--blue)' : 'var(--border)'}`,
                     background: 'var(--white)', color: 'var(--text)',
                     fontSize: 13, fontWeight: 600, cursor: 'pointer',
-                    fontFamily: "'Plus Jakarta Sans',sans-serif", textAlign: 'left',
+                    fontFamily: "'Inter',sans-serif", textAlign: 'left',
                     transition: 'border-color .15s',
                 }}
             >
@@ -71,7 +82,7 @@ function Dropdown({ value, options, onChange, width = 180, placeholder = 'Pilih.
                                     background: active ? 'var(--blue)' : 'transparent',
                                     color: active ? '#fff' : 'var(--text)',
                                     fontSize: 12.5, fontWeight: active ? 700 : 600, textAlign: 'left',
-                                    fontFamily: "'Plus Jakarta Sans',sans-serif",
+                                    fontFamily: "'Inter',sans-serif",
                                 }}
                                 onMouseEnter={e => { if (!active) e.currentTarget.style.background = 'var(--bg2)'; }}
                                 onMouseLeave={e => { if (!active) e.currentTarget.style.background = 'transparent'; }}
@@ -193,6 +204,8 @@ export default function AdminPanel() {
         { label: 'Hari ini', value: 'today' },
         { label: '7 hari terakhir', value: '7d' },
         { label: '30 hari terakhir', value: '30d' },
+        { label: '90 hari terakhir', value: '90d' },
+        { label: '120 hari terakhir', value: '120d' },
     ];
     const [statsPeriod, setStatsPeriod] = useState('all'); // untuk ringkasan revenue
     const [orderPeriod, setOrderPeriod] = useState('all');  // untuk daftar orders
@@ -231,49 +244,127 @@ export default function AdminPanel() {
 
     // Mapping periode (statsPeriod) → jumlah hari yang digambar di grafik.
     // 'Semua waktu' digambar 90 hari terakhir biar grafik tetap informatif.
-    const PERIOD_TO_DAYS = { all: 90, today: 7, '7d': 7, '30d': 30 };
+    // ✅ FIX: 'today' dulu salah di-map ke 7 hari (chart-nya jadi nampilin data
+    // seminggu padahal labelnya "Hari ini"). Sekarang 'today' ditangani khusus
+    // (breakdown per jam) di bawah, jadi angka di sini cuma dipakai periode lain.
+    const PERIOD_TO_DAYS = { all: 90, today: 1, '7d': 7, '30d': 30, '90d': 90, '120d': 120 };
+
+    // Pendapatan 1 order dalam IDR (modal × markup, fallback ke o.amount kalau
+    // modal tidak diketahui) — dipisah jadi helper biar konsisten & tidak duplikat.
+    const orderRevenueIDR = (o) => {
+        const ci = parseFloat(o.charge_idr);
+        const costIDR = (Number.isFinite(ci) && ci > 0)
+            ? Math.round(ci)
+            : (o.charge && parseFloat(o.charge) > 0
+                ? Math.round(parseFloat(o.charge) * fxForOrder(o))
+                : null);
+        if (costIDR != null) return Math.round(costIDR * markup);
+        return Math.round(parseFloat(o.amount || 0));
+    };
+
+    // ✅ Moving average 3-titik (kiri-tengah-kanan) — dipakai untuk menghaluskan
+    // garis chart TANPA mengubah angka aslinya. Nilai asli tetap disimpan di
+    // `_rawRevenue` (dan `_rawUsers` yang sudah ada) supaya tooltip & "Total
+    // periode ini" tetap nunjukin angka real order, cuma garis visualnya yang
+    // dihalusin. Dilewati kalau titiknya terlalu sedikit (<3) buat dihaluskan.
+    const applySmoothing = (rawData, windowSize = 3) => {
+        if (rawData.length < 3) return rawData.map(d => ({ ...d, _rawRevenue: d.revenue }));
+        const half = Math.floor(windowSize / 2);
+        return rawData.map((d, i) => {
+            const lo = Math.max(0, i - half);
+            const hi = Math.min(rawData.length - 1, i + half);
+            const windowSlice = rawData.slice(lo, hi + 1);
+            const avgRevenue = windowSlice.reduce((s, w) => s + w.revenue, 0) / windowSlice.length;
+            const avgUsers = windowSlice.reduce((s, w) => s + w.newUsers, 0) / windowSlice.length;
+            return { ...d, _rawRevenue: d.revenue, revenue: avgRevenue, newUsers: avgUsers };
+        });
+    };
 
     const generateChartData = (period) => {
-        const days = PERIOD_TO_DAYS[period] ?? 30;
         const now = new Date();
+
+        // ✅ FIX: dulu perbandingan tanggal pakai `.toISOString().slice(0,10)`.
+        // Masalahnya, Date di sini dibentuk pakai jam LOKAL (WIB/UTC+7), sementara
+        // toISOString() mengonversi ke UTC dulu — jadi tanggalnya bisa geser mundur
+        // 1 hari (misal order jam 8 malam WIB bisa kehitung masuk bucket "kemarin"
+        // versi UTC). Ini yang bikin titik di grafik kelihatan "geser"/gak selaras
+        // sama label tanggalnya. Sekarang semua perbandingan pakai range Date lokal
+        // langsung (>= start && < end), jadi tidak ada konversi UTC sama sekali.
+
+        // "Hari ini" → breakdown per JAM (bukan per hari), supaya labelnya bener-bener
+        // cuma nampilin data hari ini, dan tetap ada bentuk garis yang informatif.
+        if (period === 'today') {
+            const data = [];
+            for (let h = 0; h < 24; h++) {
+                const start = new Date(now); start.setHours(h, 0, 0, 0);
+                const end = new Date(start); end.setHours(h + 1, 0, 0, 0);
+
+                const hourOrders = dbOrders.filter(o => {
+                    if (!o.created_at) return false;
+                    const t = new Date(o.created_at);
+                    return t >= start && t < end;
+                });
+                const hourUsers = users.filter(u => {
+                    if (!u.createdAt) return false;
+                    const t = new Date(u.createdAt);
+                    return t >= start && t < end;
+                }).length;
+
+                data.push({
+                    date: start,
+                    revenue: hourOrders.reduce((s, o) => s + orderRevenueIDR(o), 0),
+                    _rawUsers: hourUsers,
+                    newUsers: hourUsers,
+                });
+            }
+            return applySmoothing(data, 3);
+        }
+
+        const totalDays = PERIOD_TO_DAYS[period] ?? 30;
+        // Periode >30 hari (90/120 hari & Semua waktu) di-agregasi PER MINGGU.
+        // Kalau digambar per-hari mentah (90-120 titik), garisnya jadi terlalu
+        // banyak gerigi tajam & keliatan acak — bucket mingguan bikin trennya
+        // lebih rapi & tetap gampang dibaca.
+        const bucketDays = totalDays > 30 ? 7 : 1;
+        const numBuckets = Math.ceil(totalDays / bucketDays);
+
+        // Awal periode: jam 00:00 lokal, "totalDays" hari ke belakang dari hari ini.
+        const periodStart = new Date(now);
+        periodStart.setHours(0, 0, 0, 0);
+        periodStart.setDate(periodStart.getDate() - (totalDays - 1));
+
         const data = [];
+        for (let b = 0; b < numBuckets; b++) {
+            const bucketStart = new Date(periodStart);
+            bucketStart.setDate(bucketStart.getDate() + b * bucketDays);
+            const bucketEnd = new Date(bucketStart);
+            bucketEnd.setDate(bucketEnd.getDate() + bucketDays); // eksklusif
 
-        for (let i = days - 1; i >= 0; i--) {
-            const d = new Date(now);
-            d.setDate(d.getDate() - i);
-            d.setHours(0, 0, 0, 0);
-            const dateKey = d.toISOString().slice(0, 10);
-
-            const dayOrders = dbOrders.filter(o => {
+            const bucketOrders = dbOrders.filter(o => {
                 if (!o.created_at) return false;
-                return new Date(o.created_at).toISOString().slice(0, 10) === dateKey;
+                const t = new Date(o.created_at);
+                return t >= bucketStart && t < bucketEnd;
             });
-            const dayRevenue = dayOrders.reduce((s, o) => {
-                // Modal IDR: prioritaskan charge_idr (akurat historis), fallback charge × rate.
-                const ci = parseFloat(o.charge_idr);
-                const costIDR = (Number.isFinite(ci) && ci > 0)
-                    ? Math.round(ci)
-                    : (o.charge && parseFloat(o.charge) > 0
-                        ? Math.round(parseFloat(o.charge) * fxForOrder(o))
-                        : null);
-                if (costIDR != null) return s + Math.round(costIDR * markup);
-                return s + Math.round(parseFloat(o.amount || 0));
-            }, 0);
-
-            const dayUsers = users.filter(u => {
+            const bucketUsers = users.filter(u => {
                 if (!u.createdAt) return false;
-                return new Date(u.createdAt).toISOString().slice(0, 10) === dateKey;
+                const t = new Date(u.createdAt);
+                return t >= bucketStart && t < bucketEnd;
             }).length;
 
             data.push({
-                date: d,
-                revenue: dayRevenue,
-                _rawUsers: dayUsers,
-                newUsers: dayUsers, // dipetakan ke sumbu-Y sekunder (skala sendiri)
+                date: bucketStart, // label sumbu-X = awal bucket
+                revenue: bucketOrders.reduce((s, o) => s + orderRevenueIDR(o), 0),
+                _rawUsers: bucketUsers,
+                newUsers: bucketUsers, // dipetakan ke sumbu-Y sekunder (skala sendiri)
             });
         }
 
-        return data;
+        // Bucket mingguan (90/120 hari) udah cukup halus dari agregasinya sendiri
+        // (lihat komentar di atas), jadi smoothing tambahan cuma diterapkan untuk
+        // bucket harian (7d/30d).
+        return bucketDays > 1
+            ? data.map(d => ({ ...d, _rawRevenue: d.revenue }))
+            : applySmoothing(data, 3);
     };
 
     // ✅ Helper: panggil /api/admin-api dengan JWT token
@@ -1150,6 +1241,8 @@ export default function AdminPanel() {
         if (period === 'today') { const d = new Date(now); d.setHours(0, 0, 0, 0); return d; }
         if (period === '7d') { const d = new Date(now); d.setDate(d.getDate() - 7); return d; }
         if (period === '30d') { const d = new Date(now); d.setDate(d.getDate() - 30); return d; }
+        if (period === '90d') { const d = new Date(now); d.setDate(d.getDate() - 90); return d; }
+        if (period === '120d') { const d = new Date(now); d.setDate(d.getDate() - 120); return d; }
         return null; // 'all'
     };
     const inPeriod = (ts, period) => {
@@ -1301,18 +1394,46 @@ export default function AdminPanel() {
     // ── LOGIN ──
     if (!authed) {
         return (
-            <div className={`root${dark ? ' dark' : ''}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: 'var(--bg)' }}>
-                <div className="card" style={{ padding: '40px 36px', width: 360, textAlign: 'center' }}>
-                    <div style={{ width: 52, height: 52, borderRadius: 14, background: 'linear-gradient(135deg,var(--blue),#1D4ED8)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', boxShadow: '0 8px 24px rgba(37,99,235,.3)' }}>
-                        <Target size={24} style={{ color: '#fff' }} />
+            <div className={`root adm-login${dark ? ' dark' : ''}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: 'var(--bg)', fontFamily: "'Inter',sans-serif", padding: 20 }}>
+                {/* Tema login berdiri sendiri — screen ini render sebelum style utama admin-shell */}
+                <style>{`
+                    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+                    .adm-login {
+                        --bg: #eef0f5; --white: #ffffff; --border: #e7e9ef;
+                        --text: #16181d; --text2: #5b616e; --text3: #9aa0ac;
+                        --blue: #2f6bff; --red: #dc2626;
+                    }
+                    .adm-login.dark {
+                        --bg: #0f1116; --white: #13151b; --border: #262a33;
+                        --text: #eceef2; --text2: #a6acb8; --text3: #6b7280;
+                        --blue: #4d80ff; --red: #f26d6d;
+                    }
+                    .adm-login-inp {
+                        width: 100%; box-sizing: border-box; padding: 10px 13px;
+                        border-radius: 10px; border: 1px solid var(--border);
+                        background: var(--white); color: var(--text);
+                        font-size: 13px; font-family: inherit; outline: none;
+                        transition: border-color .15s;
+                    }
+                    .adm-login-inp:focus { border-color: var(--blue); }
+                    .adm-login-inp::placeholder { color: var(--text3); }
+                `}</style>
+                <div style={{ background: 'var(--white)', border: '1px solid var(--border)', borderRadius: 16, padding: '32px 30px', width: 360, boxShadow: '0 10px 40px rgba(20,30,60,.08)' }}>
+                    <div style={{ width: 44, height: 44, borderRadius: 11, background: 'linear-gradient(135deg,#2f6bff,#2456e0)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px', boxShadow: '0 6px 18px rgba(47,107,255,.25)' }}>
+                        <Target size={21} style={{ color: '#fff' }} />
                     </div>
-                    <h1 style={{ fontSize: 20, fontWeight: 800, color: 'var(--text)', marginBottom: 4 }}>Admin Panel</h1>
-                    <p style={{ fontSize: 13, color: 'var(--text3)', marginBottom: 24 }}>SuntikSosmed</p>
+                    <h1 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text)', marginBottom: 2, textAlign: 'center', letterSpacing: '-.3px' }}>Admin Panel</h1>
+                    <p style={{ fontSize: 12.5, color: 'var(--text3)', marginBottom: 22, textAlign: 'center' }}>SuntikSosmed</p>
                     <form onSubmit={handleLogin}>
-                        <input className="inp" type="text" placeholder="Username" value={adminUser} onChange={e => setAdminUser(e.target.value)} style={{ marginBottom: 10, textAlign: 'center' }} autoFocus autoComplete="username" />
-                        <input className="inp" type="password" placeholder="Password" value={adminPass} onChange={e => setAdminPass(e.target.value)} style={{ marginBottom: 10, textAlign: 'center' }} autoComplete="current-password" />
-                        {passError && <div style={{ fontSize: 12, color: 'var(--red)', marginBottom: 10 }}>{passError}</div>}
-                        <button className="btn btn-blue" type="submit" style={{ width: '100%', padding: 12, borderRadius: 10 }}>Masuk</button>
+                        <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text2)', marginBottom: 6 }}>Username</label>
+                        <input className="adm-login-inp" type="text" placeholder="Username" value={adminUser} onChange={e => setAdminUser(e.target.value)} style={{ marginBottom: 12 }} autoFocus autoComplete="username" />
+                        <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text2)', marginBottom: 6 }}>Password</label>
+                        <input className="adm-login-inp" type="password" placeholder="••••••••••" value={adminPass} onChange={e => setAdminPass(e.target.value)} style={{ marginBottom: 14 }} autoComplete="current-password" />
+                        {passError && (
+                            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--red)', background: 'rgba(239,68,68,.08)', border: '1px solid rgba(239,68,68,.25)', borderRadius: 8, padding: '8px 12px', marginBottom: 12 }}>{passError}</div>
+                        )}
+                        {/* CTA gelap adaptif — ala "Create Workflow" di desain */}
+                        <button type="submit" style={{ width: '100%', padding: '11px 0', borderRadius: 8, border: 'none', background: 'var(--text)', color: 'var(--white)', fontWeight: 600, fontSize: 13.5, cursor: 'pointer', fontFamily: 'inherit' }}>Masuk</button>
                     </form>
                 </div>
             </div>
@@ -1389,34 +1510,75 @@ export default function AdminPanel() {
 
     // ── MAIN ──
     return (
-        <div className={`root admin-shell${dark ? ' dark' : ''}`} style={{ display: 'flex', height: '100vh', overflow: 'hidden', fontFamily: "'Plus Jakarta Sans',sans-serif" }}>
+        <div className={`root admin-shell${dark ? ' dark' : ''}`} style={{ display: 'flex', height: '100vh', overflow: 'hidden', fontFamily: "'Inter',sans-serif" }}>
 
-            <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-                .adm-kpi-card { transition: transform .18s ease, box-shadow .18s ease; }
-                .adm-kpi-card:hover { transform: translateY(-3px); box-shadow: 0 12px 28px rgba(0,0,0,.12); }
-                .adm-hero-card { isolation: isolate; }
-                .adm-bento-pattern {
-                    position: absolute; inset: 0; pointer-events: none; opacity: .5;
-                    background-image: radial-gradient(circle at 1px 1px, rgba(255,255,255,.16) 1px, transparent 0);
-                    background-size: 15px 15px;
-                    -webkit-mask-image: linear-gradient(135deg, #000 0%, transparent 70%);
-                    mask-image: linear-gradient(135deg, #000 0%, transparent 70%);
+            <style>{`@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+                @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+                /* ══ THEME — match desain admin baru ══ */
+                .admin-shell {
+                    --bg: #eef0f5;
+                    --bg2: #f4f5f8;
+                    --white: #ffffff;
+                    --border: #e7e9ef;
+                    --text: #16181d;
+                    --text2: #5b616e;
+                    --text3: #9aa0ac;
+                    --blue: #2f6bff;
+                    --blue-l: #e8efff;
+                    --green: #16a34a;
+                    --green-l: #e6f7ee;
+                    --red: #dc2626;
+                    --red-l: #fdecec;
+                    --yellow: #b45309;
+                    --yellow-l: #fdf3e2;
                 }
-                .adm-bento-glow {
-                    position: absolute; top: -55px; right: -45px; width: 200px; height: 200px;
-                    border-radius: 50%; pointer-events: none; filter: blur(8px);
-                    background: radial-gradient(circle, rgba(255,255,255,.2) 0%, transparent 70%);
+                .admin-shell.dark {
+                    --bg: #0f1116;
+                    --bg2: #191c23;
+                    --white: #13151b;
+                    --border: #262a33;
+                    --text: #eceef2;
+                    --text2: #a6acb8;
+                    --text3: #6b7280;
+                    --blue: #4d80ff;
+                    --blue-l: rgba(77,128,255,.14);
+                    --green: #34c26b;
+                    --green-l: rgba(52,194,107,.14);
+                    --red: #f26d6d;
+                    --red-l: rgba(242,109,109,.14);
+                    --yellow: #e0a83f;
+                    --yellow-l: rgba(224,168,63,.14);
                 }
-                @media (max-width: 920px) {
-                    .adm-bento-top { grid-template-columns: 1fr 1fr !important; }
-                    .adm-bento-top > .adm-hero-card { grid-column: 1 / -1 !important; }
+                .admin-shell .card {
+                    background: var(--white);
+                    border: 1px solid var(--border);
+                    border-radius: 12px;
                 }
-                @media (max-width: 560px) {
-                    .adm-bento-top { grid-template-columns: 1fr !important; }
-                    .adm-bento-top > .adm-hero-card { grid-column: auto !important; }
+                .admin-shell .btn {
+                    display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+                    font-family: 'Inter', sans-serif; font-weight: 600; font-size: 13px;
+                    border-radius: 8px; cursor: pointer; border: 1px solid transparent;
                 }
+                .admin-shell .btn-blue { background: var(--blue); color: #fff; border-color: var(--blue); }
+                .admin-shell .btn-outline { background: var(--white); color: var(--text); border-color: var(--border); }
+                .admin-shell .btn-outline:hover { background: var(--bg2); }
+                .admin-shell .inp {
+                    width: 100%; box-sizing: border-box; height: 40px; padding: 0 12px;
+                    border: 1.5px solid var(--border); border-radius: 10px;
+                    background: var(--white); color: var(--text);
+                    font-family: 'Inter', sans-serif; font-size: 13px; outline: none;
+                    transition: border-color .15s;
+                }
+                .admin-shell .inp:focus { border-color: var(--blue); }
+                .admin-shell table thead tr { background: var(--bg2); }
+                .admin-shell table thead th { font-size: 12px; font-weight: 600; color: var(--text2); }
+                /* Segmented progress bars ala stat card desain baru */
+                .adm-segbars { display: flex; gap: 4px; margin-top: 14px; }
+                .adm-segbars i { height: 4px; flex: 1; border-radius: 99px; background: var(--border); }
+
                 .admin-shell .card { box-shadow: 0 1px 2px rgba(0,0,0,.04); transition: box-shadow .18s ease, border-color .18s ease; }
-                .admin-shell .card:hover { box-shadow: 0 4px 16px rgba(0,0,0,.06); }
+                .admin-shell .card:hover { box-shadow: 0 2px 8px rgba(0,0,0,.05); }
                 .admin-shell table tbody tr { transition: background .12s ease; }
                 .admin-shell table tbody tr:hover td { background: color-mix(in srgb, var(--blue) 5%, transparent); }
                 .admin-shell ::-webkit-scrollbar { width: 9px; height: 9px; }
@@ -1426,7 +1588,7 @@ export default function AdminPanel() {
                 .admin-shell .btn { transition: filter .15s ease, transform .12s ease, box-shadow .15s ease; }
                 .admin-shell .btn:hover { filter: brightness(1.06); }
                 .admin-shell .btn:active { transform: translateY(1px); }
-                .admin-shell .btn-blue { box-shadow: 0 4px 14px rgba(37,99,235,.25); }
+                .admin-shell .btn-blue { box-shadow: 0 4px 14px rgba(47,107,255,.25); }
             `}</style>
 
             {/* Backdrop mobile saat sidebar terbuka */}
@@ -1440,7 +1602,7 @@ export default function AdminPanel() {
                 {/* Logo */}
                 <div style={{ padding: '20px 18px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 9, fontWeight: 800, fontSize: 17, color: 'var(--text)', letterSpacing: '-.3px' }}>
-                        <div style={{ width: 32, height: 32, borderRadius: 9, background: 'linear-gradient(135deg,#3b82f6,#1d4ed8)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 12px rgba(37,99,235,.35), inset 0 1px 0 rgba(255,255,255,.2)' }}>
+                        <div style={{ width: 32, height: 32, borderRadius: 9, background: 'linear-gradient(135deg,#2f6bff,#2456e0)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 12px rgba(47,107,255,.35), inset 0 1px 0 rgba(255,255,255,.2)' }}>
                             <Target size={17} style={{ color: '#fff' }} strokeWidth={2.5} />
                         </div>
                         SuntikSosmed
@@ -1452,7 +1614,7 @@ export default function AdminPanel() {
 
                 {/* Admin badge card */}
                 <div style={{ margin: '0 12px 14px' }}>
-                    <div style={{ background: 'linear-gradient(135deg,#2563EB,#1D4ED8)', borderRadius: 14, padding: '13px 15px', position: 'relative', overflow: 'hidden', boxShadow: '0 4px 12px rgba(37,99,235,.18)' }}>
+                    <div style={{ background: 'linear-gradient(135deg,#1a1d24,#111318)', borderRadius: 14, padding: '13px 15px', position: 'relative', overflow: 'hidden', boxShadow: '0 4px 14px rgba(17,19,24,.28)' }}>
                         <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(120% 140% at 100% 0%, rgba(255,255,255,.1), transparent 55%)', pointerEvents: 'none' }} />
                         <div style={{ position: 'relative', fontSize: 10, color: 'rgba(255,255,255,.7)', fontWeight: 700, letterSpacing: '.07em', marginBottom: 4 }}>ADMIN PANEL</div>
                         <div style={{ position: 'relative', fontSize: 14.5, fontWeight: 800, color: '#fff' }}>Full Access</div>
@@ -1470,7 +1632,7 @@ export default function AdminPanel() {
                         const active = menu === n.id;
                         return (
                             <button key={n.id} onClick={() => { setMenu(n.id); if (isMobile) setSideOpen(false); }}
-                                style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 10, padding: '9px 11px 9px 13px', borderRadius: 10, border: 'none', cursor: 'pointer', background: active ? 'color-mix(in srgb, var(--blue) 12%, transparent)' : 'transparent', color: active ? 'var(--blue)' : 'var(--text2)', fontWeight: active ? 700 : 600, fontSize: 13.5, fontFamily: "'Plus Jakarta Sans',sans-serif", transition: 'background .15s, color .15s', whiteSpace: 'nowrap', textAlign: 'left' }}
+                                style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 10, padding: '9px 11px 9px 13px', borderRadius: 10, border: 'none', cursor: 'pointer', background: active ? 'var(--bg2)' : 'transparent', color: active ? 'var(--text)' : 'var(--text2)', fontWeight: active ? 700 : 600, fontSize: 13.5, fontFamily: "'Inter',sans-serif", transition: 'background .15s, color .15s', whiteSpace: 'nowrap', textAlign: 'left' }}
                                 onMouseEnter={e => { if (!active) e.currentTarget.style.background = 'var(--bg2)'; }}
                                 onMouseLeave={e => { if (!active) e.currentTarget.style.background = 'transparent'; }}>
                                 {active && <span style={{ position: 'absolute', left: 0, top: 6, bottom: 6, width: 3, borderRadius: 3, background: 'var(--blue)' }} />}
@@ -1489,13 +1651,13 @@ export default function AdminPanel() {
 
                 {/* Bottom */}
                 <div style={{ padding: '10px 10px 16px', borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 3 }}>
-                    <button onClick={toggle} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 11px', borderRadius: 9, border: 'none', cursor: 'pointer', background: 'transparent', color: 'var(--text3)', fontSize: 13.5, fontFamily: "'Plus Jakarta Sans',sans-serif", fontWeight: 600, transition: 'background .15s', width: '100%', boxSizing: 'border-box' }}
+                    <button onClick={toggle} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 11px', borderRadius: 9, border: 'none', cursor: 'pointer', background: 'transparent', color: 'var(--text3)', fontSize: 13.5, fontFamily: "'Inter',sans-serif", fontWeight: 600, transition: 'background .15s', width: '100%', boxSizing: 'border-box' }}
                         onMouseEnter={e => e.currentTarget.style.background = 'var(--bg2)'}
                         onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                         {dark ? <Sun size={15} /> : <Moon size={15} />}
                         {dark ? 'Light Mode' : 'Dark Mode'}
                     </button>
-                    <button onClick={logout} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 11px', borderRadius: 9, border: 'none', cursor: 'pointer', background: 'transparent', color: 'var(--red)', fontSize: 13.5, fontFamily: "'Plus Jakarta Sans',sans-serif", fontWeight: 700, transition: 'background .15s', width: '100%', boxSizing: 'border-box' }}
+                    <button onClick={logout} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 11px', borderRadius: 9, border: 'none', cursor: 'pointer', background: 'transparent', color: 'var(--red)', fontSize: 13.5, fontFamily: "'Inter',sans-serif", fontWeight: 700, transition: 'background .15s', width: '100%', boxSizing: 'border-box' }}
                         onMouseEnter={e => e.currentTarget.style.background = 'var(--red-l)'}
                         onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                         <LogOut size={15} /> Sign Out Admin
@@ -1528,14 +1690,15 @@ export default function AdminPanel() {
                     {/* ── OVERVIEW ── */}
                     {menu === 'Overview' && (
                         <div>
-                            <div style={{ marginBottom: 22, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+                            <div style={{ marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
                                 <div>
-                                    <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text)', marginBottom: 3, letterSpacing: '-.3px' }}>Overview</h1>
-                                    <p style={{ fontSize: 13.5, color: 'var(--text2)' }}>Data real-time dari API provider.</p>
+                                    <h1 style={{ fontSize: 20, fontWeight: 700, color: 'var(--text)', marginBottom: 2, letterSpacing: '-.3px' }}>Overview</h1>
+                                    <p style={{ fontSize: 13, color: 'var(--text3)' }}>Data real-time dari API provider.</p>
                                 </div>
+                                <Dropdown width={170} value={statsPeriod} options={PERIOD_OPTIONS} onChange={setStatsPeriod} />
                             </div>
 
-                            {/* ✅ Error banner */}
+                            {/* Error banner */}
                             {overviewError && (
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: 'var(--red-l)', border: '1px solid rgba(239,68,68,.25)', borderRadius: 10, marginBottom: 16, fontSize: 13, color: 'var(--red)', fontWeight: 600 }}>
                                     <AlertCircle size={15} style={{ flexShrink: 0 }} />
@@ -1543,125 +1706,80 @@ export default function AdminPanel() {
                                     <button onClick={() => setOverviewError('')} style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--red)' }}><X size={14} /></button>
                                 </div>
                             )}
-                            {/* ── BENTO: hero revenue + quick stats ── */}
-                            <div className="adm-bento-top" style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr', gap: 14, marginBottom: 14 }}>
-                                {/* Hero — Revenue hari ini */}
-                                <div className="adm-hero-card" style={{ position: 'relative', overflow: 'hidden', borderRadius: 18, padding: '22px 24px', background: 'linear-gradient(135deg, #2563EB 0%, #1D4ED8 55%, #1E3A8A 100%)', color: '#fff', boxShadow: '0 12px 32px rgba(37,99,235,.3), inset 0 1px 0 rgba(255,255,255,.16)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', minHeight: 150 }}>
-                                    <div className="adm-bento-pattern" />
-                                    <div className="adm-bento-glow" />
-                                    <div style={{ position: 'relative', zIndex: 1 }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-                                            <span style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '.1em', color: 'rgba(255,255,255,.8)' }}>REVENUE HARI INI</span>
-                                            <div style={{ width: 36, height: 36, borderRadius: 11, background: 'rgba(255,255,255,.16)', border: '1px solid rgba(255,255,255,.22)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><TrendingUp size={18} /></div>
-                                        </div>
-                                        <div style={{ fontSize: 32, fontWeight: 800, letterSpacing: '-.02em', textShadow: '0 2px 8px rgba(0,0,0,.18)', lineHeight: 1.1 }}>Rp {revenueTodayIDR.toLocaleString('id-ID')}</div>
-                                    </div>
-                                    <div style={{ position: 'relative', zIndex: 1, display: 'flex', gap: 18, marginTop: 14, paddingTop: 14, borderTop: '1px solid rgba(255,255,255,.18)' }}>
-                                        <div>
-                                            <div style={{ fontSize: 19, fontWeight: 800 }}>{ordersToday.length}</div>
-                                            <div style={{ fontSize: 11, color: 'rgba(255,255,255,.7)' }}>Order hari ini</div>
-                                        </div>
-                                        <div>
-                                            <div style={{ fontSize: 19, fontWeight: 800 }}>{users.length}</div>
-                                            <div style={{ fontSize: 11, color: 'rgba(255,255,255,.7)' }}>Total user</div>
-                                        </div>
-                                    </div>
-                                </div>
 
-                                {/* 2 KPI ringkas */}
+                            {/* ── 4 stat cards flat (match desain) ── */}
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 14, marginBottom: 16 }}>
                                 {[
-                                    { label: 'Total Orders', value: orders.length, sub: `${orders.filter(o => o.status?.toLowerCase() === 'completed').length} completed · ${orders.filter(o => o.status?.toLowerCase() === 'processing').length} aktif`, icon: <ShoppingCart size={19} />, iconBg: 'var(--yellow-l)', iconColor: 'var(--yellow)' },
-                                    { label: 'Markup Aktif', value: `${markup}x`, sub: `+${Math.round((markup - 1) * 100)}% keuntungan`, icon: <Percent size={19} />, iconBg: 'rgba(233,30,99,.1)', iconColor: '#E91E63' },
+                                    { label: 'Revenue Hari Ini', value: `Rp ${revenueTodayIDR.toLocaleString('id-ID')}`, icon: <TrendingUp size={16} />, color: 'var(--blue)', filled: 5 },
+                                    { label: 'Total Orders', value: orders.length, icon: <ShoppingCart size={16} />, color: '#0e93c4', filled: 4 },
+                                    { label: 'Total Users', value: users.length, icon: <Users size={16} />, color: 'var(--green)', filled: 6 },
+                                    { label: 'Total Services', value: services.length || '...', icon: <Layers size={16} />, color: '#9f3b5e', filled: 4 },
                                 ].map(s => (
-                                    <div key={s.label} className="card adm-kpi-card" style={{ padding: 18, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', minHeight: 150, borderRadius: 16 }}>
-                                        <div style={{ width: 42, height: 42, borderRadius: 12, background: s.iconBg, color: s.iconColor, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: 'inset 0 0 0 1px rgba(0,0,0,.03)' }}>{s.icon}</div>
-                                        <div>
-                                            <div style={{ fontSize: 26, fontWeight: 800, color: 'var(--text)', letterSpacing: '-.02em', marginBottom: 2 }}>{s.value}</div>
-                                            <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text2)', marginBottom: 2 }}>{s.label}</div>
-                                            <div style={{ fontSize: 11.5, color: 'var(--text3)' }}>{s.sub}</div>
+                                    <div key={s.label} className="card" style={{ padding: '14px 16px' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                            <div style={{ width: 34, height: 34, borderRadius: 9, background: `color-mix(in srgb, ${s.color} 12%, transparent)`, color: s.color, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{s.icon}</div>
+                                            <div style={{ minWidth: 0 }}>
+                                                <div style={{ color: 'var(--text2)', fontSize: 12, fontWeight: 500 }}>{s.label}</div>
+                                                <div style={{ fontSize: 19, fontWeight: 700, color: 'var(--text)', letterSpacing: '-.01em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.value}</div>
+                                            </div>
                                         </div>
+                                        <SegBars color={s.color} filled={s.filled} />
                                     </div>
                                 ))}
                             </div>
 
-                            {/* ── BENTO: saldo provider + total services ── */}
-                            <div className="adm-bento-mid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14, marginBottom: 14 }}>
-                                {[
-                                    ...providerBalanceCards,
-                                    { label: 'Total Services', value: services.length || '...', sub: `${[...new Set(services.map(s => s.category))].length} kategori`, icon: <Layers size={20} />, iconBg: 'var(--green-l)', iconColor: 'var(--green)', badge: `${services.length} layanan` },
-                                ].map((s) => (
-                                    <div key={s.label} className="card adm-kpi-card" style={{ padding: 18, borderRadius: 16 }}>
-                                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 14 }}>
-                                            <div style={{ width: 42, height: 42, borderRadius: 12, background: s.iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center', color: s.iconColor, flexShrink: 0, boxShadow: 'inset 0 0 0 1px rgba(0,0,0,.03)' }}>{s.icon}</div>
-                                            <div style={{ marginLeft: 'auto', fontSize: 10.5, fontWeight: 700, color: s.badge === 'Error' ? 'var(--red)' : 'var(--blue)', background: s.badge === 'Error' ? 'var(--red-l)' : 'var(--blue-l)', padding: '3px 9px', borderRadius: 20 }}>{s.badge}</div>
-                                        </div>
-                                        <div style={{ fontSize: 23, fontWeight: 800, color: 'var(--text)', marginBottom: 2, letterSpacing: '-.02em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.value}</div>
-                                        <div style={{ fontSize: 12, color: 'var(--text2)', fontWeight: 600, marginBottom: 1 }}>{s.label}</div>
-                                        <div style={{ fontSize: 11.5, color: 'var(--text3)' }}>{s.sub}</div>
-                                    </div>
-                                ))}
-                            </div>
-
-                            {/* Revenue Summary */}
-                            <div className="card" style={{ padding: 22, marginBottom: 14, borderRadius: 16 }}>
-                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
-                                    <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text)' }}>Revenue Summary · {statsOrders.length} order</div>
-                                    <Dropdown width={170} value={statsPeriod} options={PERIOD_OPTIONS} onChange={setStatsPeriod} />
-                                </div>
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }}>
+                            {/* ── Revenue summary — satu card, 3 kolom bersih ── */}
+                            <div className="card" style={{ padding: '18px 20px', marginBottom: 16 }}>
+                                <div style={{ fontWeight: 600, fontSize: 13.5, color: 'var(--text)', marginBottom: 14 }}>Revenue Summary · {statsOrders.length} order</div>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 0 }}>
                                     {[
-                                        { l: 'Modal (Harga Provider)', v: `Rp ${statsCostIDR.toLocaleString('id-ID')}`, v2: `${statsOrders.length} order`, c: 'var(--red)' },
-                                        { l: 'Revenue (Harga User)', v: `Rp ${statsRevenueIDR.toLocaleString('id-ID')}`, v2: `${markup}x markup`, c: 'var(--blue)' },
-                                        { l: 'Estimasi Profit', v: `Rp ${statsProfitIDR.toLocaleString('id-ID')}`, v2: `${Math.round((markup - 1) * 100)}% margin`, c: 'var(--green)' },
-                                    ].map(r => (
-                                        <div key={r.l} style={{ background: 'var(--bg2)', borderRadius: 12, padding: '16px 18px', borderLeft: `3px solid ${r.c}` }}>
-                                            <div style={{ fontSize: 12, color: 'var(--text3)', fontWeight: 600, marginBottom: 8 }}>{r.l}</div>
-                                            <div style={{ fontSize: 20, fontWeight: 800, color: r.c, marginBottom: 3 }}>{r.v}</div>
-                                            <div style={{ fontSize: 12, color: 'var(--text3)' }}>{r.v2}</div>
+                                        { l: 'Modal (Provider)', v: `Rp ${statsCostIDR.toLocaleString('id-ID')}`, s: `${statsOrders.length} order`, c: 'var(--red)' },
+                                        { l: 'Revenue (User)', v: `Rp ${statsRevenueIDR.toLocaleString('id-ID')}`, s: `${markup}x markup`, c: 'var(--blue)' },
+                                        { l: 'Estimasi Profit', v: `Rp ${statsProfitIDR.toLocaleString('id-ID')}`, s: `${Math.round((markup - 1) * 100)}% margin`, c: 'var(--green)' },
+                                    ].map((r, i) => (
+                                        <div key={r.l} style={{ padding: '2px 18px', borderLeft: i > 0 ? '1px solid var(--border)' : 'none', paddingLeft: i > 0 ? 18 : 0 }}>
+                                            <div style={{ fontSize: 12, color: 'var(--text3)', fontWeight: 500, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                <span style={{ width: 6, height: 6, borderRadius: '50%', background: r.c }} />{r.l}
+                                            </div>
+                                            <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text)', letterSpacing: '-.01em' }}>{r.v}</div>
+                                            <div style={{ fontSize: 11.5, color: 'var(--text3)', marginTop: 2 }}>{r.s}</div>
                                         </div>
                                     ))}
                                 </div>
                             </div>
 
-                            {/* Quick Stats + API Config */}
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14 }}>
-                                <div className="card" style={{ padding: 20, borderRadius: 16 }}>
-                                    <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text)', marginBottom: 14 }}>Quick Stats</div>
-                                    {[
-                                        { l: 'Services Loaded', v: services.length, c: 'var(--blue)' },
-                                        { l: 'Categories', v: [...new Set(services.map(s => s.category))].length, c: 'var(--blue)' },
-                                        { l: 'Total Orders', v: orders.length, c: 'var(--text)' },
-                                        { l: 'Completed Orders', v: orders.filter(o => o.status?.toLowerCase() === 'completed').length, c: 'var(--green)' },
-                                        { l: 'Active Orders', v: orders.filter(o => o.status?.toLowerCase() === 'processing').length, c: 'var(--yellow)' },
-                                    ].map(r => (
-                                        <div key={r.l} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 4px', borderBottom: '1px solid var(--border)', fontSize: 13, borderRadius: 8, transition: 'background .12s' }}
-                                            onMouseEnter={e => e.currentTarget.style.background = 'var(--bg2)'}
-                                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                                            <span style={{ color: 'var(--text2)', display: 'flex', alignItems: 'center', gap: 8 }}>
-                                                <span style={{ width: 6, height: 6, borderRadius: '50%', background: r.c, flexShrink: 0 }} />
-                                                {r.l}
-                                            </span>
-                                            <span style={{ fontWeight: 800, color: r.c, fontVariantNumeric: 'tabular-nums' }}>{r.v}</span>
+                            {/* ── Saldo provider + API config — 2 kolom list, ringkas ── */}
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 14 }}>
+                                <div className="card" style={{ padding: '18px 20px' }}>
+                                    <div style={{ fontWeight: 600, fontSize: 13.5, color: 'var(--text)', marginBottom: 8 }}>Saldo Provider</div>
+                                    {providerBalanceCards.length === 0 && (
+                                        <p style={{ fontSize: 12.5, color: 'var(--text3)', padding: '10px 0' }}>Memuat saldo provider...</p>
+                                    )}
+                                    {providerBalanceCards.map(p => (
+                                        <div key={p.label} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0', borderBottom: '1px solid var(--border)' }}>
+                                            <div style={{ width: 30, height: 30, borderRadius: 8, background: p.iconBg, color: p.iconColor, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{p.icon}</div>
+                                            <div style={{ minWidth: 0, flex: 1 }}>
+                                                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{p.label}</div>
+                                                <div style={{ fontSize: 11.5, color: 'var(--text3)' }}>{p.sub}</div>
+                                            </div>
+                                            <div style={{ textAlign: 'right' }}>
+                                                <div style={{ fontSize: 13.5, fontWeight: 700, color: p.badge === 'Error' ? 'var(--red)' : 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>{p.value}</div>
+                                                <span style={{ fontSize: 10.5, fontWeight: 600, color: p.badge === 'Error' ? 'var(--red)' : 'var(--green)', background: p.badge === 'Error' ? 'var(--red-l)' : 'var(--green-l)', padding: '2px 8px', borderRadius: 20, display: 'inline-block', marginTop: 2 }}>{p.badge}</span>
+                                            </div>
                                         </div>
                                     ))}
                                 </div>
-                                <div className="card" style={{ padding: 20, borderRadius: 16 }}>
-                                    <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text)', marginBottom: 14 }}>API Configuration</div>
+                                <div className="card" style={{ padding: '18px 20px' }}>
+                                    <div style={{ fontWeight: 600, fontSize: 13.5, color: 'var(--text)', marginBottom: 8 }}>API Configuration</div>
                                     {[
                                         { l: 'Provider URL', v: apiUrl || 'Not set' },
-                                        { l: 'API Key', v: '(server-side only — aman)' },
-                                        { l: 'Admin Password', v: '••••••••••• (server-side)' },
                                         { l: 'Proxy', v: '/api/smm (CORS-safe)' },
                                         { l: 'Markup', v: `${markup}x (${Math.round((markup - 1) * 100)}% profit)` },
                                         { l: 'Kurs USD/IDR', v: `Rp ${rate.toLocaleString('id-ID')}` },
                                     ].map(r => (
-                                        <div key={r.l} style={{ display: 'flex', gap: 12, padding: '9px 4px', borderBottom: '1px solid var(--border)', fontSize: 13, alignItems: 'center', borderRadius: 8, transition: 'background .12s' }}
-                                            onMouseEnter={e => e.currentTarget.style.background = 'var(--bg2)'}
-                                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, width: 140, flexShrink: 0, color: 'var(--text3)', fontWeight: 600 }}>
-                                                <CheckCircle size={12} style={{ color: 'var(--green)', flexShrink: 0 }} />{r.l}
-                                            </div>
-                                            <div style={{ color: 'var(--text)', fontFamily: "'JetBrains Mono',monospace", fontSize: 11.5, wordBreak: 'break-all', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 7, padding: '3px 9px', flex: 1 }}>{r.v}</div>
+                                        <div key={r.l} style={{ display: 'flex', gap: 12, padding: '10px 0', borderBottom: '1px solid var(--border)', fontSize: 12.5, alignItems: 'center' }}>
+                                            <div style={{ width: 120, flexShrink: 0, color: 'var(--text3)', fontWeight: 500 }}>{r.l}</div>
+                                            <div style={{ color: 'var(--text)', fontFamily: "'JetBrains Mono',monospace", fontSize: 11.5, wordBreak: 'break-all' }}>{r.v}</div>
                                         </div>
                                     ))}
                                 </div>
@@ -1823,20 +1941,20 @@ export default function AdminPanel() {
                                             </span>
                                             <div style={{ display: 'flex', gap: 6 }}>
                                                 <button onClick={() => setOrderPage(p => Math.max(0, p - 1))} disabled={safeOrderPage === 0}
-                                                    style={{ padding: '5px 12px', borderRadius: 7, border: '1px solid var(--border)', background: safeOrderPage === 0 ? 'var(--bg2)' : 'var(--white)', color: safeOrderPage === 0 ? 'var(--text3)' : 'var(--text)', cursor: safeOrderPage === 0 ? 'not-allowed' : 'pointer', fontSize: 12, fontWeight: 600, fontFamily: "'Plus Jakarta Sans',sans-serif" }}>
+                                                    style={{ padding: '5px 12px', borderRadius: 7, border: '1px solid var(--border)', background: safeOrderPage === 0 ? 'var(--bg2)' : 'var(--white)', color: safeOrderPage === 0 ? 'var(--text3)' : 'var(--text)', cursor: safeOrderPage === 0 ? 'not-allowed' : 'pointer', fontSize: 12, fontWeight: 600, fontFamily: "'Inter',sans-serif" }}>
                                                     ← Prev
                                                 </button>
                                                 {Array.from({ length: orderPageCount }, (_, idx) => idx)
                                                     .filter(idx => Math.abs(idx - safeOrderPage) <= 2)
                                                     .map(idx => (
                                                         <button key={idx} onClick={() => setOrderPage(idx)}
-                                                            style={{ padding: '5px 10px', borderRadius: 7, border: `1px solid ${idx === safeOrderPage ? 'var(--blue)' : 'var(--border)'}`, background: idx === safeOrderPage ? 'var(--blue)' : 'var(--white)', color: idx === safeOrderPage ? '#fff' : 'var(--text)', cursor: 'pointer', fontSize: 12, fontWeight: 700, fontFamily: "'Plus Jakarta Sans',sans-serif" }}>
+                                                            style={{ padding: '5px 10px', borderRadius: 7, border: `1px solid ${idx === safeOrderPage ? 'var(--blue)' : 'var(--border)'}`, background: idx === safeOrderPage ? 'var(--blue)' : 'var(--white)', color: idx === safeOrderPage ? '#fff' : 'var(--text)', cursor: 'pointer', fontSize: 12, fontWeight: 700, fontFamily: "'Inter',sans-serif" }}>
                                                             {idx + 1}
                                                         </button>
                                                     ))
                                                 }
                                                 <button onClick={() => setOrderPage(p => Math.min(orderPageCount - 1, p + 1))} disabled={safeOrderPage >= orderPageCount - 1}
-                                                    style={{ padding: '5px 12px', borderRadius: 7, border: '1px solid var(--border)', background: safeOrderPage >= orderPageCount - 1 ? 'var(--bg2)' : 'var(--white)', color: safeOrderPage >= orderPageCount - 1 ? 'var(--text3)' : 'var(--text)', cursor: safeOrderPage >= orderPageCount - 1 ? 'not-allowed' : 'pointer', fontSize: 12, fontWeight: 600, fontFamily: "'Plus Jakarta Sans',sans-serif" }}>
+                                                    style={{ padding: '5px 12px', borderRadius: 7, border: '1px solid var(--border)', background: safeOrderPage >= orderPageCount - 1 ? 'var(--bg2)' : 'var(--white)', color: safeOrderPage >= orderPageCount - 1 ? 'var(--text3)' : 'var(--text)', cursor: safeOrderPage >= orderPageCount - 1 ? 'not-allowed' : 'pointer', fontSize: 12, fontWeight: 600, fontFamily: "'Inter',sans-serif" }}>
                                                     Next →
                                                 </button>
                                             </div>
@@ -1915,8 +2033,8 @@ export default function AdminPanel() {
                         <div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                                 <div>
-                                    <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text)', marginBottom: 3 }}>Services</h1>
-                                    <p style={{ fontSize: 13.5, color: 'var(--text2)' }}>{services.length} layanan · markup {markup}x aktif</p>
+                                    <h1 style={{ fontSize: 20, fontWeight: 700, color: 'var(--text)', marginBottom: 2, letterSpacing: '-.3px' }}>Services</h1>
+                                    <p style={{ fontSize: 13, color: 'var(--text3)' }}>{services.length} layanan · markup {markup}x aktif</p>
                                 </div>
                                 <div style={{ display: 'flex', gap: 8 }}>
                                     {services.length > 0 && (
@@ -2083,7 +2201,7 @@ export default function AdminPanel() {
                                                                 return (
                                                                     <button onClick={() => toggleService(s.service, isOff)}
                                                                         title={isOff ? 'Layanan dimatikan — klik untuk aktifkan' : 'Layanan aktif — klik untuk matikan'}
-                                                                        style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 20, border: `1.5px solid ${isOff ? 'var(--red)' : 'var(--green)'}`, background: isOff ? 'var(--red-l)' : 'var(--green-l)', color: isOff ? 'var(--red)' : 'var(--green)', fontWeight: 700, fontSize: 11.5, cursor: 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif", whiteSpace: 'nowrap' }}>
+                                                                        style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 20, border: `1.5px solid ${isOff ? 'var(--red)' : 'var(--green)'}`, background: isOff ? 'var(--red-l)' : 'var(--green-l)', color: isOff ? 'var(--red)' : 'var(--green)', fontWeight: 700, fontSize: 11.5, cursor: 'pointer', fontFamily: "'Inter',sans-serif", whiteSpace: 'nowrap' }}>
                                                                         <span style={{ width: 7, height: 7, borderRadius: '50%', background: isOff ? 'var(--red)' : 'var(--green)' }} />
                                                                         {isOff ? 'Off' : 'On'}
                                                                     </button>
@@ -2103,20 +2221,20 @@ export default function AdminPanel() {
                                             </span>
                                             <div style={{ display: 'flex', gap: 6 }}>
                                                 <button onClick={() => setServicePage(p => Math.max(0, p - 1))} disabled={safeServicePage === 0}
-                                                    style={{ padding: '5px 12px', borderRadius: 7, border: '1px solid var(--border)', background: safeServicePage === 0 ? 'var(--bg2)' : 'var(--white)', color: safeServicePage === 0 ? 'var(--text3)' : 'var(--text)', cursor: safeServicePage === 0 ? 'not-allowed' : 'pointer', fontSize: 12, fontWeight: 600, fontFamily: "'Plus Jakarta Sans',sans-serif" }}>
+                                                    style={{ padding: '5px 12px', borderRadius: 7, border: '1px solid var(--border)', background: safeServicePage === 0 ? 'var(--bg2)' : 'var(--white)', color: safeServicePage === 0 ? 'var(--text3)' : 'var(--text)', cursor: safeServicePage === 0 ? 'not-allowed' : 'pointer', fontSize: 12, fontWeight: 600, fontFamily: "'Inter',sans-serif" }}>
                                                     ← Prev
                                                 </button>
                                                 {Array.from({ length: Math.ceil(filteredSvc.length / SERVICES_PER_PAGE) }, (_, idx) => idx)
                                                     .filter(idx => Math.abs(idx - safeServicePage) <= 2)
                                                     .map(idx => (
                                                         <button key={idx} onClick={() => setServicePage(idx)}
-                                                            style={{ padding: '5px 10px', borderRadius: 7, border: `1px solid ${idx === safeServicePage ? 'var(--blue)' : 'var(--border)'}`, background: idx === safeServicePage ? 'var(--blue)' : 'var(--white)', color: idx === safeServicePage ? '#fff' : 'var(--text)', cursor: 'pointer', fontSize: 12, fontWeight: 700, fontFamily: "'Plus Jakarta Sans',sans-serif" }}>
+                                                            style={{ padding: '5px 10px', borderRadius: 7, border: `1px solid ${idx === safeServicePage ? 'var(--blue)' : 'var(--border)'}`, background: idx === safeServicePage ? 'var(--blue)' : 'var(--white)', color: idx === safeServicePage ? '#fff' : 'var(--text)', cursor: 'pointer', fontSize: 12, fontWeight: 700, fontFamily: "'Inter',sans-serif" }}>
                                                             {idx + 1}
                                                         </button>
                                                     ))
                                                 }
                                                 <button onClick={() => setServicePage(p => Math.min(servicePageCount - 1, p + 1))} disabled={safeServicePage >= servicePageCount - 1}
-                                                    style={{ padding: '5px 12px', borderRadius: 7, border: '1px solid var(--border)', background: safeServicePage >= servicePageCount - 1 ? 'var(--bg2)' : 'var(--white)', color: safeServicePage >= servicePageCount - 1 ? 'var(--text3)' : 'var(--text)', cursor: safeServicePage >= servicePageCount - 1 ? 'not-allowed' : 'pointer', fontSize: 12, fontWeight: 600, fontFamily: "'Plus Jakarta Sans',sans-serif" }}>
+                                                    style={{ padding: '5px 12px', borderRadius: 7, border: '1px solid var(--border)', background: safeServicePage >= servicePageCount - 1 ? 'var(--bg2)' : 'var(--white)', color: safeServicePage >= servicePageCount - 1 ? 'var(--text3)' : 'var(--text)', cursor: safeServicePage >= servicePageCount - 1 ? 'not-allowed' : 'pointer', fontSize: 12, fontWeight: 600, fontFamily: "'Inter',sans-serif" }}>
                                                     Next →
                                                 </button>
                                             </div>
@@ -2139,7 +2257,7 @@ export default function AdminPanel() {
                         const chartData = generateChartData(statsPeriod);
 
                         // Perbandingan periode: periode sebelumnya untuk delta
-                        const PREV_PERIOD_MAP = { today: 'yesterday', '7d': 'prev7d', '30d': 'prev30d', all: null };
+                        const PREV_PERIOD_MAP = { today: 'yesterday', '7d': 'prev7d', '30d': 'prev30d', '90d': 'prev90d', '120d': 'prev120d', all: null };
                         const prevPeriodOrders = (() => {
                             const now = new Date();
                             if (statsPeriod === 'today') {
@@ -2155,6 +2273,16 @@ export default function AdminPanel() {
                             if (statsPeriod === '30d') {
                                 const start = new Date(now); start.setDate(start.getDate() - 60);
                                 const end = new Date(now); end.setDate(end.getDate() - 30);
+                                return orders.filter(o => o.created_at && new Date(o.created_at) >= start && new Date(o.created_at) < end);
+                            }
+                            if (statsPeriod === '90d') {
+                                const start = new Date(now); start.setDate(start.getDate() - 180);
+                                const end = new Date(now); end.setDate(end.getDate() - 90);
+                                return orders.filter(o => o.created_at && new Date(o.created_at) >= start && new Date(o.created_at) < end);
+                            }
+                            if (statsPeriod === '120d') {
+                                const start = new Date(now); start.setDate(start.getDate() - 240);
+                                const end = new Date(now); end.setDate(end.getDate() - 120);
                                 return orders.filter(o => o.created_at && new Date(o.created_at) >= start && new Date(o.created_at) < end);
                             }
                             return [];
@@ -2253,32 +2381,32 @@ export default function AdminPanel() {
                             <div>
                                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 22, flexWrap: 'wrap', gap: 10 }}>
                                     <div>
-                                        <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text)', marginBottom: 3 }}>Revenue Stats</h1>
-                                        <p style={{ fontSize: 13.5, color: 'var(--text2)' }}>Estimasi pendapatan vs user baru · markup {markup}x aktif.</p>
+                                        <h1 style={{ fontSize: 20, fontWeight: 700, color: 'var(--text)', marginBottom: 2, letterSpacing: '-.3px' }}>Revenue Stats</h1>
+                                        <p style={{ fontSize: 13, color: 'var(--text3)' }}>Estimasi pendapatan vs user baru · markup {markup}x aktif.</p>
                                     </div>
                                     <Dropdown width={170} value={statsPeriod} options={PERIOD_OPTIONS} onChange={setStatsPeriod} />
                                 </div>
 
-                                {/* Stat cards dengan delta periode sebelumnya */}
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16, marginBottom: 20 }}>
+                                {/* Stat cards flat — match desain Overview (icon kecil + SegBars) */}
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 14, marginBottom: 16 }}>
                                     {[
-                                        { l: 'Total Modal', v: `Rp ${statsCostIDR.toLocaleString('id-ID')}`, prev: prevCostIDR, cur: statsCostIDR, v2: `${statsOrders.length} order`, c: 'var(--red)', iconBg: 'var(--red-l)', icon: <DollarSign size={20} /> },
-                                        { l: 'Total Revenue', v: `Rp ${statsRevenueIDR.toLocaleString('id-ID')}`, prev: prevRevenueIDR, cur: statsRevenueIDR, v2: `Markup ${markup}x`, c: 'var(--blue)', iconBg: 'var(--blue-l)', icon: <TrendingUp size={20} /> },
-                                        { l: 'Estimasi Profit', v: `Rp ${statsProfitIDR.toLocaleString('id-ID')}`, prev: prevProfitIDR, cur: statsProfitIDR, v2: `Margin ${Math.round((markup - 1) * 100)}%`, c: 'var(--green)', iconBg: 'var(--green-l)', icon: <Zap size={20} /> },
+                                        { l: 'Total Modal', v: `Rp ${statsCostIDR.toLocaleString('id-ID')}`, prev: prevCostIDR, cur: statsCostIDR, v2: `${statsOrders.length} order`, c: 'var(--red)', icon: <DollarSign size={16} />, filled: 4 },
+                                        { l: 'Total Revenue', v: `Rp ${statsRevenueIDR.toLocaleString('id-ID')}`, prev: prevRevenueIDR, cur: statsRevenueIDR, v2: `Markup ${markup}x`, c: 'var(--blue)', icon: <TrendingUp size={16} />, filled: 5 },
+                                        { l: 'Estimasi Profit', v: `Rp ${statsProfitIDR.toLocaleString('id-ID')}`, prev: prevProfitIDR, cur: statsProfitIDR, v2: `Margin ${Math.round((markup - 1) * 100)}%`, c: 'var(--green)', icon: <Zap size={16} />, filled: 6 },
                                     ].map(s => (
-                                        <div key={s.l} className="card" style={{ padding: 22 }}>
-                                            <div style={{ width: 42, height: 42, borderRadius: 12, background: s.iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center', color: s.c, marginBottom: 14 }}>{s.icon}</div>
-                                            <div style={{ display: 'flex', alignItems: 'baseline', flexWrap: 'wrap', gap: 4, marginBottom: 4 }}>
-                                                <div style={{ fontSize: 22, fontWeight: 800, color: s.c }}>{s.v}</div>
-                                                <DeltaBadge cur={s.cur} prev={s.prev} />
-                                            </div>
-                                            <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 2 }}>{s.l}</div>
-                                            <div style={{ fontSize: 12, color: 'var(--text3)' }}>{s.v2}</div>
-                                            {statsPeriod !== 'all' && prevRevenueIDR > 0 && (
-                                                <div style={{ fontSize: 10.5, color: 'var(--text3)', marginTop: 4 }}>
-                                                    Periode sebelumnya: Rp {(s.l === 'Total Modal' ? prevCostIDR : s.l === 'Total Revenue' ? prevRevenueIDR : prevProfitIDR).toLocaleString('id-ID')}
+                                        <div key={s.l} className="card" style={{ padding: '14px 16px' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                                <div style={{ width: 34, height: 34, borderRadius: 9, background: `color-mix(in srgb, ${s.c} 12%, transparent)`, color: s.c, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{s.icon}</div>
+                                                <div style={{ minWidth: 0, flex: 1 }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                        <span style={{ color: 'var(--text2)', fontSize: 12, fontWeight: 500 }}>{s.l}</span>
+                                                        <DeltaBadge cur={s.cur} prev={s.prev} />
+                                                    </div>
+                                                    <div style={{ fontSize: 19, fontWeight: 700, color: 'var(--text)', letterSpacing: '-.01em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.v}</div>
                                                 </div>
-                                            )}
+                                            </div>
+                                            <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 8 }}>{s.v2}</div>
+                                            <SegBars color={s.c} filled={s.filled} />
                                         </div>
                                     ))}
                                 </div>
@@ -2287,14 +2415,14 @@ export default function AdminPanel() {
                                 <div className="card" style={{ padding: 24, marginBottom: 20 }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
                                         <div>
-                                            <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text)' }}>Pendapatan & User Baru</div>
+                                            <div style={{ fontWeight: 600, fontSize: 13.5, color: 'var(--text)' }}>Pendapatan & User Baru</div>
                                             <div style={{ fontSize: 12.5, color: 'var(--text3)', marginTop: 2 }}>
                                                 {PERIOD_OPTIONS.find(o => o.value === statsPeriod)?.label} · data real order
                                             </div>
                                         </div>
                                         <div style={{ textAlign: 'right' }}>
                                             <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--blue)' }}>
-                                                Rp {chartData.reduce((s, d) => s + d.revenue, 0).toLocaleString('id-ID')}
+                                                Rp {chartData.reduce((s, d) => s + (d._rawRevenue ?? d.revenue), 0).toLocaleString('id-ID')}
                                             </div>
                                             <div style={{ fontSize: 11.5, color: 'var(--text3)' }}>Total periode ini</div>
                                         </div>
@@ -2306,13 +2434,13 @@ export default function AdminPanel() {
                                         margin={{ top: 20, right: 56, bottom: 40, left: 60 }}
                                     >
                                         <Grid horizontal />
-                                        <Area dataKey="revenue" fill="#2563EB" stroke="#2563EB" fillOpacity={0.25} strokeWidth={2.5} />
+                                        <Area dataKey="revenue" fill="#2f6bff" stroke="#2f6bff" fillOpacity={0.25} strokeWidth={2.5} />
                                         <Area dataKey="newUsers" secondary fill="#10B981" stroke="#10B981" fillOpacity={0.2} strokeWidth={2} />
                                         <XAxis numTicks={6} />
                                         <YAxis numTicks={5} formatValue={(v) => v >= 1000000 ? `${(v / 1000000).toFixed(1)}jt` : v >= 1000 ? `${Math.round(v / 1000)}rb` : Math.round(v).toLocaleString('id-ID')} />
                                         <YAxis secondary numTicks={5} formatValue={(v) => `${Math.round(v)}`} />
                                         <ChartTooltip rows={(point) => [
-                                            { color: '#2563EB', label: 'Pendapatan', value: `Rp ${Number(point.revenue).toLocaleString('id-ID')}` },
+                                            { color: '#2f6bff', label: 'Pendapatan', value: `Rp ${Number(point._rawRevenue ?? point.revenue).toLocaleString('id-ID')}` },
                                             { color: '#10B981', label: 'User Baru', value: `${point._rawUsers ?? 0} orang` },
                                         ]} />
                                     </AreaChart>
@@ -2322,7 +2450,7 @@ export default function AdminPanel() {
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 16, marginBottom: 20 }}>
                                     {/* Provider breakdown */}
                                     <div className="card" style={{ padding: 22 }}>
-                                        <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text)', marginBottom: 16 }}>Breakdown per Provider</div>
+                                        <div style={{ fontWeight: 600, fontSize: 13.5, color: 'var(--text)', marginBottom: 16 }}>Breakdown per Provider</div>
                                         {providerBreakdown.length === 0 ? (
                                             <p style={{ fontSize: 13, color: 'var(--text3)' }}>Belum ada order pada periode ini.</p>
                                         ) : (
@@ -2349,7 +2477,7 @@ export default function AdminPanel() {
 
                                     {/* Pie chart status order */}
                                     <div className="card" style={{ padding: 22 }}>
-                                        <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text)', marginBottom: 16 }}>Distribusi Status Order</div>
+                                        <div style={{ fontWeight: 600, fontSize: 13.5, color: 'var(--text)', marginBottom: 16 }}>Distribusi Status Order</div>
                                         {statusBreakdown.length === 0 ? (
                                             <p style={{ fontSize: 13, color: 'var(--text3)' }}>Belum ada order pada periode ini.</p>
                                         ) : (
@@ -2372,7 +2500,7 @@ export default function AdminPanel() {
 
                                 {/* Simulasi Markup */}
                                 <div className="card" style={{ padding: 22 }}>
-                                    <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text)', marginBottom: 16 }}>Simulasi Markup</div>
+                                    <div style={{ fontWeight: 600, fontSize: 13.5, color: 'var(--text)', marginBottom: 16 }}>Simulasi Markup</div>
                                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 12 }}>
                                         {[1.2, 1.3, 1.5, 2].map(m => {
                                             const rev = Math.round(totalCostIDR * m);
@@ -2402,19 +2530,19 @@ export default function AdminPanel() {
                     {menu === 'Markup' && (
                         <div>
                             <div style={{ marginBottom: 24 }}>
-                                <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text)', marginBottom: 4 }}>Markup Settings</h1>
-                                <p style={{ fontSize: 13.5, color: 'var(--text2)' }}>Set keuntungan dari harga modal ke harga yang ditampilkan ke user.</p>
+                                <h1 style={{ fontSize: 20, fontWeight: 700, color: 'var(--text)', marginBottom: 2, letterSpacing: '-.3px' }}>Markup Settings</h1>
+                                <p style={{ fontSize: 13, color: 'var(--text3)' }}>Set keuntungan dari harga modal ke harga yang ditampilkan ke user.</p>
                             </div>
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 24 }}>
                                 <div className="card" style={{ padding: 30 }}>
-                                    <div style={{ fontWeight: 800, fontSize: 15, color: 'var(--text)', marginBottom: 4 }}>Set Markup Multiplier</div>
+                                    <div style={{ fontWeight: 600, fontSize: 13.5, color: 'var(--text)', marginBottom: 4 }}>Set Markup Multiplier</div>
                                     <p style={{ fontSize: 12.5, color: 'var(--text3)', marginBottom: 22 }}>Berlaku untuk semua layanan kecuali yang punya override.</p>
                                     <label style={{ display: 'block', fontSize: 11.5, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: 10 }}>Multiplier (2 = 2× harga modal)</label>
                                     <input className="inp" type="number" step="0.1" min="1" style={{ fontSize: 30, fontWeight: 800, textAlign: 'center', padding: '18px 14px', marginBottom: 18 }} value={markupInput} onChange={e => setMarkupInput(e.target.value)} />
                                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 9, marginBottom: 24 }}>
                                         {[1.1, 1.15, 1.2, 1.3, 1.5, 2].map(m => (
                                             <button key={m} onClick={() => setMarkupInput(String(m))}
-                                                style={{ padding: '11px 0', borderRadius: 11, border: `1.5px solid ${markupInput === String(m) ? 'var(--blue)' : 'var(--border)'}`, background: markupInput === String(m) ? 'var(--blue)' : 'transparent', color: markupInput === String(m) ? '#fff' : 'var(--text2)', fontWeight: 700, fontSize: 14, cursor: 'pointer', fontFamily: "'Plus Jakarta Sans',sans-serif", transition: 'all .15s' }}>
+                                                style={{ padding: '11px 0', borderRadius: 11, border: `1.5px solid ${markupInput === String(m) ? 'var(--blue)' : 'var(--border)'}`, background: markupInput === String(m) ? 'var(--blue)' : 'transparent', color: markupInput === String(m) ? '#fff' : 'var(--text2)', fontWeight: 700, fontSize: 14, cursor: 'pointer', fontFamily: "'Inter',sans-serif", transition: 'all .15s' }}>
                                                 {m}×
                                             </button>
                                         ))}
@@ -2431,7 +2559,7 @@ export default function AdminPanel() {
                                 </div>
                                 <div className="card" style={{ padding: 30 }}>
                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-                                        <div style={{ fontWeight: 800, fontSize: 15, color: 'var(--text)' }}>Preview Harga</div>
+                                        <div style={{ fontWeight: 600, fontSize: 13.5, color: 'var(--text)' }}>Preview Harga</div>
                                         <span style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--blue)', background: 'var(--blue-l)', padding: '4px 10px', borderRadius: 20 }}>{markupInput}× markup</span>
                                     </div>
                                     <p style={{ fontSize: 12.5, color: 'var(--text3)', marginBottom: 14 }}>Contoh perhitungan harga jadi ke user.</p>
@@ -2461,7 +2589,7 @@ export default function AdminPanel() {
                             <div className="card" style={{ padding: 30, marginTop: 24 }}>
                                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 6, flexWrap: 'wrap', gap: 12 }}>
                                     <div>
-                                        <div style={{ fontWeight: 800, fontSize: 15, color: 'var(--text)', marginBottom: 4 }}>Markup per Kategori / Service</div>
+                                        <div style={{ fontWeight: 600, fontSize: 13.5, color: 'var(--text)', marginBottom: 4 }}>Markup per Kategori / Service</div>
                                         <p style={{ fontSize: 12.5, color: 'var(--text3)', maxWidth: 520 }}>Kosongkan untuk pakai markup global ({markup}×). Prioritas: <b style={{ color: 'var(--text2)' }}>service → kategori → provider → global</b>.</p>
                                     </div>
                                     <button className="btn btn-blue" onClick={saveMarkupRules} disabled={savingRules} style={{ padding: '10px 18px', borderRadius: 11, fontSize: 13.5, opacity: savingRules ? 0.6 : 1, flexShrink: 0 }}>
@@ -2533,7 +2661,7 @@ export default function AdminPanel() {
                                             return (s.name?.toLowerCase().includes(q) || String(s.service).toLowerCase().includes(q) || serviceCode(s).toLowerCase().includes(q)) && rulesDraft.services[String(s.service)] == null;
                                         }).slice(0, 20).map(s => (
                                             <button key={s.service} onClick={() => { setRulesDraft(d => ({ ...d, services: { ...d.services, [String(s.service)]: resolveMarkup(s) } })); setSvcOverrideSearch(''); }}
-                                                style={{ display: 'flex', width: '100%', alignItems: 'center', gap: 10, padding: '11px 14px', border: 'none', borderBottom: '1px solid var(--border)', background: 'transparent', cursor: 'pointer', textAlign: 'left', fontFamily: "'Plus Jakarta Sans',sans-serif" }}>
+                                                style={{ display: 'flex', width: '100%', alignItems: 'center', gap: 10, padding: '11px 14px', border: 'none', borderBottom: '1px solid var(--border)', background: 'transparent', cursor: 'pointer', textAlign: 'left', fontFamily: "'Inter',sans-serif" }}>
                                                 <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 11, color: 'var(--text3)', flexShrink: 0 }} title={s.service}>{serviceCode(s)}</span>
                                                 <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</span>
                                                 <span style={{ fontSize: 11, color: 'var(--blue)', fontWeight: 700, flexShrink: 0 }}>+ override</span>
@@ -2602,8 +2730,8 @@ export default function AdminPanel() {
                             <div>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, gap: 10, flexWrap: 'wrap' }}>
                                     <div>
-                                        <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text)', marginBottom: 3 }}>Audit Log</h1>
-                                        <p style={{ fontSize: 13.5, color: 'var(--text2)' }}>Riwayat aktivitas admin · 200 terbaru.</p>
+                                        <h1 style={{ fontSize: 20, fontWeight: 700, color: 'var(--text)', marginBottom: 2, letterSpacing: '-.3px' }}>Audit Log</h1>
+                                        <p style={{ fontSize: 13, color: 'var(--text3)' }}>Riwayat aktivitas admin · 200 terbaru.</p>
                                     </div>
                                     <div style={{ display: 'flex', gap: 8 }}>
                                         <button className="btn btn-outline" onClick={loadAuditLogs} disabled={loadingAudit}
@@ -2680,11 +2808,11 @@ export default function AdminPanel() {
                     {menu === 'Settings' && (
                         <div>
                             <div style={{ marginBottom: 20 }}>
-                                <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text)', marginBottom: 3 }}>Settings</h1>
-                                <p style={{ fontSize: 13.5, color: 'var(--text2)' }}>Konfigurasi sistem admin panel.</p>
+                                <h1 style={{ fontSize: 20, fontWeight: 700, color: 'var(--text)', marginBottom: 2, letterSpacing: '-.3px' }}>Settings</h1>
+                                <p style={{ fontSize: 13, color: 'var(--text3)' }}>Konfigurasi sistem admin panel.</p>
                             </div>
                             <div className="card" style={{ padding: 22, marginBottom: 16 }}>
-                                <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text)', marginBottom: 14 }}>Informasi Sistem</div>
+                                <div style={{ fontWeight: 600, fontSize: 13.5, color: 'var(--text)', marginBottom: 14 }}>Informasi Sistem</div>
                                 {[
                                     { l: 'Framework', v: 'Next.js 14 (Pages Router)' },
                                     { l: 'Provider', v: providerBalances.length ? providerBalances.map(p => p.label || p.key).join(', ') : 'SMMSOC' },
@@ -2702,7 +2830,7 @@ export default function AdminPanel() {
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 16, marginBottom: 16 }}>
                                 {/* Edit Kurs */}
                                 <div className="card" style={{ padding: 22 }}>
-                                    <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text)', marginBottom: 6 }}>Kurs USD/IDR</div>
+                                    <div style={{ fontWeight: 600, fontSize: 13.5, color: 'var(--text)', marginBottom: 6 }}>Kurs USD/IDR</div>
                                     <p style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 14 }}>Saat ini: Rp {rate.toLocaleString('id-ID')}. Ubah jika ingin override kurs manual.</p>
                                     <input className="inp" inputMode="numeric" placeholder={`Rp ${rate.toLocaleString('id-ID')}`} value={rateInput} onChange={e => setRateInput(e.target.value)} style={{ marginBottom: 12 }} />
                                     <button className="btn btn-blue" onClick={saveRate} disabled={savingRate} style={{ width: '100%', padding: 11, borderRadius: 10, opacity: savingRate ? 0.6 : 1 }}>
@@ -2711,7 +2839,7 @@ export default function AdminPanel() {
                                 </div>
                                 {/* Ganti Password */}
                                 <div className="card" style={{ padding: 22 }}>
-                                    <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text)', marginBottom: 14 }}>Ganti Password Admin</div>
+                                    <div style={{ fontWeight: 600, fontSize: 13.5, color: 'var(--text)', marginBottom: 14 }}>Ganti Password Admin</div>
                                     <input className="inp" type="password" placeholder="Password saat ini" autoComplete="current-password" value={pwForm.current} onChange={e => setPwForm(f => ({ ...f, current: e.target.value }))} style={{ marginBottom: 10 }} />
                                     <input className="inp" type="password" placeholder="Password baru (min. 6 karakter)" autoComplete="new-password" value={pwForm.next} onChange={e => setPwForm(f => ({ ...f, next: e.target.value }))} style={{ marginBottom: 10 }} />
                                     <input className="inp" type="password" placeholder="Konfirmasi password baru" autoComplete="new-password" value={pwForm.confirm} onChange={e => setPwForm(f => ({ ...f, confirm: e.target.value }))} style={{ marginBottom: 12 }} />
@@ -2724,7 +2852,7 @@ export default function AdminPanel() {
                             <div className="card" style={{ padding: 22, marginBottom: 16 }}>
                                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6, flexWrap: 'wrap', gap: 8 }}>
                                     <div>
-                                        <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text)' }}>Bonus Deposit Bertingkat</div>
+                                        <div style={{ fontWeight: 600, fontSize: 13.5, color: 'var(--text)' }}>Bonus Deposit Bertingkat</div>
                                         <p style={{ fontSize: 12, color: 'var(--text3)', marginTop: 3 }}>Makin besar deposit, makin besar bonus. Berlaku untuk QRIS & crypto.</p>
                                     </div>
                                     <button onClick={addTier} className="btn btn-outline" style={{ padding: '7px 14px', borderRadius: 9, fontSize: 12.5 }}>

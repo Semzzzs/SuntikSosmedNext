@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { DollarSign, Users, MinusCircle, Ban, CheckCircle, History, ArrowDownCircle, ArrowUpCircle, ShoppingCart, Gift, RefreshCw } from 'lucide-react';
+import { DollarSign, Users, MinusCircle, Ban, CheckCircle, ArrowDownCircle, ArrowUpCircle, ShoppingCart, ChevronLeft, ChevronRight, Search } from 'lucide-react';
 
 const adminFetch = async (url, opts = {}) => {
     const res = await fetch(url, {
@@ -39,6 +39,54 @@ async function getAllBalances(emails) {
     // clamp ke 0
     for (const k of Object.keys(map)) map[k] = Math.max(0, map[k]);
     return map;
+}
+
+// ── SegBars — segmented progress bar (match desain admin) ──
+function SegBars({ color = 'var(--blue)', filled = 4, total = 6 }) {
+    return (
+        <div style={{ display: 'flex', gap: 4, marginTop: 12 }}>
+            {Array.from({ length: total }).map((_, i) => (
+                <i key={i} style={{ height: 4, flex: 1, borderRadius: 99, background: i < filled ? color : 'var(--border)' }} />
+            ))}
+        </div>
+    );
+}
+
+// ── Pagination — match footer tabel di desain ──
+function Pagination({ page, totalPages, perPage, setPerPage, setPage, totalItems }) {
+    const pages = [];
+    for (let i = 0; i < totalPages; i++) {
+        if (i === 0 || i === totalPages - 1 || Math.abs(i - page) <= 1) pages.push(i);
+        else if (pages[pages.length - 1] !== '…') pages.push('…');
+    }
+    const from = totalItems === 0 ? 0 : page * perPage + 1;
+    const to = Math.min((page + 1) * perPage, totalItems);
+    const pageBtn = (active) => ({
+        minWidth: 28, height: 28, border: active ? '1px solid var(--border)' : 'none',
+        background: active ? 'var(--white)' : 'none', borderRadius: 7,
+        fontSize: 12.5, fontWeight: active ? 600 : 500, color: active ? 'var(--text)' : 'var(--text2)',
+        cursor: 'pointer', fontFamily: 'inherit', boxShadow: active ? '0 1px 2px rgba(0,0,0,.05)' : 'none',
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+    });
+    return (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 14, flexWrap: 'wrap' }}>
+            <button style={pageBtn(false)} disabled={page === 0} onClick={() => setPage(p => Math.max(0, p - 1))}><ChevronLeft size={13} /></button>
+            {pages.map((p, i) => p === '…'
+                ? <span key={`e${i}`} style={{ color: 'var(--text3)', fontSize: 12.5, padding: '0 2px' }}>…</span>
+                : <button key={p} style={pageBtn(p === page)} onClick={() => setPage(p)}>{p + 1}</button>
+            )}
+            <button style={pageBtn(false)} disabled={page >= totalPages - 1} onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}><ChevronRight size={13} /></button>
+            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text2)', fontSize: 12.5 }}>
+                Show:
+                <select value={perPage} onChange={e => { setPerPage(Number(e.target.value)); setPage(0); }}
+                    style={{ border: '1px solid var(--border)', borderRadius: 7, padding: '4px 6px', fontSize: 12, fontFamily: 'inherit', color: 'var(--text)', background: 'var(--white)', outline: 'none', cursor: 'pointer' }}>
+                    {[10, 25, 50].map(n => <option key={n} value={n}>{n}</option>)}
+                </select>
+                Per Page
+                <span>{from} - {to} dari {totalItems}</span>
+            </div>
+        </div>
+    );
 }
 
 export default function AdminUsers() {
@@ -256,415 +304,350 @@ export default function AdminUsers() {
     const txColor = (type) => ['deposit', 'bonus', 'refund'].includes(type) ? 'var(--green)' : 'var(--red)';
 
     const [search, setSearch] = useState('');
+    const [page, setPage] = useState(0);
+    const [perPage, setPerPage] = useState(10);
+    useEffect(() => { setPage(0); }, [search]);
+
     const filteredUsers = users.filter(u =>
         !search || u.email?.toLowerCase().includes(search.toLowerCase()) || u.name?.toLowerCase().includes(search.toLowerCase())
     );
+    const totalPages = Math.max(1, Math.ceil(filteredUsers.length / perPage));
+    const pagedUsers = filteredUsers.slice(page * perPage, (page + 1) * perPage);
+
+    const totalSaldo = Object.values(balances).reduce((s, v) => s + Math.max(0, v || 0), 0);
+    const blockedCount = users.filter(u => u.blocked).length;
+
+    // ── Gaya bersama (match desain admin page) ──
+    const ghostBtn = (color, bg) => ({
+        display: 'inline-flex', alignItems: 'center', gap: 5,
+        fontSize: 11.5, fontWeight: 600, padding: '5px 10px', borderRadius: 7,
+        cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
+        border: '1px solid var(--border)', background: 'var(--white)', color,
+    });
+    const pill = (color, bg) => ({
+        display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 600,
+        padding: '3px 9px', borderRadius: 99, whiteSpace: 'nowrap', color, background: bg,
+    });
 
     return (
         <div>
             <style dangerouslySetInnerHTML={{
                 __html: `
-                @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap');
-
-                .admin-users-wrap { font-family: 'Inter', sans-serif; }
-
-                /* ── Header ── */
-                .au-header {
-                    display: flex;
-                    align-items: center;
-                    justify-content: space-between;
-                    margin-bottom: 22px;
-                    gap: 16px;
-                    flex-wrap: wrap;
-                    padding-bottom: 18px;
-                    border-bottom: 1px solid var(--border);
-                }
-                .au-title { display: flex; align-items: center; font-size: 22px; font-weight: 800; color: var(--text); letter-spacing: -.4px; margin: 0 0 4px; }
-                .au-subtitle { font-size: 13px; color: var(--text3); margin: 0; font-weight: 500; }
-                .au-badge {
-                    display: inline-flex;
-                    align-items: center;
-                    gap: 5px;
-                    font-size: 11px;
-                    font-weight: 700;
-                    color: var(--blue);
-                    background: color-mix(in srgb, var(--blue) 10%, transparent);
-                    border: 1px solid color-mix(in srgb, var(--blue) 22%, transparent);
-                    padding: 4px 11px;
-                    border-radius: 20px;
-                    margin-left: 12px;
-                    vertical-align: middle;
-                }
-                .au-search-wrap { position: relative; }
-                .au-search-wrap svg.search-ic { position: absolute; left: 13px; top: 50%; transform: translateY(-50%); color: var(--text3); pointer-events: none; }
-                .au-search { 
-                    padding: 10px 14px 10px 38px; 
-                    border-radius: 24px; 
-                    border: 1.5px solid var(--border); 
-                    background: var(--bg2); 
-                    color: var(--text);
-                    font-size: 13px;
-                    font-family: 'Inter', sans-serif;
-                    font-weight: 500;
-                    width: 260px;
-                    outline: none;
-                    transition: border-color .15s, box-shadow .15s, width .15s;
-                }
-                .au-search:focus { border-color: var(--blue); box-shadow: 0 0 0 4px color-mix(in srgb, var(--blue) 14%, transparent); width: 300px; }
-                .au-search::placeholder { color: var(--text3); }
-
-                /* ── Table ── */
-                .au-table-wrap { border-radius: 16px; border: 1px solid var(--border); overflow: hidden; background: var(--bg); box-shadow: 0 1px 2px rgba(0,0,0,.06); }
-                .au-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-                .au-thead th {
-                    padding: 13px 16px;
-                    text-align: left;
-                    font-size: 10.5px;
-                    font-weight: 700;
-                    color: var(--text3);
-                    letter-spacing: .07em;
-                    text-transform: uppercase;
-                    background: var(--bg2);
-                    border-bottom: 1px solid var(--border);
-                    white-space: nowrap;
-                }
-                .usr-tr { cursor: pointer; transition: background .12s; }
-                .usr-tr:hover td { background: color-mix(in srgb, var(--blue) 6%, var(--bg2)); }
-                .au-td { padding: 14px 16px; border-bottom: 1px solid var(--border); vertical-align: middle; }
-                .usr-tr:last-child .au-td { border-bottom: none; }
-
-                /* Avatar */
-                .au-avatar {
-                    width: 38px; height: 38px;
-                    border-radius: 11px;
-                    display: flex; align-items: center; justify-content: center;
-                    font-weight: 800; font-size: 14px; color: #fff; flex-shrink: 0;
-                    background: linear-gradient(135deg, #2563eb, #1d4ed8);
-                    box-shadow: inset 0 1px 0 rgba(255,255,255,.12);
-                }
-                .au-avatar.blocked { background: linear-gradient(135deg, #6b7280, #4b5563); box-shadow: inset 0 1px 0 rgba(255,255,255,.1); }
-                .au-name { font-weight: 700; color: var(--text); font-size: 13.5px; }
-                .au-email { color: var(--text2); font-family: 'JetBrains Mono', monospace; font-size: 11.5px; letter-spacing: -.2px; }
-                .au-balance { font-weight: 800; color: var(--green); font-size: 13.5px; font-variant-numeric: tabular-nums; }
-
-                /* Status pill */
-                .au-pill { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700; padding: 4px 11px; border-radius: 20px; white-space: nowrap; }
-                .au-pill-active { color: var(--green); background: var(--green-l); border: 1px solid color-mix(in srgb, var(--green) 18%, transparent); }
-                .au-pill-blocked { color: var(--red); background: var(--red-l); border: 1px solid color-mix(in srgb, var(--red) 18%, transparent); }
-
-                /* Action buttons */
-                .usr-act {
-                    display: inline-flex; align-items: center; gap: 5px;
-                    font-size: 11.5px; font-weight: 700;
-                    padding: 7px 12px; border-radius: 9px; cursor: pointer;
-                    font-family: 'Inter', sans-serif;
-                    transition: filter .15s, box-shadow .15s;
-                    white-space: nowrap;
-                }
-                .usr-act:hover { filter: brightness(1.04); box-shadow: 0 2px 6px rgba(0,0,0,.1); }
-                .usr-act:active { filter: brightness(0.98); box-shadow: none; }
-
-                /* ── Detail Modal ── */
-                .au-modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.68); backdrop-filter: blur(6px); z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 20px; animation: fadeIn .15s ease; }
-                .au-modal { background: var(--bg); border-radius: 22px; width: 100%; max-width: 460px; overflow: hidden; box-shadow: 0 30px 90px rgba(0,0,0,.5); border: 1px solid var(--border); animation: popIn .18s cubic-bezier(.2,.9,.3,1); }
-                .au-modal-header { padding: 26px 26px 22px; display: flex; align-items: center; gap: 16px; position: relative; overflow: hidden; }
-                .au-modal-header::after { content: ''; position: absolute; inset: 0; background: radial-gradient(120% 140% at 100% 0%, rgba(255,255,255,.14), transparent 55%); pointer-events: none; }
-                .au-modal-avatar { width: 54px; height: 54px; border-radius: 15px; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 22px; color: #fff; flex-shrink: 0; background: rgba(255,255,255,.18); border: 1px solid rgba(255,255,255,.25); box-shadow: inset 0 1px 0 rgba(255,255,255,.2); position: relative; z-index: 1; }
-                .au-modal-name { font-size: 17.5px; font-weight: 800; color: #fff; margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; position: relative; z-index: 1; }
-                .au-modal-email { font-size: 12px; color: rgba(255,255,255,.8); font-family: 'JetBrains Mono', monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; position: relative; z-index: 1; }
-                .au-modal-body { padding: 22px 24px 24px; }
-                .au-stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 18px; }
-                .au-stat { background: var(--bg2); border: 1px solid var(--border); border-radius: 14px; padding: 15px 10px; text-align: center; transition: border-color .15s, transform .15s; }
-                .au-stat:hover { border-color: color-mix(in srgb, var(--blue) 30%, var(--border)); transform: translateY(-1px); }
-                .au-stat-label { font-size: 10px; font-weight: 700; color: var(--text3); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 7px; }
-                .au-stat-val { font-size: 13px; font-weight: 800; line-height: 1.2; word-break: break-word; }
-                .au-meta-row { display: flex; align-items: center; justify-content: space-between; font-size: 12.5px; color: var(--text3); margin-bottom: 18px; }
-                .au-actions-row { display: flex; gap: 8px; margin-bottom: 16px; }
-                .au-divider { border: none; border-top: 1px solid var(--border); margin: 0 0 16px; }
-                .au-tx-toggle { width: 100%; display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-radius: 12px; border: 1.5px solid var(--border); background: var(--bg2); color: var(--text2); font-weight: 700; font-size: 13px; cursor: pointer; font-family: 'Inter',sans-serif; transition: background .15s, border-color .15s; }
-                .au-tx-toggle.open { background: color-mix(in srgb, var(--blue) 10%, var(--bg2)); border-color: color-mix(in srgb, var(--blue) 35%, transparent); color: var(--blue); }
-                .au-tx-list { margin-top: 10px; max-height: 280px; overflow-y: auto; border-radius: 12px; border: 1px solid var(--border); scrollbar-width: thin; background: var(--bg2); }
-                .au-tx-item { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--border); transition: background .1s; }
-                .au-tx-item:last-child { border-bottom: none; }
-                .au-tx-item:hover { background: color-mix(in srgb, var(--blue) 4%, var(--bg2)); }
-                .au-close-btn { width: 100%; margin-top: 14px; padding: 11px 0; border-radius: 12px; border: 1.5px solid var(--border); background: transparent; color: var(--text2); font-weight: 700; font-size: 13.5px; cursor: pointer; font-family: 'Inter',sans-serif; transition: background .15s; }
-                .au-close-btn:hover { background: var(--bg2); }
-
-                /* ── Saldo Modal ── */
-                .au-saldo-modal { background: var(--bg); border-radius: 22px; width: 100%; max-width: 400px; overflow: hidden; box-shadow: 0 30px 90px rgba(0,0,0,.5); border: 1px solid var(--border); animation: popIn .18s cubic-bezier(.2,.9,.3,1); }
-                .au-saldo-header { padding: 24px 26px; position: relative; overflow: hidden; }
-                .au-saldo-header::after { content: ''; position: absolute; inset: 0; background: radial-gradient(120% 140% at 100% 0%, rgba(255,255,255,.14), transparent 55%); pointer-events: none; }
-                .au-saldo-header-label { font-size: 10.5px; font-weight: 700; color: rgba(255,255,255,.7); letter-spacing: .08em; text-transform: uppercase; margin-bottom: 5px; position: relative; z-index: 1; }
-                .au-saldo-header-email { font-size: 13px; font-weight: 700; color: #fff; margin-bottom: 12px; opacity: .92; position: relative; z-index: 1; }
-                .au-saldo-curr { display: flex; align-items: baseline; gap: 6px; position: relative; z-index: 1; }
-                .au-saldo-curr-label { font-size: 11px; color: rgba(255,255,255,.65); font-weight: 600; }
-                .au-saldo-curr-val { font-size: 25px; font-weight: 900; color: #fff; letter-spacing: -.5px; }
-                .au-saldo-body { padding: 22px 24px 24px; }
-                .au-inp-label { display: block; font-size: 11.5px; font-weight: 700; color: var(--text2); margin-bottom: 8px; letter-spacing: .03em; text-transform: uppercase; }
-                .au-inp { width: 100%; padding: 13px 14px; border-radius: 12px; border: 1.5px solid var(--border); background: var(--bg2); color: var(--text); font-size: 20px; font-weight: 800; font-family: 'Inter',sans-serif; outline: none; box-sizing: border-box; margin-bottom: 14px; transition: border-color .15s, box-shadow .15s; }
-                .au-inp:focus { border-color: var(--blue); box-shadow: 0 0 0 4px color-mix(in srgb, var(--blue) 14%, transparent); }
-                .au-presets { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 18px; }
-                .au-preset { padding: 10px 0; border-radius: 10px; font-size: 12.5px; font-weight: 700; cursor: pointer; font-family: 'Inter',sans-serif; text-align: center; transition: all .12s; border-width: 1.5px; border-style: solid; }
-                .au-preset:hover { transform: translateY(-1px); }
-                .au-btn-row { display: flex; gap: 10px; }
-                .au-btn-cancel { flex: 1; padding: 13px 0; border-radius: 12px; border: 1.5px solid var(--border); background: transparent; color: var(--text2); font-weight: 700; font-size: 14px; cursor: pointer; font-family: 'Inter',sans-serif; transition: background .15s; }
-                .au-btn-cancel:hover { background: var(--bg2); }
-                .au-btn-confirm { flex: 2; padding: 13px 0; border-radius: 12px; border: none; color: #fff; font-weight: 800; font-size: 14px; cursor: pointer; font-family: 'Inter',sans-serif; display: flex; align-items: center; justify-content: center; gap: 7px; transition: opacity .15s, transform .1s, box-shadow .15s; box-shadow: 0 6px 16px rgba(0,0,0,.2); }
-                .au-btn-confirm:hover { opacity: .92; transform: translateY(-1px); }
-                .au-btn-confirm:disabled { opacity: .5; cursor: not-allowed; transform: none; box-shadow: none; }
-
-                /* ── Empty / Loading ── */
-                .au-empty { padding: 60px 32px; text-align: center; }
-                .au-loading { padding: 52px 32px; text-align: center; }
+                .au-tr { cursor: pointer; transition: background .12s; }
+                .au-td { padding: 11px 14px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+                .au-tr:last-child .au-td { border-bottom: none; }
+                .au-modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 20px; animation: fadeIn .15s ease; }
+                .au-modal { background: var(--white); border-radius: 16px; width: 100%; overflow: hidden; box-shadow: 0 24px 70px rgba(0,0,0,.28); border: 1px solid var(--border); animation: popIn .18s cubic-bezier(.2,.9,.3,1); }
                 .spin { animation: spin .7s linear infinite; display: inline-block; }
                 @keyframes spin { to { transform: rotate(360deg); } }
                 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-                @keyframes popIn { from { opacity: 0; transform: scale(.94) translateY(6px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+                @keyframes popIn { from { opacity: 0; transform: scale(.96) translateY(6px); } to { opacity: 1; transform: scale(1) translateY(0); } }
             ` }} />
 
-            <div className="admin-users-wrap">
-                <div className="au-header">
-                    <div>
-                        <h1 className="au-title">
-                            User Management
-                            <span className="au-badge"><Users size={11} />{users.length} user</span>
-                        </h1>
-                        <p className="au-subtitle">Kelola saldo, status, dan riwayat transaksi pengguna</p>
-                    </div>
-                    <div className="au-search-wrap">
-                        <svg className="search-ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" /></svg>
-                        <input className="au-search" placeholder="Cari nama atau email..." value={search} onChange={e => setSearch(e.target.value)} />
-                    </div>
+            {/* Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
+                <div>
+                    <h1 style={{ fontSize: 20, fontWeight: 700, color: 'var(--text)', marginBottom: 2, letterSpacing: '-.3px' }}>User Management</h1>
+                    <p style={{ fontSize: 13, color: 'var(--text3)' }}>Kelola saldo, status, dan riwayat transaksi pengguna.</p>
                 </div>
+            </div>
 
-                {detailUser && (
-                    <div className="au-modal-backdrop" onClick={() => setDetailUser(null)}>
-                        <div className="au-modal" onClick={e => e.stopPropagation()}>
-                            <div className="au-modal-header" style={{ background: detailUser.blocked ? 'linear-gradient(135deg,#374151,#1f2937)' : 'linear-gradient(135deg,#2563eb,#1e40af)' }}>
-                                <div className="au-modal-avatar">{(detailUser.name || detailUser.email || 'U').charAt(0).toUpperCase()}</div>
-                                <div style={{ minWidth: 0, flex: 1 }}>
-                                    <div className="au-modal-name">{detailUser.name || '—'}</div>
-                                    <div className="au-modal-email">{detailUser.email}</div>
-                                </div>
-                                <span className={`au-pill ${detailUser.blocked ? 'au-pill-blocked' : 'au-pill-active'}`} style={{ flexShrink: 0 }}>
-                                    {detailUser.blocked ? 'Diblokir' : 'Aktif'}
-                                </span>
+            {/* Stat cards flat + segbars (match desain) */}
+            {!loadingUsers && users.length > 0 && (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14, marginBottom: 16 }}>
+                    {[
+                        { label: 'Total User', value: users.length, color: 'var(--blue)', filled: 5 },
+                        { label: 'Aktif', value: users.length - blockedCount, color: 'var(--green)', filled: 5 },
+                        { label: 'Diblokir', value: blockedCount, color: 'var(--red)', filled: 1 },
+                        { label: 'Total Saldo User', value: 'Rp ' + Math.round(totalSaldo).toLocaleString('id-ID'), color: '#0e93c4', filled: 4 },
+                    ].map(s => (
+                        <div key={s.label} className="card" style={{ padding: '14px 16px' }}>
+                            <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text2)', marginBottom: 2 }}>{s.label}</div>
+                            <div style={{ fontSize: 19, fontWeight: 700, color: 'var(--text)', letterSpacing: '-.01em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.value}</div>
+                            <SegBars color={s.color} filled={s.filled} />
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            {/* Toolbar: search kiri (match desain) */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14, flexWrap: 'wrap' }}>
+                <div style={{ position: 'relative', width: 260 }}>
+                    <Search size={13} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text3)' }} />
+                    <input
+                        placeholder="Cari nama atau email..."
+                        value={search}
+                        onChange={e => setSearch(e.target.value)}
+                        style={{ width: '100%', boxSizing: 'border-box', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 10px 8px 30px', fontSize: 12.5, fontFamily: 'inherit', background: 'var(--white)', color: 'var(--text)', outline: 'none' }}
+                        onFocus={e => e.target.style.borderColor = 'var(--blue)'}
+                        onBlur={e => e.target.style.borderColor = 'var(--border)'}
+                    />
+                </div>
+                <span style={{ marginLeft: 'auto', fontSize: 12.5, color: 'var(--text3)' }}>{filteredUsers.length} user</span>
+            </div>
+
+            {/* ── Detail user modal — flat, tanpa gradien (match desain) ── */}
+            {detailUser && (
+                <div className="au-modal-backdrop" onClick={() => setDetailUser(null)}>
+                    <div className="au-modal" style={{ maxWidth: 460 }} onClick={e => e.stopPropagation()}>
+                        {/* Header flat */}
+                        <div style={{ padding: '20px 22px', display: 'flex', alignItems: 'center', gap: 14, borderBottom: '1px solid var(--border)' }}>
+                            <div style={{ width: 46, height: 46, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 18, color: '#fff', flexShrink: 0, background: detailUser.blocked ? 'var(--text3)' : 'var(--blue)' }}>
+                                {(detailUser.name || detailUser.email || 'U').charAt(0).toUpperCase()}
                             </div>
-                            <div className="au-modal-body">
-                                <div className="au-stat-grid">
-                                    {[
-                                        { l: 'Saldo', v: balances[detailUser.email] || 0, c: 'var(--green)' },
-                                        { l: 'Total Deposit', v: deposits[detailUser.email] || 0, c: 'var(--blue)' },
-                                        { l: 'Total Spend', v: spends[detailUser.email] || 0, c: 'var(--yellow)' },
-                                    ].map(s => (
-                                        <div key={s.l} className="au-stat">
-                                            <div className="au-stat-label">{s.l}</div>
-                                            <div className="au-stat-val" style={{ color: s.c }}>Rp {Math.round(s.v).toLocaleString('id-ID')}</div>
-                                        </div>
-                                    ))}
-                                </div>
-                                <div className="au-meta-row">
-                                    <span>Terdaftar: {detailUser.createdAt ? new Date(detailUser.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : '—'}</span>
-                                </div>
-                                <div className="au-actions-row">
-                                    <button className="usr-act" onClick={() => { setModal({ type: 'add', email: detailUser.email }); setAmount(''); setDetailUser(null); }} style={{ flex: 1, justifyContent: 'center', padding: '10px 0', background: 'var(--green-l)', color: 'var(--green)', border: '1.5px solid color-mix(in srgb, var(--green) 16%, transparent)' }}><DollarSign size={13} /> Tambah</button>
-                                    <button className="usr-act" onClick={() => { setModal({ type: 'kurang', email: detailUser.email }); setAmount(''); setDetailUser(null); }} style={{ flex: 1, justifyContent: 'center', padding: '10px 0', background: 'var(--red-l)', color: 'var(--red)', border: '1.5px solid color-mix(in srgb, var(--red) 16%, transparent)' }}><MinusCircle size={13} /> Kurangi</button>
-                                    <button className="usr-act" onClick={() => { toggleBlock(detailUser.email); setDetailUser(d => d ? { ...d, blocked: !d.blocked } : d); }} style={{ flex: 1, justifyContent: 'center', padding: '10px 0', background: detailUser.blocked ? 'var(--green-l)' : 'var(--yellow-l)', color: detailUser.blocked ? 'var(--green)' : 'var(--yellow)', border: `1.5px solid color-mix(in srgb, ${detailUser.blocked ? 'var(--green)' : 'var(--yellow)'} 16%, transparent)` }}>{detailUser.blocked ? <CheckCircle size={13} /> : <Ban size={13} />} {detailUser.blocked ? 'Unblock' : 'Blokir'}</button>
-                                </div>
-                                <hr className="au-divider" />
+                            <div style={{ minWidth: 0, flex: 1 }}>
+                                <div style={{ fontSize: 15.5, fontWeight: 700, color: 'var(--text)', marginBottom: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{detailUser.name || '—'}</div>
+                                <div style={{ fontSize: 11.5, color: 'var(--text3)', fontFamily: "'JetBrains Mono',monospace", whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{detailUser.email}</div>
+                            </div>
+                            <span style={pill(detailUser.blocked ? 'var(--red)' : 'var(--green)', detailUser.blocked ? 'var(--red-l)' : 'var(--green-l)')}>
+                                {detailUser.blocked ? 'Diblokir' : 'Aktif'}
+                            </span>
+                        </div>
+                        <div style={{ padding: '18px 22px 22px' }}>
+                            {/* Stat grid flat */}
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 14 }}>
+                                {[
+                                    { l: 'Saldo', v: balances[detailUser.email] || 0, c: 'var(--green)' },
+                                    { l: 'Total Deposit', v: deposits[detailUser.email] || 0, c: 'var(--blue)' },
+                                    { l: 'Total Spend', v: spends[detailUser.email] || 0, c: '#9f3b5e' },
+                                ].map(s => (
+                                    <div key={s.l} style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 12, padding: '13px 10px', textAlign: 'center' }}>
+                                        <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--text3)', marginBottom: 5 }}>{s.l}</div>
+                                        <div style={{ fontSize: 13, fontWeight: 700, lineHeight: 1.2, wordBreak: 'break-word', color: s.c }}>Rp {Math.round(s.v).toLocaleString('id-ID')}</div>
+                                    </div>
+                                ))}
+                            </div>
+                            <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 14 }}>
+                                Terdaftar: {detailUser.createdAt ? new Date(detailUser.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : '—'}
+                            </div>
+                            {/* Aksi */}
+                            <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+                                <button onClick={() => { setModal({ type: 'add', email: detailUser.email }); setAmount(''); setDetailUser(null); }} style={{ ...ghostBtn('var(--green)'), flex: 1, justifyContent: 'center', padding: '9px 0' }}><DollarSign size={13} /> Tambah</button>
+                                <button onClick={() => { setModal({ type: 'kurang', email: detailUser.email }); setAmount(''); setDetailUser(null); }} style={{ ...ghostBtn('var(--red)'), flex: 1, justifyContent: 'center', padding: '9px 0' }}><MinusCircle size={13} /> Kurangi</button>
+                                <button onClick={() => { toggleBlock(detailUser.email); setDetailUser(d => d ? { ...d, blocked: !d.blocked } : d); }} style={{ ...ghostBtn(detailUser.blocked ? 'var(--green)' : 'var(--yellow)'), flex: 1, justifyContent: 'center', padding: '9px 0' }}>{detailUser.blocked ? <CheckCircle size={13} /> : <Ban size={13} />} {detailUser.blocked ? 'Unblock' : 'Blokir'}</button>
+                            </div>
+                            <hr style={{ border: 'none', borderTop: '1px solid var(--border)', margin: '0 0 14px' }} />
 
-                                {/* Tab: Riwayat Order vs Deposit */}
-                                <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
-                                    {[{ k: 'order', l: 'Order', count: userDetailData ? userDetailData.orderCount : userTx.filter(t => ['order', 'purchase'].includes(t.type)).length },
-                                    { k: 'deposit', l: 'Deposit', count: userDetailData ? userDetailData.depositCount : userTx.filter(t => ['deposit', 'bonus', 'refund'].includes(t.type)).length }
-                                    ].map(tab => (
+                            {/* Tab: Riwayat Order vs Deposit — gaya tabs desain */}
+                            <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+                                {[{ k: 'order', l: 'Order', count: userDetailData ? userDetailData.orderCount : userTx.filter(t => ['order', 'purchase'].includes(t.type)).length },
+                                { k: 'deposit', l: 'Deposit', count: userDetailData ? userDetailData.depositCount : userTx.filter(t => ['deposit', 'bonus', 'refund'].includes(t.type)).length }
+                                ].map(tab => {
+                                    const on = txTab === tab.k && showTx;
+                                    return (
                                         <button key={tab.k}
                                             onClick={() => { setTxTab(tab.k); setShowTx(true); }}
-                                            style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, padding: '9px 0', borderRadius: 10, border: `1.5px solid ${txTab === tab.k && showTx ? 'var(--blue)' : 'var(--border)'}`, background: txTab === tab.k && showTx ? 'color-mix(in srgb, var(--blue) 10%, var(--bg2))' : 'var(--bg2)', color: txTab === tab.k && showTx ? 'var(--blue)' : 'var(--text2)', fontWeight: 700, fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit', transition: 'all .15s' }}>
+                                            style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, padding: '8px 0', borderRadius: 8, border: `1px solid ${on ? 'var(--text)' : 'var(--border)'}`, background: on ? 'var(--bg2)' : 'var(--white)', color: on ? 'var(--text)' : 'var(--text2)', fontWeight: 600, fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit', transition: 'all .15s' }}>
                                             {tab.l}
-                                            {tab.count > 0 && <span style={{ fontSize: 10, fontWeight: 700, background: txTab === tab.k && showTx ? 'var(--blue)' : 'var(--text3)', color: '#fff', borderRadius: 20, padding: '2px 7px' }}>{tab.count}</span>}
+                                            {tab.count > 0 && <span style={{ fontSize: 10, fontWeight: 600, background: on ? 'var(--text)' : 'var(--text3)', color: 'var(--white)', borderRadius: 20, padding: '2px 7px' }}>{tab.count}</span>}
                                         </button>
-                                    ))}
-                                    {showTx && <button onClick={() => setShowTx(false)} style={{ padding: '9px 12px', borderRadius: 10, border: '1.5px solid var(--border)', background: 'transparent', color: 'var(--text3)', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, fontWeight: 600 }}>✕</button>}
-                                </div>
+                                    );
+                                })}
+                                {showTx && <button onClick={() => setShowTx(false)} style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--white)', color: 'var(--text3)', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, fontWeight: 600 }}>✕</button>}
+                            </div>
 
-                                {showTx && (
-                                    <div className="au-tx-list">
-                                        {loadingTx ? (
-                                            <div style={{ padding: '28px 0', textAlign: 'center' }}>
-                                                <span style={{ width: 20, height: 20, border: '2.5px solid var(--border)', borderTop: '2.5px solid var(--blue)', borderRadius: '50%', display: 'inline-block' }} className="spin" />
+                            {showTx && (
+                                <div style={{ maxHeight: 280, overflowY: 'auto', borderRadius: 10, border: '1px solid var(--border)', background: 'var(--white)' }}>
+                                    {loadingTx ? (
+                                        <div style={{ padding: '28px 0', textAlign: 'center' }}>
+                                            <span style={{ width: 20, height: 20, border: '2.5px solid var(--border)', borderTop: '2.5px solid var(--blue)', borderRadius: '50%', display: 'inline-block' }} className="spin" />
+                                        </div>
+                                    ) : (() => {
+                                        // Pilih data dari get_user_detail jika tersedia, fallback ke userTx
+                                        const listOrders = userDetailData
+                                            ? (userDetailData.orders || [])
+                                            : userTx.filter(t => ['order', 'purchase'].includes(t.type));
+                                        const listDeposits = userDetailData
+                                            ? (userDetailData.deposits || [])
+                                            : userTx.filter(t => ['deposit', 'bonus', 'refund'].includes(t.type));
+                                        const list = txTab === 'order' ? listOrders : listDeposits;
+
+                                        if (list.length === 0) return (
+                                            <div style={{ padding: '24px 0', textAlign: 'center', color: 'var(--text3)', fontSize: 13 }}>
+                                                {txTab === 'order' ? 'Belum ada order.' : 'Belum ada deposit.'}
                                             </div>
-                                        ) : (() => {
-                                            // Pilih data dari get_user_detail jika tersedia, fallback ke userTx
-                                            const listOrders = userDetailData
-                                                ? (userDetailData.orders || [])
-                                                : userTx.filter(t => ['order', 'purchase'].includes(t.type));
-                                            const listDeposits = userDetailData
-                                                ? (userDetailData.deposits || [])
-                                                : userTx.filter(t => ['deposit', 'bonus', 'refund'].includes(t.type));
-                                            const list = txTab === 'order' ? listOrders : listDeposits;
-
-                                            if (list.length === 0) return (
-                                                <div style={{ padding: '24px 0', textAlign: 'center', color: 'var(--text3)', fontSize: 13 }}>
-                                                    {txTab === 'order' ? 'Belum ada order.' : 'Belum ada deposit.'}
-                                                </div>
-                                            );
-                                            return list.map((t, i) => (
-                                                <div key={t.id || i} className="au-tx-item">
-                                                    <div style={{ marginTop: 2 }}>{txTypeIcon(t.type)}</div>
-                                                    <div style={{ flex: 1, minWidth: 0 }}>
-                                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                                                            <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text)' }}>
-                                                                {txTypeLabel(t.type)}
-                                                                {t.order_id && <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 600, color: 'var(--text3)', fontFamily: "'JetBrains Mono',monospace" }}>#{t.order_id}</span>}
-                                                                {t.status && t.status !== 'success' && (
-                                                                    <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, color: t.status === 'pending' ? 'var(--yellow)' : 'var(--red)', background: t.status === 'pending' ? 'var(--yellow-l)' : 'var(--red-l)', padding: '2px 7px', borderRadius: 10 }}>{t.status}</span>
-                                                                )}
-                                                            </div>
-                                                            <div style={{ fontSize: 13, fontWeight: 800, color: txColor(t.type), flexShrink: 0 }}>
-                                                                {txSign(t.type)}Rp {Math.round(t.amount || 0).toLocaleString('id-ID')}
-                                                            </div>
+                                        );
+                                        return list.map((t, i) => (
+                                            <div key={t.id || i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '11px 14px', borderBottom: i < list.length - 1 ? '1px solid var(--border)' : 'none' }}>
+                                                <div style={{ marginTop: 2 }}>{txTypeIcon(t.type)}</div>
+                                                <div style={{ flex: 1, minWidth: 0 }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                                                        <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text)' }}>
+                                                            {txTypeLabel(t.type)}
+                                                            {t.order_id && <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 500, color: 'var(--text3)', fontFamily: "'JetBrains Mono',monospace" }}>#{t.order_id}</span>}
+                                                            {t.status && t.status !== 'success' && (
+                                                                <span style={{ marginLeft: 6, ...pill(t.status === 'pending' ? 'var(--yellow)' : 'var(--red)', t.status === 'pending' ? 'var(--yellow-l)' : 'var(--red-l)'), fontSize: 10, padding: '2px 7px' }}>{t.status}</span>
+                                                            )}
                                                         </div>
-                                                        {(t.description || t.service_id) && (
-                                                            <div style={{ fontSize: 11.5, color: 'var(--text2)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                                                {t.description || `Layanan #${t.service_id}`}
-                                                            </div>
-                                                        )}
-                                                        {(t.qty || t.link) && (
-                                                            <div style={{ display: 'flex', gap: 10, marginTop: 3, flexWrap: 'wrap' }}>
-                                                                {t.qty && <span style={{ fontSize: 11, color: 'var(--text3)' }}>Qty: <b style={{ color: 'var(--text2)' }}>{Number(t.qty).toLocaleString('id-ID')}</b></span>}
-                                                                {t.link && <a href={t.link} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: 'var(--blue)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 180 }}>{t.link}</a>}
-                                                            </div>
-                                                        )}
-                                                        <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 3 }}>
-                                                            {t.created_at ? new Date(t.created_at).toLocaleString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}
-                                                            {t.provider && <span style={{ marginLeft: 6, fontSize: 10, color: 'var(--text3)' }}>via {t.provider}</span>}
+                                                        <div style={{ fontSize: 13, fontWeight: 700, color: txColor(t.type), flexShrink: 0 }}>
+                                                            {txSign(t.type)}Rp {Math.round(t.amount || 0).toLocaleString('id-ID')}
                                                         </div>
                                                     </div>
+                                                    {(t.description || t.service_id) && (
+                                                        <div style={{ fontSize: 11.5, color: 'var(--text2)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                            {t.description || `Layanan #${t.service_id}`}
+                                                        </div>
+                                                    )}
+                                                    {(t.qty || t.link) && (
+                                                        <div style={{ display: 'flex', gap: 10, marginTop: 3, flexWrap: 'wrap' }}>
+                                                            {t.qty && <span style={{ fontSize: 11, color: 'var(--text3)' }}>Qty: <b style={{ color: 'var(--text2)' }}>{Number(t.qty).toLocaleString('id-ID')}</b></span>}
+                                                            {t.link && <a href={t.link} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: 'var(--blue)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 180 }}>{t.link}</a>}
+                                                        </div>
+                                                    )}
+                                                    <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 3 }}>
+                                                        {t.created_at ? new Date(t.created_at).toLocaleString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}
+                                                        {t.provider && <span style={{ marginLeft: 6, fontSize: 10, color: 'var(--text3)' }}>via {t.provider}</span>}
+                                                    </div>
                                                 </div>
-                                            ));
-                                        })()}
-                                    </div>
-                                )}
-                                <button className="au-close-btn" onClick={() => setDetailUser(null)}>Tutup</button>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {modal && (
-                    <div className="au-modal-backdrop" onClick={() => { setModal(null); setAmount(''); setMsg(''); setCreditNote(''); }}>
-                        <div className="au-saldo-modal" onClick={e => e.stopPropagation()}>
-                            <div className="au-saldo-header" style={{ background: modal.type === 'add' ? 'linear-gradient(135deg,#15803d,#166534)' : 'linear-gradient(135deg,#b91c1c,#991b1b)' }}>
-                                <div className="au-saldo-header-label">{modal.type === 'add' ? '✦ Tambah Saldo' : '✦ Kurangi Saldo'}</div>
-                                <div className="au-saldo-header-email">{modal.email}</div>
-                                <div className="au-saldo-curr">
-                                    <span className="au-saldo-curr-label">Saldo saat ini</span>
-                                    <span className="au-saldo-curr-val">Rp {(balances[modal.email] || 0).toLocaleString('id-ID')}</span>
+                                            </div>
+                                        ));
+                                    })()}
                                 </div>
-                            </div>
-                            <div className="au-saldo-body">
-                                {msg ? (
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '16px 18px', background: msg.startsWith('✅') ? 'var(--green-l)' : 'var(--red-l)', borderRadius: 14, border: `1.5px solid ${msg.startsWith('✅') ? 'var(--green)' : 'var(--red)'}` }}>
-                                        <span style={{ fontWeight: 700, fontSize: 14, color: msg.startsWith('✅') ? 'var(--green)' : 'var(--red)' }}>{msg.replace('✅ ', '').replace('❌ ', '')}</span>
-                                    </div>
-                                ) : (
-                                    <>
-                                        <label className="au-inp-label">Jumlah (Rp)</label>
-                                        <input className="au-inp" type="number" placeholder="0" value={amount} onChange={e => setAmount(e.target.value)} autoFocus />
-                                        <label className="au-inp-label" style={{ marginTop: 4 }}>Catatan (opsional)</label>
-                                        <input className="au-inp" type="text" placeholder="mis. kompensasi, bonus, dll" value={creditNote} onChange={e => setCreditNote(e.target.value)} style={{ fontSize: 14, marginBottom: 14 }} />
-                                        <div className="au-presets">
-                                            {[5000, 10000, 20000, 50000, 100000, 500000].map(n => {
-                                                const sel = amount === String(n);
-                                                const ac = modal.type === 'add';
-                                                return (
-                                                    <button key={n} className="au-preset" onClick={() => setAmount(String(n))} style={{
-                                                        borderColor: sel ? (ac ? '#16a34a' : '#dc2626') : 'var(--border)',
-                                                        background: sel ? (ac ? 'color-mix(in srgb,#16a34a 12%,transparent)' : 'color-mix(in srgb,#dc2626 12%,transparent)') : 'var(--bg2)',
-                                                        color: sel ? (ac ? '#16a34a' : '#dc2626') : 'var(--text2)',
-                                                    }}>
-                                                        Rp {(n / 1000).toFixed(0)}K
-                                                    </button>
-                                                );
-                                            })}
-                                        </div>
-                                        <div className="au-btn-row">
-                                            <button className="au-btn-cancel" onClick={() => { setModal(null); setAmount(''); setCreditNote(''); }}>Batal</button>
-                                            <button className="au-btn-confirm" onClick={handleSaldo} disabled={!amount || parseInt(amount) <= 0 || loading} style={{ background: modal.type === 'add' ? '#16a34a' : '#dc2626' }}>
-                                                {loading ? <span style={{ width: 16, height: 16, border: '2px solid rgba(255,255,255,.4)', borderTop: '2px solid #fff', borderRadius: '50%' }} className="spin" /> : modal.type === 'add' ? <DollarSign size={15} /> : <MinusCircle size={15} />}
-                                                {modal.type === 'add' ? 'Tambahkan Saldo' : 'Kurangi Saldo'}
-                                            </button>
-                                        </div>
-                                    </>
-                                )}
-                            </div>
+                            )}
+                            <button onClick={() => setDetailUser(null)} style={{ width: '100%', marginTop: 14, padding: '10px 0', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--white)', color: 'var(--text2)', fontWeight: 600, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>Tutup</button>
                         </div>
                     </div>
-                )}
+                </div>
+            )}
 
-                {loadingUsers ? (
-                    <div className="au-table-wrap au-loading">
-                        <span style={{ width: 26, height: 26, border: '3px solid var(--border)', borderTop: '3px solid var(--blue)', borderRadius: '50%', display: 'inline-block' }} className="spin" />
-                        <p style={{ marginTop: 14, fontSize: 13, color: 'var(--text3)', fontWeight: 600 }}>Memuat data user...</p>
-                    </div>
-                ) : users.length === 0 ? (
-                    <div className="au-table-wrap au-empty">
-                        <div style={{ width: 56, height: 56, borderRadius: 16, background: 'var(--bg2)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
-                            <Users size={24} style={{ color: 'var(--text3)' }} />
+            {/* ── Saldo modal — flat (match desain) ── */}
+            {modal && (
+                <div className="au-modal-backdrop" onClick={() => { setModal(null); setAmount(''); setMsg(''); setCreditNote(''); }}>
+                    <div className="au-modal" style={{ maxWidth: 400 }} onClick={e => e.stopPropagation()}>
+                        <div style={{ padding: '18px 22px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 12 }}>
+                            <div style={{ width: 38, height: 38, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, background: modal.type === 'add' ? 'var(--green-l)' : 'var(--red-l)', color: modal.type === 'add' ? 'var(--green)' : 'var(--red)' }}>
+                                {modal.type === 'add' ? <DollarSign size={17} /> : <MinusCircle size={17} />}
+                            </div>
+                            <div style={{ minWidth: 0, flex: 1 }}>
+                                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>{modal.type === 'add' ? 'Tambah Saldo' : 'Kurangi Saldo'}</div>
+                                <div style={{ fontSize: 11.5, color: 'var(--text3)', fontFamily: "'JetBrains Mono',monospace", whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{modal.email}</div>
+                            </div>
+                            <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                                <div style={{ fontSize: 10.5, color: 'var(--text3)', fontWeight: 500 }}>Saldo saat ini</div>
+                                <div style={{ fontSize: 14.5, fontWeight: 700, color: 'var(--text)' }}>Rp {(balances[modal.email] || 0).toLocaleString('id-ID')}</div>
+                            </div>
                         </div>
-                        <p style={{ fontWeight: 800, fontSize: 15, color: 'var(--text)', marginBottom: 6 }}>Belum ada user terdaftar</p>
-                        <p style={{ fontSize: 13, color: 'var(--text3)' }}>User yang register via /register akan muncul di sini.</p>
+                        <div style={{ padding: '18px 22px 22px' }}>
+                            {msg ? (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', background: msg.startsWith('✅') ? 'var(--green-l)' : 'var(--red-l)', borderRadius: 10, border: `1px solid ${msg.startsWith('✅') ? 'rgba(22,163,74,.25)' : 'rgba(239,68,68,.25)'}` }}>
+                                    <span style={{ fontWeight: 600, fontSize: 13.5, color: msg.startsWith('✅') ? 'var(--green)' : 'var(--red)' }}>{msg.replace('✅ ', '').replace('❌ ', '')}</span>
+                                </div>
+                            ) : (
+                                <>
+                                    <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text2)', marginBottom: 7 }}>Jumlah (Rp)</label>
+                                    <input type="number" placeholder="0" value={amount} onChange={e => setAmount(e.target.value)} autoFocus
+                                        style={{ width: '100%', boxSizing: 'border-box', padding: '11px 13px', borderRadius: 10, border: '1px solid var(--border)', background: 'var(--white)', color: 'var(--text)', fontSize: 18, fontWeight: 700, fontFamily: 'inherit', outline: 'none', marginBottom: 12 }}
+                                        onFocus={e => e.target.style.borderColor = 'var(--blue)'}
+                                        onBlur={e => e.target.style.borderColor = 'var(--border)'} />
+                                    <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text2)', marginBottom: 7 }}>Catatan (opsional)</label>
+                                    <input type="text" placeholder="mis. kompensasi, bonus, dll" value={creditNote} onChange={e => setCreditNote(e.target.value)}
+                                        style={{ width: '100%', boxSizing: 'border-box', padding: '10px 13px', borderRadius: 10, border: '1px solid var(--border)', background: 'var(--white)', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit', outline: 'none', marginBottom: 14 }}
+                                        onFocus={e => e.target.style.borderColor = 'var(--blue)'}
+                                        onBlur={e => e.target.style.borderColor = 'var(--border)'} />
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 16 }}>
+                                        {[5000, 10000, 20000, 50000, 100000, 500000].map(n => {
+                                            const sel = amount === String(n);
+                                            const c = modal.type === 'add' ? 'var(--green)' : 'var(--red)';
+                                            const cl = modal.type === 'add' ? 'var(--green-l)' : 'var(--red-l)';
+                                            return (
+                                                <button key={n} onClick={() => setAmount(String(n))}
+                                                    style={{ padding: '9px 0', borderRadius: 8, fontSize: 12.5, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'center', border: `1px solid ${sel ? c : 'var(--border)'}`, background: sel ? cl : 'var(--white)', color: sel ? c : 'var(--text2)' }}>
+                                                    Rp {(n / 1000).toFixed(0)}K
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                    <div style={{ display: 'flex', gap: 10 }}>
+                                        <button onClick={() => { setModal(null); setAmount(''); setCreditNote(''); }}
+                                            style={{ flex: 1, padding: '11px 0', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--white)', color: 'var(--text2)', fontWeight: 600, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>Batal</button>
+                                        <button onClick={handleSaldo} disabled={!amount || parseInt(amount) <= 0 || loading}
+                                            style={{ flex: 2, padding: '11px 0', borderRadius: 8, border: 'none', color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, background: modal.type === 'add' ? 'var(--green)' : 'var(--red)', opacity: (!amount || parseInt(amount) <= 0 || loading) ? 0.55 : 1 }}>
+                                            {loading ? <span style={{ width: 15, height: 15, border: '2px solid rgba(255,255,255,.4)', borderTop: '2px solid #fff', borderRadius: '50%' }} className="spin" /> : modal.type === 'add' ? <DollarSign size={14} /> : <MinusCircle size={14} />}
+                                            {modal.type === 'add' ? 'Tambahkan Saldo' : 'Kurangi Saldo'}
+                                        </button>
+                                    </div>
+                                </>
+                            )}
+                        </div>
                     </div>
-                ) : (
-                    <div className="au-table-wrap">
-                        <table className="au-table">
-                            <thead className="au-thead">
-                                <tr>
-                                    {['Nama', 'Email', 'Saldo', 'Terdaftar', 'Status', 'Aksi'].map(h => (
-                                        <th key={h}>{h}</th>
-                                    ))}
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {filteredUsers.map((u) => (
-                                    <tr key={u.email} className="usr-tr" onClick={() => { setDetailUser(u); setShowTx(false); loadUserTx(u.email); }} title="Klik untuk lihat detail" style={{ opacity: u.blocked ? 0.65 : 1 }}>
-                                        <td className="au-td">
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                                <div className={`au-avatar ${u.blocked ? 'blocked' : ''}`}>
-                                                    {(u.name || u.email || 'U').charAt(0).toUpperCase()}
-                                                </div>
-                                                <span className="au-name">{u.name || '—'}</span>
-                                            </div>
-                                        </td>
-                                        <td className="au-td au-email">{u.email}</td>
-                                        <td className="au-td au-balance">Rp {(balances[u.email] ?? 0).toLocaleString?.('id-ID') ?? '0'}</td>
-                                        <td className="au-td" style={{ color: 'var(--text3)', fontSize: 12 }}>{u.createdAt ? new Date(u.createdAt).toLocaleDateString('id-ID') : '—'}</td>
-                                        <td className="au-td">
-                                            <span className={`au-pill ${u.blocked ? 'au-pill-blocked' : 'au-pill-active'}`}>
-                                                {u.blocked ? 'Diblokir' : 'Aktif'}
-                                            </span>
-                                        </td>
-                                        <td className="au-td">
-                                            <div style={{ display: 'flex', gap: 6, flexWrap: 'nowrap' }}>
-                                                <button className="usr-act" onClick={(e) => { e.stopPropagation(); setModal({ type: 'add', email: u.email }); setAmount(''); }} style={{ background: 'var(--green-l)', color: 'var(--green)', border: '1.5px solid color-mix(in srgb, var(--green) 16%, transparent)' }}>
-                                                    <DollarSign size={11} /> Saldo
-                                                </button>
-                                                <button className="usr-act" onClick={(e) => { e.stopPropagation(); setModal({ type: 'kurang', email: u.email }); setAmount(''); }} style={{ background: 'var(--red-l)', color: 'var(--red)', border: '1.5px solid color-mix(in srgb, var(--red) 16%, transparent)' }}>
-                                                    <MinusCircle size={11} /> Kurangi
-                                                </button>
-                                                <button className="usr-act" onClick={(e) => { e.stopPropagation(); toggleBlock(u.email); }} style={{ background: u.blocked ? 'var(--green-l)' : 'var(--yellow-l)', color: u.blocked ? 'var(--green)' : 'var(--yellow)', border: `1.5px solid color-mix(in srgb, ${u.blocked ? 'var(--green)' : 'var(--yellow)'} 16%, transparent)` }}>
-                                                    {u.blocked ? <CheckCircle size={11} /> : <Ban size={11} />} {u.blocked ? 'Unblock' : 'Blokir'}
-                                                </button>
-                                            </div>
-                                        </td>
+                </div>
+            )}
+
+            {loadingUsers ? (
+                <div className="card" style={{ padding: 52, textAlign: 'center' }}>
+                    <span style={{ width: 26, height: 26, border: '3px solid var(--border)', borderTop: '3px solid var(--blue)', borderRadius: '50%', display: 'inline-block' }} className="spin" />
+                    <p style={{ marginTop: 14, fontSize: 13, color: 'var(--text3)', fontWeight: 500 }}>Memuat data user...</p>
+                </div>
+            ) : users.length === 0 ? (
+                <div className="card" style={{ padding: 60, textAlign: 'center' }}>
+                    <div style={{ width: 52, height: 52, borderRadius: 14, background: 'var(--bg2)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+                        <Users size={22} style={{ color: 'var(--text3)' }} />
+                    </div>
+                    <p style={{ fontWeight: 600, fontSize: 14.5, color: 'var(--text)', marginBottom: 6 }}>Belum ada user terdaftar</p>
+                    <p style={{ fontSize: 13, color: 'var(--text3)' }}>User yang register via /register akan muncul di sini.</p>
+                </div>
+            ) : (
+                <>
+                    <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+                        <div style={{ overflowX: 'auto' }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 720 }}>
+                                <thead>
+                                    <tr style={{ background: 'var(--bg2)', borderBottom: '1px solid var(--border)' }}>
+                                        {['User', 'Saldo', 'Terdaftar', 'Status', 'Aksi'].map(h => (
+                                            <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 600, color: 'var(--text2)', fontSize: 12, whiteSpace: 'nowrap' }}>{h}</th>
+                                        ))}
                                     </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody>
+                                    {pagedUsers.map((u) => (
+                                        <tr key={u.email} className="au-tr" onClick={() => { setDetailUser(u); setShowTx(false); loadUserTx(u.email); }} title="Klik untuk lihat detail" style={{ opacity: u.blocked ? 0.6 : 1 }}
+                                            onMouseEnter={e => e.currentTarget.style.background = 'var(--bg2)'}
+                                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                                            {/* User: avatar + nama (bold) + email (sub) — gaya 2 baris seperti desain */}
+                                            <td className="au-td">
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                                    <div style={{ width: 32, height: 32, borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 13, color: '#fff', flexShrink: 0, background: u.blocked ? 'var(--text3)' : 'var(--blue)' }}>
+                                                        {(u.name || u.email || 'U').charAt(0).toUpperCase()}
+                                                    </div>
+                                                    <div style={{ minWidth: 0 }}>
+                                                        <div style={{ fontWeight: 600, fontSize: 12.5, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 260 }}>{u.name || '—'}</div>
+                                                        <div style={{ fontSize: 11.5, color: 'var(--text3)', marginTop: 2, fontFamily: "'JetBrains Mono',monospace", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 260 }}>{u.email}</div>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            {/* Saldo: pill hijau seperti "Enrolled" di desain */}
+                                            <td className="au-td" style={{ whiteSpace: 'nowrap' }}>
+                                                <span style={pill('var(--green)', 'var(--green-l)')}>Rp {(balances[u.email] ?? 0).toLocaleString?.('id-ID') ?? '0'}</span>
+                                            </td>
+                                            <td className="au-td" style={{ color: 'var(--text3)', fontSize: 12, whiteSpace: 'nowrap' }}>{u.createdAt ? new Date(u.createdAt).toLocaleDateString('id-ID') : '—'}</td>
+                                            <td className="au-td">
+                                                <span style={pill(u.blocked ? 'var(--red)' : 'var(--green)', u.blocked ? 'var(--red-l)' : 'var(--green-l)')}>
+                                                    {u.blocked ? 'Diblokir' : 'Aktif'}
+                                                </span>
+                                            </td>
+                                            <td className="au-td">
+                                                <div style={{ display: 'flex', gap: 6, flexWrap: 'nowrap' }}>
+                                                    <button onClick={(e) => { e.stopPropagation(); setModal({ type: 'add', email: u.email }); setAmount(''); }} style={ghostBtn('var(--green)')}>
+                                                        <DollarSign size={11} /> Saldo
+                                                    </button>
+                                                    <button onClick={(e) => { e.stopPropagation(); setModal({ type: 'kurang', email: u.email }); setAmount(''); }} style={ghostBtn('var(--red)')}>
+                                                        <MinusCircle size={11} /> Kurangi
+                                                    </button>
+                                                    <button onClick={(e) => { e.stopPropagation(); toggleBlock(u.email); }} style={ghostBtn(u.blocked ? 'var(--green)' : 'var(--yellow)')}>
+                                                        {u.blocked ? <CheckCircle size={11} /> : <Ban size={11} />} {u.blocked ? 'Unblock' : 'Blokir'}
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
-                )}
-            </div>
+
+                    <Pagination page={page} totalPages={totalPages} perPage={perPage} setPerPage={setPerPage} setPage={setPage} totalItems={filteredUsers.length} />
+                </>
+            )}
         </div>
     );
 }

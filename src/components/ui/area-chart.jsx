@@ -1,18 +1,15 @@
 "use client";
 
-import { localPoint } from "@visx/event";
-import { curveMonotoneX } from "@visx/curve";
+import { curveMonotoneX, curveNatural } from "@visx/curve";
 import { GridRows } from "@visx/grid";
 import { ParentSize } from "@visx/responsive";
 import { scaleLinear, scaleTime } from "@visx/scale";
 import { AreaClosed, LinePath } from "@visx/shape";
 import { bisector } from "d3-array";
-import { AnimatePresence, motion, useMotionTemplate, useSpring } from "motion/react";
 import {
   Children, createContext, isValidElement, useCallback, useContext,
   useEffect, useId, useLayoutEffect, useMemo, useRef, useState,
 } from "react";
-import useMeasure from "react-use-measure";
 import { createPortal } from "react-dom";
 
 export const chartCssVars = {
@@ -31,86 +28,164 @@ function useChart() {
   return ctx;
 }
 
-// ── Interaction hook ──────────────────────────────────────────────────────────
-
-function useChartInteraction({ xScale, yScale, secondaryYScale, data, lines, margin, xAccessor, bisectDate, canInteract }) {
+// ── Interaction hook ────────────────────────────────────────────────────────
+//
+// ⚡ REWRITE — versi lama bikin lag pas di-drag karena 2 hal:
+//   1. `setTooltipData` dipanggil di SETIAP gerakan mouse (per piksel), padahal
+//      isinya cuma berubah kalau titik data yang ke-hover beda. Sekarang kita
+//      simpan index terakhir di ref, dan cuma `setState` (yang men-trigger
+//      render) kalau index-nya BENERAN ganti.
+//   2. Posisi elemen (garis SVG) di-baca ulang tiap gerakan mouse pakai
+//      `localPoint` (visx) yang menghitung CTM SVG — sekarang posisi kotak
+//      chart di-cache sekali (saat mouse masuk / mouse down) dan dipakai
+//      ulang, jadi tidak ada perhitungan layout berulang per piksel.
+function useChartInteraction({ xScale, yScale, secondaryYScale, data, lines, margin, xAccessor, bisectDate, canInteract, containerRef }) {
   const [tooltipData, setTooltipData] = useState(null);
   const [selection, setSelection] = useState(null);
   const isDragging = useRef(false);
   const dragStartX = useRef(0);
+  const lastIndexRef = useRef(-1);
+  const rectRef = useRef(null);
 
-  const resolveTooltip = useCallback((pixelX) => {
+  const findPoint = useCallback((pixelX) => {
     const x0 = xScale.invert(pixelX);
     const idx = bisectDate(data, x0, 1);
     const d0 = data[idx - 1], d1 = data[idx];
     if (!d0) return null;
     let d = d0, fi = idx - 1;
     if (d1 && x0.getTime() - xAccessor(d0).getTime() > xAccessor(d1).getTime() - x0.getTime()) { d = d1; fi = idx; }
-    const yPositions = {};
-    for (const line of lines) { const v = d[line.dataKey]; if (typeof v === "number") { const sc = line.secondary && secondaryYScale ? secondaryYScale : yScale; yPositions[line.dataKey] = sc(v) ?? 0; } }
-    return { point: d, index: fi, x: xScale(xAccessor(d)) ?? 0, yPositions };
-  }, [xScale, yScale, secondaryYScale, data, lines, xAccessor, bisectDate]);
-
-  const resolveIndex = useCallback((pixelX) => {
-    const x0 = xScale.invert(pixelX);
-    const idx = bisectDate(data, x0, 1);
-    const d0 = data[idx - 1], d1 = data[idx];
-    if (!d0) return 0;
-    if (d1 && x0.getTime() - xAccessor(d0).getTime() > xAccessor(d1).getTime() - x0.getTime()) return idx;
-    return idx - 1;
+    return { point: d, index: fi };
   }, [xScale, data, xAccessor, bisectDate]);
 
-  const getX = useCallback((event, ti = 0) => {
-    let pt = null;
-    if ("touches" in event) {
-      const t = event.touches[ti]; if (!t) return null;
-      const svg = event.currentTarget.ownerSVGElement; if (!svg) return null;
-      pt = localPoint(svg, t);
-    } else pt = localPoint(event);
-    return pt ? pt.x - margin.left : null;
+  const buildTooltip = useCallback((fi, d) => {
+    const yPositions = {};
+    for (const line of lines) {
+      const v = d[line.dataKey];
+      if (typeof v === "number") {
+        const sc = line.secondary && secondaryYScale ? secondaryYScale : yScale;
+        yPositions[line.dataKey] = sc(v) ?? 0;
+      }
+    }
+    return { point: d, index: fi, x: xScale(xAccessor(d)) ?? 0, yPositions };
+  }, [xScale, yScale, secondaryYScale, lines, xAccessor]);
+
+  // Cache posisi kotak chart — dihitung sekali per interaksi (bukan per piksel).
+  const measureRect = useCallback(() => {
+    if (containerRef.current) rectRef.current = containerRef.current.getBoundingClientRect();
+  }, [containerRef]);
+
+  const getClientX = (e) => ("touches" in e ? e.touches[0]?.clientX : e.clientX);
+
+  const pixelFromEvent = useCallback((e) => {
+    const clientX = getClientX(e);
+    if (clientX == null || !rectRef.current) return null;
+    return clientX - rectRef.current.left - margin.left;
   }, [margin.left]);
 
+  const onMouseEnter = useCallback(() => { measureRect(); }, [measureRect]);
+
   const onMouseMove = useCallback((e) => {
-    const x = getX(e); if (x === null) return;
+    if (!rectRef.current) measureRect();
+    const x = pixelFromEvent(e);
+    if (x === null) return;
+
     if (isDragging.current) {
       const s = Math.min(dragStartX.current, x), en = Math.max(dragStartX.current, x);
-      setSelection({ startX: s, endX: en, startIndex: resolveIndex(s), endIndex: resolveIndex(en), active: true });
+      const sp = findPoint(s), ep = findPoint(en);
+      setSelection({ startX: s, endX: en, startIndex: sp?.index ?? 0, endIndex: ep?.index ?? 0, active: true });
       return;
     }
-    const t = resolveTooltip(x); if (t) setTooltipData(t);
-  }, [getX, resolveTooltip, resolveIndex]);
 
-  const onMouseLeave = useCallback(() => { setTooltipData(null); isDragging.current = false; setSelection(null); }, []);
-  const onMouseDown = useCallback((e) => { const x = getX(e); if (x === null) return; isDragging.current = true; dragStartX.current = x; setTooltipData(null); setSelection(null); }, [getX]);
+    const found = findPoint(x);
+    if (!found || found.index === lastIndexRef.current) return; // ⚡ skip render kalau titik data sama
+    lastIndexRef.current = found.index;
+    setTooltipData(buildTooltip(found.index, found.point));
+  }, [measureRect, pixelFromEvent, findPoint, buildTooltip]);
+
+  const onMouseLeave = useCallback(() => {
+    lastIndexRef.current = -1;
+    isDragging.current = false;
+    setTooltipData(null);
+    setSelection(null);
+  }, []);
+
+  const onMouseDown = useCallback((e) => {
+    measureRect();
+    const x = pixelFromEvent(e);
+    if (x === null) return;
+    isDragging.current = true;
+    dragStartX.current = x;
+    lastIndexRef.current = -1;
+    setTooltipData(null);
+    setSelection(null);
+  }, [measureRect, pixelFromEvent]);
+
   const onMouseUp = useCallback(() => { isDragging.current = false; setSelection(null); }, []);
-  const onTouchStart = useCallback((e) => { if (e.touches.length === 1) { e.preventDefault(); const x = getX(e, 0); if (x === null) return; const t = resolveTooltip(x); if (t) setTooltipData(t); } }, [getX, resolveTooltip]);
-  const onTouchMove = useCallback((e) => { if (e.touches.length === 1) { e.preventDefault(); const x = getX(e, 0); if (x === null) return; const t = resolveTooltip(x); if (t) setTooltipData(t); } }, [getX, resolveTooltip]);
-  const onTouchEnd = useCallback(() => { setTooltipData(null); setSelection(null); }, []);
+
+  // ⚡ FIX — dulu ada `e.preventDefault()` di sini, tapi React attach
+  // onTouchStart/onTouchMove sebagai PASSIVE listener secara default (demi
+  // performa scroll), jadi preventDefault() dari synthetic event ini selalu
+  // gagal dan browser nge-log "Unable to preventDefault inside passive event
+  // listener invocation". preventDefault()-nya sebenarnya redundant: gesture
+  // scroll/pan default browser di area chart ini sudah dicegah lewat CSS
+  // `touchAction: "none"` (lihat interactionStyle di bawah & style container
+  // di komponen AreaChart), jadi aman dihapus tanpa mengubah perilaku drag.
+  const onTouchStart = useCallback((e) => {
+    if (e.touches.length !== 1) return;
+    measureRect();
+    const x = pixelFromEvent(e);
+    if (x === null) return;
+    const found = findPoint(x);
+    if (!found) return;
+    lastIndexRef.current = found.index;
+    setTooltipData(buildTooltip(found.index, found.point));
+  }, [measureRect, pixelFromEvent, findPoint, buildTooltip]);
+
+  const onTouchMove = useCallback((e) => {
+    if (e.touches.length !== 1) return;
+    const x = pixelFromEvent(e);
+    if (x === null) return;
+    const found = findPoint(x);
+    if (!found || found.index === lastIndexRef.current) return;
+    lastIndexRef.current = found.index;
+    setTooltipData(buildTooltip(found.index, found.point));
+  }, [pixelFromEvent, findPoint, buildTooltip]);
+
+  const onTouchEnd = useCallback(() => { lastIndexRef.current = -1; setTooltipData(null); setSelection(null); }, []);
 
   return {
     tooltipData, setTooltipData, selection,
     clearSelection: useCallback(() => setSelection(null), []),
-    interactionHandlers: canInteract ? { onMouseMove, onMouseLeave, onMouseDown, onMouseUp, onTouchStart, onTouchMove, onTouchEnd } : {},
+    interactionHandlers: canInteract ? { onMouseEnter, onMouseMove, onMouseLeave, onMouseDown, onMouseUp, onTouchStart, onTouchMove, onTouchEnd } : {},
     interactionStyle: { cursor: canInteract ? "crosshair" : "default", touchAction: "none" },
   };
 }
 
 // ── Tooltip Components ────────────────────────────────────────────────────────
+// ⚡ Semua animasi di bawah ini dulu pakai `framer-motion` (useSpring), yang
+// artinya tiap elemen punya loop requestAnimationFrame SENDIRI yang jalan terus
+// selama hover/drag. Sekarang diganti transisi CSS murni (`transform` +
+// `transition`) — jauh lebih ringan karena dikerjakan compositor browser,
+// bukan JS, dan cuma "hidup" pas nilainya berubah (bukan tiap frame).
 
 function TooltipDot({ x, y, visible, color, size = 5 }) {
-  const cfg = { stiffness: 300, damping: 30 };
-  const ax = useSpring(x, cfg), ay = useSpring(y, cfg);
-  useEffect(() => { ax.set(x); ay.set(y); }, [x, y, ax, ay]);
   if (!visible) return null;
-  return <motion.circle cx={ax} cy={ay} fill={color} r={size} stroke="var(--chart-background)" strokeWidth={2} />;
+  return (
+    <circle
+      r={size} fill={color} stroke="var(--chart-background)" strokeWidth={2}
+      style={{ transform: `translate(${x}px, ${y}px)`, transition: "transform 150ms cubic-bezier(.22,.9,.32,1)", willChange: "transform" }}
+    />
+  );
 }
 
 function TooltipCrosshair({ x, height, visible }) {
-  const cfg = { stiffness: 300, damping: 30 };
-  const ax = useSpring(x, cfg);
-  useEffect(() => { ax.set(x); }, [x, ax]);
   if (!visible) return null;
-  return <motion.line x1={ax} x2={ax} y1={0} y2={height} stroke="var(--chart-crosshair)" strokeWidth={1} strokeDasharray="4 3" opacity={0.7} />;
+  return (
+    <line
+      x1={0} x2={0} y1={0} y2={height} stroke="var(--chart-crosshair)" strokeWidth={1} strokeDasharray="4 3" opacity={0.7}
+      style={{ transform: `translateX(${x}px)`, transition: "transform 150ms cubic-bezier(.22,.9,.32,1)", willChange: "transform" }}
+    />
+  );
 }
 
 function TooltipBox({ x, visible, containerRef, containerWidth, containerHeight, margin, children }) {
@@ -119,50 +194,52 @@ function TooltipBox({ x, visible, containerRef, containerWidth, containerHeight,
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
   useLayoutEffect(() => {
-    if (ref.current) { const w = ref.current.offsetWidth, h = ref.current.offsetHeight; if (w > 0) setTw(w); if (h > 0) setTh(h); }
+    if (!ref.current) return;
+    const w = ref.current.offsetWidth, h = ref.current.offsetHeight;
+    if (w > 0 && w !== tw) setTw(w);
+    if (h > 0 && h !== th) setTh(h);
   });
 
   const offset = 16;
   const flip = x + tw + offset > containerWidth;
   const targetX = flip ? x - offset - tw : x + offset;
   const targetY = Math.max(offset, Math.min(margin.top, containerHeight - th - offset));
-  const [fk, setFk] = useState(0);
-  const prevFlip = useRef(flip);
-  useEffect(() => { if (prevFlip.current !== flip) { setFk(k => k + 1); prevFlip.current = flip; } }, [flip]);
-
-  const cfg = { stiffness: 100, damping: 20 };
-  const al = useSpring(targetX, cfg), at = useSpring(targetY, cfg);
-  useEffect(() => { al.set(targetX); }, [targetX, al]);
-  useEffect(() => { at.set(targetY); }, [targetY, at]);
 
   const container = containerRef.current;
   if (!(mounted && container && visible)) return null;
 
   return createPortal(
-    <motion.div ref={ref} animate={{ opacity: 1 }} initial={{ opacity: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.1 }}
-      style={{ position: "absolute", pointerEvents: "none", zIndex: 50, left: al, top: at }}>
-      <motion.div key={fk} animate={{ scale: 1, opacity: 1, x: 0 }} initial={{ scale: 0.88, opacity: 0, x: flip ? 16 : -16 }}
-        transition={{ type: "spring", stiffness: 300, damping: 25 }}
-        style={{ minWidth: 150, overflow: "hidden", borderRadius: 10, background: "var(--chart-tooltip-background)", color: "var(--chart-tooltip-foreground)", boxShadow: "0 8px 32px rgba(0,0,0,.2)", backdropFilter: "blur(8px)", transformOrigin: flip ? "right top" : "left top" }}>
-        {children}
-      </motion.div>
-    </motion.div>,
+    <div
+      ref={ref}
+      style={{
+        position: "absolute", pointerEvents: "none", zIndex: 50, left: 0, top: 0,
+        transform: `translate(${targetX}px, ${targetY}px)`,
+        transition: "transform 150ms cubic-bezier(.22,.9,.32,1)",
+        willChange: "transform",
+        minWidth: 150, overflow: "hidden", borderRadius: 8,
+        background: "var(--chart-tooltip-background)", color: "var(--chart-tooltip-foreground)",
+        border: "1px solid var(--chart-tooltip-border, rgba(255,255,255,.08))",
+        boxShadow: "0 4px 16px rgba(0,0,0,.25)",
+      }}
+    >
+      {children}
+    </div>,
     container
   );
 }
 
 function TooltipContent({ title, rows }) {
   return (
-    <div style={{ padding: "10px 14px" }}>
-      {title && <div style={{ fontWeight: 700, fontSize: 12, color: "var(--chart-tooltip-foreground)", marginBottom: 8, opacity: 0.7 }}>{title}</div>}
-      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+    <div style={{ padding: "8px 12px" }}>
+      {title && <div style={{ fontWeight: 700, fontSize: 11.5, color: "var(--chart-tooltip-foreground)", marginBottom: 6, opacity: 0.7 }}>{title}</div>}
+      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
         {rows.map((row) => (
-          <div key={`${row.label}-${row.color}`} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-              <span style={{ width: 8, height: 8, borderRadius: "50%", background: row.color, flexShrink: 0, display: "inline-block" }} />
-              <span style={{ fontSize: 12, color: "var(--chart-tooltip-muted)" }}>{row.label}</span>
+          <div key={`${row.label}-${row.color}`} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <span style={{ width: 7, height: 7, borderRadius: "50%", background: row.color, flexShrink: 0, display: "inline-block" }} />
+              <span style={{ fontSize: 11.5, color: "var(--chart-tooltip-muted)" }}>{row.label}</span>
             </div>
-            <span style={{ fontSize: 12, fontWeight: 700, color: "var(--chart-tooltip-foreground)", fontVariantNumeric: "tabular-nums" }}>
+            <span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--chart-tooltip-foreground)", fontVariantNumeric: "tabular-nums" }}>
               {typeof row.value === "number" ? row.value.toLocaleString() : row.value}
             </span>
           </div>
@@ -173,17 +250,18 @@ function TooltipContent({ title, rows }) {
 }
 
 function DatePill({ x, index, labels, visible }) {
-  const cfg = { stiffness: 300, damping: 30 };
-  const ax = useSpring(x, cfg);
-  useEffect(() => { ax.set(x); }, [x, ax]);
   if (!visible || !labels[index]) return null;
   return (
-    <motion.div animate={{ opacity: 1 }} initial={{ opacity: 0 }}
-      style={{ position: "absolute", bottom: 4, left: ax, transform: "translateX(-50%)", pointerEvents: "none", zIndex: 50 }}>
+    <div style={{
+      position: "absolute", bottom: 4, left: 0, pointerEvents: "none", zIndex: 50,
+      transform: `translateX(${x}px) translateX(-50%)`,
+      transition: "transform 150ms cubic-bezier(.22,.9,.32,1)",
+      willChange: "transform",
+    }}>
       <div style={{ background: "#18181b", color: "#fff", borderRadius: 9999, padding: "3px 14px", fontSize: 12, fontWeight: 600, whiteSpace: "nowrap", boxShadow: "0 2px 8px rgba(0,0,0,.2)" }}>
         {labels[index]}
       </div>
-    </motion.div>
+    </div>
   );
 }
 
@@ -226,7 +304,7 @@ export function ChartTooltip({ showDatePill = true, showCrosshair = true, showDo
           <g transform={`translate(${margin.left},${margin.top})`}>
             {lines.map(line => (
               <TooltipDot key={line.dataKey} color={line.stroke} visible={visible}
-                x={tooltipData?.xPositions?.[line.dataKey] ?? x}
+                x={tooltipData?.x ?? x}
                 y={tooltipData?.yPositions[line.dataKey] ?? 0}
               />
             ))}
@@ -303,10 +381,9 @@ export function XAxis({ numTicks = 6 }) {
         }
         return (
           <div key={`${item.label}-${item.x}`} style={{ position: "absolute", left: item.x, bottom: 8, width: 0, display: "flex", justifyContent: "center" }}>
-            <motion.span animate={{ opacity }} initial={{ opacity: 1 }} transition={{ duration: 0.3 }}
-              style={{ fontSize: 11, color: "var(--chart-label)", whiteSpace: "nowrap", fontWeight: 500, display: "block" }}>
+            <span style={{ opacity, transition: "opacity 200ms ease", fontSize: 11, color: "var(--chart-label)", whiteSpace: "nowrap", fontWeight: 500, display: "block" }}>
               {item.label}
-            </motion.span>
+            </span>
           </div>
         );
       })}
@@ -348,49 +425,40 @@ export function YAxis({ numTicks = 5, formatValue, secondary = false }) {
   );
 }
 
-export function Area({ dataKey, fill = "var(--chart-line-primary)", fillOpacity = 0.15, stroke, strokeWidth = 2, curve = curveMonotoneX, animate = true, showHighlight = true, gradientToOpacity = 0, secondary = false }) {
+export function Area({ dataKey, fill = "var(--chart-line-primary)", fillOpacity = 0.15, stroke, strokeWidth = 2, curve = curveNatural, animate = true, showHighlight = true, gradientToOpacity = 0, secondary = false }) {
   const { data, xScale, yScale, secondaryYScale, innerHeight, innerWidth, tooltipData, selection, isLoaded, animationDuration, xAccessor } = useChart();
   const activeYScale = secondary && secondaryYScale ? secondaryYScale : yScale;
-  const pathRef = useRef(null);
-  const [pathLength, setPathLength] = useState(0);
   const [clipW, setClipW] = useState(0);
   const gradId = useId();
   const strokeGradId = useId();
+  const highlightClipId = useId();
   const resolvedStroke = stroke || fill;
 
   useEffect(() => {
-    if (pathRef.current && animate) {
-      const len = pathRef.current.getTotalLength();
-      if (len > 0) { setPathLength(len); if (!isLoaded) requestAnimationFrame(() => setClipW(innerWidth)); }
-    }
+    if (animate && !isLoaded) requestAnimationFrame(() => setClipW(innerWidth));
   }, [animate, innerWidth, isLoaded]);
 
-  const findLenAtX = useCallback((tx) => {
-    const path = pathRef.current;
-    if (!path || pathLength === 0) return 0;
-    let lo = 0, hi = pathLength;
-    while (hi - lo > 0.5) { const mid = (lo + hi) / 2; if (path.getPointAtLength(mid).x < tx) lo = mid; else hi = mid; }
-    return (lo + hi) / 2;
-  }, [pathLength]);
-
-  const segBounds = useMemo(() => {
-    if (!pathRef.current || pathLength === 0) return { startLength: 0, segmentLength: 0 };
-    if (selection?.active) {
-      const s = findLenAtX(selection.startX), e = findLenAtX(selection.endX);
-      return { startLength: s, segmentLength: e - s };
-    }
-    if (!tooltipData) return { startLength: 0, segmentLength: 0 };
-    const sp = data[Math.max(0, tooltipData.index - 1)], ep = data[Math.min(data.length - 1, tooltipData.index + 1)];
-    if (!sp || !ep) return { startLength: 0, segmentLength: 0 };
-    return { startLength: findLenAtX(xScale(xAccessor(sp)) ?? 0), segmentLength: findLenAtX(xScale(xAccessor(ep)) ?? 0) - findLenAtX(xScale(xAccessor(sp)) ?? 0) };
-  }, [tooltipData, selection, data, xScale, pathLength, xAccessor, findLenAtX]);
-
-  const scfg = { stiffness: 180, damping: 28 };
-  const offSpring = useSpring(0, scfg), lenSpring = useSpring(0, scfg);
-  const animDash = useMotionTemplate`${lenSpring} ${pathLength}`;
-  useEffect(() => { offSpring.set(-segBounds.startLength); lenSpring.set(segBounds.segmentLength); }, [segBounds.startLength, segBounds.segmentLength, offSpring, lenSpring]);
-
   const getY = useCallback((d) => { const v = d[dataKey]; return typeof v === "number" ? (activeYScale(v) ?? 0) : 0; }, [dataKey, activeYScale]);
+
+  // ⚡ REWRITE — segmen highlight dulu dihitung pakai `path.getPointAtLength()`
+  // (binary search ~30-40 iterasi PER update, dipanggil tiap gerakan mouse saat
+  // drag = puluhan ribu operasi SVG per detik → ini biang lag utamanya).
+  // Kurva default (`curveNatural`, sebelumnya `curveMonotoneX`) sama-sama
+  // menggambar y sebagai FUNGSI dari x yang urut ascending (bukan kurva
+  // parametrik yang bisa balik arah) — jadi clip berbasis piksel-X saja masih
+  // akurat secara visual, tidak perlu arc-length sama sekali. Cuma pakai
+  // xScale (matematika biasa, hampir gratis).
+  const highlightRange = useMemo(() => {
+    if (selection?.active) return { x: selection.startX, width: Math.max(0, selection.endX - selection.startX) };
+    if (!tooltipData) return null;
+    const sp = data[Math.max(0, tooltipData.index - 1)];
+    const ep = data[Math.min(data.length - 1, tooltipData.index + 1)];
+    if (!sp || !ep) return null;
+    const sx = xScale(xAccessor(sp)) ?? 0;
+    const ex = xScale(xAccessor(ep)) ?? 0;
+    return { x: sx, width: Math.max(0, ex - sx) };
+  }, [tooltipData, selection, data, xScale, xAccessor]);
+
   const isHovering = tooltipData !== null || selection?.active === true;
   const easing = "cubic-bezier(0.85, 0, 0.15, 1)";
 
@@ -407,24 +475,29 @@ export function Area({ dataKey, fill = "var(--chart-line-primary)", fillOpacity 
           <stop offset="88%" style={{ stopColor: resolvedStroke, stopOpacity: 1 }} />
           <stop offset="100%" style={{ stopColor: resolvedStroke, stopOpacity: 0 }} />
         </linearGradient>
-      </defs>
-      {animate && (
-        <defs>
+        {animate && (
           <clipPath id={`clip-${gradId}`}>
             <rect height={innerHeight + 20} x={0} y={0} width={isLoaded ? innerWidth : clipW}
               style={{ transition: !isLoaded && clipW > 0 ? `width ${animationDuration}ms ${easing}` : "none" }} />
           </clipPath>
-        </defs>
-      )}
+        )}
+        {showHighlight && highlightRange && (
+          <clipPath id={highlightClipId}>
+            <rect x={highlightRange.x} y={-10} width={highlightRange.width} height={innerHeight + 20} />
+          </clipPath>
+        )}
+      </defs>
       <g clipPath={animate ? `url(#clip-${gradId})` : undefined}>
-        <motion.g animate={{ opacity: isHovering && showHighlight ? 0.55 : 1 }} initial={{ opacity: 1 }} transition={{ duration: 0.35 }}>
+        <g style={{ opacity: isHovering && showHighlight ? 0.55 : 1, transition: "opacity 200ms ease" }}>
           <AreaClosed curve={curve} data={data} fill={`url(#${gradId})`} x={(d) => xScale(xAccessor(d)) ?? 0} y={getY} yScale={activeYScale} />
-          <LinePath curve={curve} data={data} innerRef={pathRef} stroke={`url(#${strokeGradId})`} strokeLinecap="round" strokeWidth={strokeWidth} x={(d) => xScale(xAccessor(d)) ?? 0} y={getY} />
-        </motion.g>
+          <LinePath curve={curve} data={data} stroke={`url(#${strokeGradId})`} strokeLinecap="round" strokeWidth={strokeWidth} x={(d) => xScale(xAccessor(d)) ?? 0} y={getY} />
+        </g>
+        {showHighlight && highlightRange && (
+          <g clipPath={`url(#${highlightClipId})`}>
+            <LinePath curve={curve} data={data} stroke={resolvedStroke} strokeLinecap="round" strokeWidth={strokeWidth} x={(d) => xScale(xAccessor(d)) ?? 0} y={getY} />
+          </g>
+        )}
       </g>
-      {isHovering && isLoaded && pathRef.current && (
-        <motion.path animate={{ opacity: 1 }} initial={{ opacity: 0 }} d={pathRef.current.getAttribute("d") || ""} fill="none" stroke={resolvedStroke} strokeLinecap="round" strokeWidth={strokeWidth} style={{ strokeDasharray: animDash, strokeDashoffset: offSpring }} transition={{ duration: 0.35 }} />
-      )}
     </>
   );
 }
@@ -453,42 +526,75 @@ function ChartInner({ width, height, data, xDataKey, margin, animationDuration, 
   const iH = height - margin.top - margin.bottom;
 
   const xAccessor = useCallback((d) => { const v = d[xDataKey]; return v instanceof Date ? v : new Date(v); }, [xDataKey]);
+
+  // ⚡ FIX — sort defensif berdasarkan tanggal. Tiga hal di bawah ini diam-diam
+  // MENGASUMSIKAN data sudah terurut kronologis, dan kalau tidak, hasilnya jadi
+  // "acak-acak" (garis nyeret balik, kurva liar):
+  //   1. `bisector(...).left` (d3-array) — binary search ini butuh array ascending,
+  //      dipakai untuk cari titik saat hover/drag. Kalau data tidak urut, titik
+  //      yang ditemukan bisa salah.
+  //   2. `LinePath`/`AreaClosed` menggambar garis mengikuti URUTAN ARRAY apa
+  //      adanya, bukan urutan tanggal — kalau array-nya tidak urut, garis akan
+  //      "loncat" ke kiri lalu nyambung lagi, keliatan seperti zigzag acak.
+  //   3. Kurva spline (`curveNatural`/`curveMonotoneX`) secara matematis cuma
+  //      valid untuk X yang monoton naik;
+  //      kalau tidak, interpolasinya bisa overshoot/berosilasi liar.
+  // Sort di sini bikin komponen aman dipakai walau data dari luar (misal hasil
+  // gabungan beberapa response API) urutannya belum tentu kronologis.
+  const sortedData = useMemo(() => {
+    return [...data].sort((a, b) => xAccessor(a).getTime() - xAccessor(b).getTime());
+  }, [data, xAccessor]);
+
   const bisectDate = useMemo(() => bisector((d) => xAccessor(d)).left, [xAccessor]);
 
   const xScale = useMemo(() => {
-    const dates = data.map(xAccessor);
+    const dates = sortedData.map(xAccessor);
     return scaleTime({ range: [0, iW], domain: [Math.min(...dates.map(d => d.getTime())), Math.max(...dates.map(d => d.getTime()))] });
-  }, [iW, data, xAccessor]);
+  }, [iW, sortedData, xAccessor]);
 
   const yScale = useMemo(() => {
     let max = 0;
-    for (const line of lines) { if (line.secondary) continue; for (const d of data) { const v = d[line.dataKey]; if (typeof v === "number" && v > max) max = v; } }
+    for (const line of lines) { if (line.secondary) continue; for (const d of sortedData) { const v = d[line.dataKey]; if (typeof v === "number" && v > max) max = v; } }
     if (max === 0) max = 100;
     return scaleLinear({ range: [iH, 0], domain: [0, max * 1.15], nice: true });
-  }, [iH, data, lines]);
+  }, [iH, sortedData, lines]);
 
   const hasSecondary = useMemo(() => lines.some(l => l.secondary), [lines]);
   const secondaryYScale = useMemo(() => {
     if (!hasSecondary) return null;
     let max = 0;
-    for (const line of lines) { if (!line.secondary) continue; for (const d of data) { const v = d[line.dataKey]; if (typeof v === "number" && v > max) max = v; } }
+    for (const line of lines) { if (!line.secondary) continue; for (const d of sortedData) { const v = d[line.dataKey]; if (typeof v === "number" && v > max) max = v; } }
     if (max === 0) max = 100;
     return scaleLinear({ range: [iH, 0], domain: [0, max * 1.15], nice: true });
-  }, [iH, data, lines, hasSecondary]);
+  }, [iH, sortedData, lines, hasSecondary]);
 
-  const columnWidth = useMemo(() => data.length < 2 ? 0 : iW / (data.length - 1), [iW, data.length]);
-  const dateLabels = useMemo(() => data.map(d => xAccessor(d).toLocaleDateString("id-ID", { day: "numeric", month: "short" })), [data, xAccessor]);
+  const columnWidth = useMemo(() => sortedData.length < 2 ? 0 : iW / (sortedData.length - 1), [iW, sortedData.length]);
+  const dateLabels = useMemo(() => sortedData.map(d => xAccessor(d).toLocaleDateString("id-ID", { day: "numeric", month: "short" })), [sortedData, xAccessor]);
 
   useEffect(() => { const t = setTimeout(() => setIsLoaded(true), animationDuration); return () => clearTimeout(t); }, [animationDuration]);
 
+  // ⚡ Penting: pakai `sortedData` di sini, bukan `data` mentah — supaya index
+  // yang dihasilkan bisector/findPoint konsisten dengan urutan yang dipakai
+  // untuk menggambar garis dan dateLabels di atas.
   const { tooltipData, setTooltipData, selection, clearSelection, interactionHandlers, interactionStyle } = useChartInteraction({
-    xScale, yScale, secondaryYScale, data, lines, margin, xAccessor, bisectDate, canInteract: isLoaded,
+    xScale, yScale, secondaryYScale, data: sortedData, lines, margin, xAccessor, bisectDate, canInteract: isLoaded, containerRef,
   });
+
+  // ⚡ Memo context value — dulu object literal ini dibuat ULANG SETIAP render,
+  // jadi semua consumer (Grid/XAxis/YAxis/ChartTooltip/Area) ikut re-render tiap
+  // kali ada perubahan apa pun. Sekarang cuma berubah kalau salah satu depedency
+  // di bawah beneran berubah.
+  const ctxValue = useMemo(() => ({
+    data: sortedData, xScale, yScale, secondaryYScale, width, height, innerWidth: iW, innerHeight: iH,
+    margin, columnWidth, tooltipData, setTooltipData, containerRef, lines, isLoaded,
+    animationDuration, xAccessor, dateLabels, selection, clearSelection,
+  }), [sortedData, xScale, yScale, secondaryYScale, width, height, iW, iH, margin, columnWidth,
+    tooltipData, containerRef, lines, isLoaded, animationDuration, xAccessor, dateLabels, selection, clearSelection]);
 
   if (width < 10 || height < 10) return null;
 
   return (
-    <ChartContext.Provider value={{ data, xScale, yScale, secondaryYScale, width, height, innerWidth: iW, innerHeight: iH, margin, columnWidth, tooltipData, setTooltipData, containerRef, lines, isLoaded, animationDuration, xAccessor, dateLabels, selection, clearSelection }}>
+    <ChartContext.Provider value={ctxValue}>
       <svg width={width} height={height} aria-hidden="true">
         <rect fill="transparent" width={width} height={height} />
         <g transform={`translate(${margin.left},${margin.top})`} {...interactionHandlers} style={interactionStyle}>
@@ -506,7 +612,7 @@ export function AreaChart({ data, xDataKey = "date", margin: marginProp, animati
   const containerRef = useRef(null);
   const margin = { ...DEFAULT_MARGIN, ...marginProp };
   return (
-    <div ref={containerRef} style={{ position: "relative", width: "100%", aspectRatio, touchAction: "none" }}>
+    <div ref={containerRef} className={className} style={{ position: "relative", width: "100%", aspectRatio, touchAction: "none" }}>
       <ParentSize debounceTime={10}>
         {({ width, height }) => (
           <ChartInner width={width} height={height} data={data} xDataKey={xDataKey} margin={margin} animationDuration={animationDuration} containerRef={containerRef}>

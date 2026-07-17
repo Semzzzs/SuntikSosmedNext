@@ -40,7 +40,7 @@ function ViewSkeleton() {
 // ── Popup "Berita Terbaru": daftar pengumuman dari Supabase, muncul tiap buka dashboard ──
 // Diam kalau user sudah "jangan tampilkan lagi", TAPI muncul lagi kalau ada pengumuman baru.
 const NEWS_TYPES = {
-  info: { label: 'Info', color: '#2563EB', darkColor: '#60A5FA', icon: <Info size={15} /> },
+  info: { label: 'Info', color: '#2f6bff', darkColor: '#7da4ff', icon: <Info size={15} /> },
   success: { label: 'Sukses', color: '#059669', darkColor: '#34D399', icon: <CheckCircle size={15} /> },
   warning: { label: 'Peringatan', color: '#D97706', darkColor: '#FCD34D', icon: <AlertCircle size={15} /> },
   promo: { label: 'Promo', color: '#7C3AED', darkColor: '#A78BFA', icon: <Zap size={15} /> },
@@ -71,7 +71,7 @@ function NewsPopup({ dark, items, onClose }) {
 
   return (
     <div className={`root${dark ? ' dark' : ''}`} onClick={finish}
-      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.6)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 16, fontFamily: "'Outfit',sans-serif", animation: 'nwFade .25s ease' }}>
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.6)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 16, fontFamily: "'Inter',sans-serif", animation: 'nwFade .25s ease' }}>
       <style>{`
         @keyframes nwFade { from { opacity: 0 } to { opacity: 1 } }
         @keyframes nwPop { from { opacity: 0; transform: translateY(16px) scale(.98) } to { opacity: 1; transform: none } }
@@ -84,7 +84,7 @@ function NewsPopup({ dark, items, onClose }) {
 
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '18px 22px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
-          <div style={{ width: 40, height: 40, borderRadius: 11, background: 'linear-gradient(135deg,#2563EB,#1D4ED8)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 14px rgba(37,99,235,.3)', flexShrink: 0 }}>
+          <div style={{ width: 40, height: 40, borderRadius: 11, background: 'linear-gradient(135deg,#2f6bff,#2456e0)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 14px rgba(47,107,255,.3)', flexShrink: 0 }}>
             <Megaphone size={19} style={{ color: '#fff' }} />
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -150,7 +150,7 @@ function NewsPopup({ dark, items, onClose }) {
             <span onClick={() => setDontShow(v => !v)}>Jangan tampilkan lagi</span>
           </label>
           <button onClick={finish}
-            style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '11px 22px', borderRadius: 12, border: 'none', background: 'var(--blue)', color: '#fff', fontSize: 13.5, fontWeight: 700, cursor: 'pointer', fontFamily: "'Outfit',sans-serif", boxShadow: '0 6px 18px rgba(37,99,235,.35)' }}>
+            style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '11px 22px', borderRadius: 12, border: 'none', background: 'var(--blue)', color: '#fff', fontSize: 13.5, fontWeight: 700, cursor: 'pointer', fontFamily: "'Inter',sans-serif", boxShadow: '0 6px 18px rgba(47,107,255,.35)' }}>
             Mengerti
           </button>
         </div>
@@ -418,7 +418,7 @@ export default function DashboardPage() {
     const active = menu === item.id;
     return (
       <button onClick={() => { setMenuAndSave(item.id); if (typeof window !== 'undefined' && window.innerWidth < 1024) setSideOpen(false); }}
-        style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '11px 14px', borderRadius: 12, border: 'none', cursor: 'pointer', fontFamily: "'Outfit',sans-serif", fontWeight: active ? 700 : 600, fontSize: 14, transition: 'all .18s', background: active ? 'var(--blue)' : 'transparent', color: active ? '#fff' : 'var(--text2)', boxShadow: active ? '0 6px 16px rgba(37,99,235,.30)' : 'none' }}
+        style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '11px 14px', borderRadius: 12, border: 'none', cursor: 'pointer', fontFamily: "'Inter',sans-serif", fontWeight: active ? 700 : 600, fontSize: 14, transition: 'all .18s', background: active ? 'var(--blue)' : 'transparent', color: active ? '#fff' : 'var(--text2)', boxShadow: active ? '0 6px 16px rgba(47,107,255,.30)' : 'none' }}
         onMouseEnter={e => { if (!active) e.currentTarget.style.background = 'var(--bg2)'; }}
         onMouseLeave={e => { if (!active) e.currentTarget.style.background = 'transparent'; }}>
         <span style={{ display: 'flex', color: active ? '#fff' : 'var(--text3)', flexShrink: 0 }}>{item.icon}</span>
@@ -429,7 +429,7 @@ export default function DashboardPage() {
   };
 
   if (authLoading) return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: 'var(--bg)', fontFamily: "'Outfit',sans-serif", fontSize: 14, color: 'var(--text3)' }}>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: 'var(--bg)', fontFamily: "'Inter',sans-serif", fontSize: 14, color: 'var(--text3)' }}>
       Loading...
     </div>
   );
@@ -437,7 +437,7 @@ export default function DashboardPage() {
   if (!user) return null;
 
   return (
-    <div className={`root ns-shell${dark ? ' dark' : ''}`} style={{ display: 'flex', overflow: 'hidden', fontFamily: "'Outfit',sans-serif" }}>
+    <div className={`root ns-shell${dark ? ' dark' : ''}`} style={{ display: 'flex', overflow: 'hidden', fontFamily: "'Inter',sans-serif" }}>
       <Head>
         {/* Cegah auto-zoom saat tap input di iOS & Android. viewport-fit=cover WAJIB ada
             supaya env(safe-area-inset-bottom) kebaca (home indicator iPhone) — tanpa ini
@@ -445,6 +445,7 @@ export default function DashboardPage() {
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
       </Head>
       <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
         .ns-shell {
           /* 100vh di iOS Safari dihitung dari viewport TERBESAR (saat address bar ngumpet),
              jadi kalau address bar lagi kebuka, layout jadi kelebihan tinggi → muncul area
@@ -499,7 +500,7 @@ export default function DashboardPage() {
 
         {/* Balance card */}
         {balance !== null && (
-          <div className="ns-balance-card" style={{ position: 'relative', overflow: 'hidden', margin: '0 12px 10px', background: 'linear-gradient(135deg, #2563EB 0%, #1D4ED8 55%, #1E3A8A 100%)', borderRadius: 14, padding: '14px 15px', boxShadow: '0 8px 22px rgba(37,99,235,.3), inset 0 1px 0 rgba(255,255,255,.16)' }}>
+          <div className="ns-balance-card" style={{ position: 'relative', overflow: 'hidden', margin: '0 12px 10px', background: 'linear-gradient(135deg, #2f6bff 0%, #2456e0 55%, #16327f 100%)', borderRadius: 14, padding: '14px 15px', boxShadow: '0 8px 22px rgba(47,107,255,.3), inset 0 1px 0 rgba(255,255,255,.16)' }}>
             <div className="ns-balance-pattern" />
             <div className="ns-balance-glow" />
             <div style={{ position: 'relative', zIndex: 1 }}>
@@ -510,7 +511,7 @@ export default function DashboardPage() {
                 </div>
               </div>
               <div style={{ fontSize: 19, fontWeight: 800, color: '#fff', letterSpacing: '-.02em', textShadow: '0 2px 8px rgba(0,0,0,.18)' }}>Rp {Math.round(balance || 0).toLocaleString('id-ID')}</div>
-              <button onClick={() => setMenuAndSave('Add Funds')} style={{ marginTop: 10, width: '100%', background: 'rgba(255,255,255,.18)', border: '1px solid rgba(255,255,255,.25)', borderRadius: 9, padding: '7px 10px', fontSize: 11.5, fontWeight: 700, color: '#fff', cursor: 'pointer', fontFamily: "'Outfit',sans-serif", display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, backdropFilter: 'blur(4px)', transition: 'background .15s' }}
+              <button onClick={() => setMenuAndSave('Add Funds')} style={{ marginTop: 10, width: '100%', background: 'rgba(255,255,255,.18)', border: '1px solid rgba(255,255,255,.25)', borderRadius: 9, padding: '7px 10px', fontSize: 11.5, fontWeight: 700, color: '#fff', cursor: 'pointer', fontFamily: "'Inter',sans-serif", display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, backdropFilter: 'blur(4px)', transition: 'background .15s' }}
                 onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,.28)'}
                 onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,.18)'}>
                 <CreditCard size={13} /> Add Funds
@@ -539,7 +540,7 @@ export default function DashboardPage() {
 
         <div style={{ padding: isMobile ? '10px 12px calc(64px + env(safe-area-inset-bottom, 0px))' : '10px 12px 16px', borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 4 }}>
           {navBottom.map(item => <SideLink key={item.id} item={item} />)}
-          <button onClick={logout} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '11px 14px', borderRadius: 12, border: 'none', cursor: 'pointer', fontFamily: "'Outfit',sans-serif", fontWeight: 600, fontSize: 14, color: 'var(--red)', background: 'transparent', transition: 'background .18s' }}
+          <button onClick={logout} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '11px 14px', borderRadius: 12, border: 'none', cursor: 'pointer', fontFamily: "'Inter',sans-serif", fontWeight: 600, fontSize: 14, color: 'var(--red)', background: 'transparent', transition: 'background .18s' }}
             onMouseEnter={e => e.currentTarget.style.background = 'var(--red-l)'}
             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
             <LogOut size={19} /> Sign Out
@@ -560,10 +561,10 @@ export default function DashboardPage() {
               </button>
               {/* Logo inline saat sidebar tutup */}
               <div onClick={() => router.push('/')} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-                <div style={{ width: 32, height: 32, borderRadius: 10, background: 'linear-gradient(135deg,#2563EB,#1D4ED8)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 12px rgba(37,99,235,.35)' }}>
+                <div style={{ width: 32, height: 32, borderRadius: 10, background: 'linear-gradient(135deg,#2f6bff,#2456e0)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 12px rgba(47,107,255,.35)' }}>
                   <img src="/logo.png" alt="SuntikSosmed" style={{ width: '70%', height: '70%', objectFit: 'contain' }} />
                 </div>
-                <span style={{ fontWeight: 800, fontSize: 16, color: 'var(--text)', letterSpacing: '-.02em', fontFamily: "'Outfit',sans-serif" }}>
+                <span style={{ fontWeight: 800, fontSize: 16, color: 'var(--text)', letterSpacing: '-.02em', fontFamily: "'Inter',sans-serif" }}>
                   Suntik<span style={{ color: 'var(--blue)' }}>Sosmed</span>
                 </span>
               </div>
@@ -597,7 +598,7 @@ export default function DashboardPage() {
                 <div className="card fu" style={{ position: 'absolute', right: 0, top: 'calc(100% + 10px)', width: 320, zIndex: 200, overflow: 'hidden', padding: 0 }}>
                   <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--text)' }}>Notifikasi {unreadCount > 0 && <span style={{ fontSize: 11, fontWeight: 700, color: '#fff', background: 'var(--red)', padding: '2px 7px', borderRadius: 20, marginLeft: 6 }}>{unreadCount}</span>}</span>
-                    {unreadCount > 0 && <button onClick={markAllRead} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: 'var(--blue)', fontWeight: 600, fontFamily: "'Outfit',sans-serif" }}>Tandai semua dibaca</button>}
+                    {unreadCount > 0 && <button onClick={markAllRead} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: 'var(--blue)', fontWeight: 600, fontFamily: "'Inter',sans-serif" }}>Tandai semua dibaca</button>}
                   </div>
                   {notifications.length === 0 ? (
                     <div style={{ padding: '32px 16px', textAlign: 'center', fontSize: 13, color: 'var(--text3)' }}>
@@ -629,7 +630,7 @@ export default function DashboardPage() {
             {/* Avatar / profile */}
             <div style={{ position: 'relative' }}>
               <button ref={profileBtnRef} onClick={handleProfileOpen} className="ns-top-btn"
-                style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 38, height: 38, flexShrink: 0, padding: 0, overflow: 'hidden', fontFamily: "'Outfit',sans-serif", transition: 'all .15s' }}>
+                style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 38, height: 38, flexShrink: 0, padding: 0, overflow: 'hidden', fontFamily: "'Inter',sans-serif", transition: 'all .15s' }}>
                 <Avatar seed={user?.email || user?.name} fallback={user?.initials?.charAt(0) || 'U'} size={30} radius={9} fontSize={12} />
               </button>
               {profileOpen && !isMobile && (
@@ -645,14 +646,14 @@ export default function DashboardPage() {
                     { label: 'My Orders', action: () => setMenuAndSave('My Orders') },
                     { label: 'Settings', action: () => setMenuAndSave('Settings') },
                   ].map(item => (
-                    <button key={item.label} onClick={() => { item.action(); setProfileOpen(false); }} style={{ width: '100%', padding: '10px 16px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', fontSize: 13.5, fontWeight: 600, color: 'var(--text)', fontFamily: "'Outfit',sans-serif", transition: 'background .15s' }}
+                    <button key={item.label} onClick={() => { item.action(); setProfileOpen(false); }} style={{ width: '100%', padding: '10px 16px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', fontSize: 13.5, fontWeight: 600, color: 'var(--text)', fontFamily: "'Inter',sans-serif", transition: 'background .15s' }}
                       onMouseEnter={e => e.currentTarget.style.background = 'var(--bg2)'}
                       onMouseLeave={e => e.currentTarget.style.background = 'none'}>
                       {item.label}
                     </button>
                   ))}
                   <div style={{ borderTop: '1px solid var(--border)', padding: '6px 0' }}>
-                    <button onClick={logout} style={{ width: '100%', padding: '10px 16px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', fontSize: 13.5, fontWeight: 600, color: 'var(--red)', fontFamily: "'Outfit',sans-serif" }}
+                    <button onClick={logout} style={{ width: '100%', padding: '10px 16px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', fontSize: 13.5, fontWeight: 600, color: 'var(--red)', fontFamily: "'Inter',sans-serif" }}
                       onMouseEnter={e => e.currentTarget.style.background = 'var(--red-l)'}
                       onMouseLeave={e => e.currentTarget.style.background = 'none'}>
                       Sign Out
@@ -679,7 +680,7 @@ export default function DashboardPage() {
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', marginBottom: 3 }}>Admin membalas tiket kamu!</div>
                 <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{toast.ticketSubject}</div>
-                <button onClick={() => { markRead(toast.id); setMenuAndSave('Tickets'); setToast(null); }} style={{ background: 'var(--blue)', color: '#fff', border: 'none', borderRadius: 7, padding: '5px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: "'Outfit',sans-serif" }}>
+                <button onClick={() => { markRead(toast.id); setMenuAndSave('Tickets'); setToast(null); }} style={{ background: 'var(--blue)', color: '#fff', border: 'none', borderRadius: 7, padding: '5px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: "'Inter',sans-serif" }}>
                   Lihat Balasan
                 </button>
               </div>
@@ -709,12 +710,12 @@ export default function DashboardPage() {
               { label: 'Settings', action: () => setMenuAndSave('Settings') },
             ].map(item => (
               <button key={item.label} onClick={() => { item.action(); setProfileOpen(false); }}
-                style={{ width: '100%', padding: '16px 20px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', fontSize: 15, fontWeight: 600, color: 'var(--text)', fontFamily: "'Outfit',sans-serif", borderBottom: '1px solid var(--border)' }}>
+                style={{ width: '100%', padding: '16px 20px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', fontSize: 15, fontWeight: 600, color: 'var(--text)', fontFamily: "'Inter',sans-serif", borderBottom: '1px solid var(--border)' }}>
                 {item.label}
               </button>
             ))}
             <button onClick={() => { logout(); setProfileOpen(false); }}
-              style={{ width: '100%', padding: '16px 20px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', fontSize: 15, fontWeight: 600, color: 'var(--red)', fontFamily: "'Outfit',sans-serif" }}>
+              style={{ width: '100%', padding: '16px 20px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', fontSize: 15, fontWeight: 600, color: 'var(--red)', fontFamily: "'Inter',sans-serif" }}>
               Sign Out
             </button>
           </div>
@@ -728,7 +729,7 @@ export default function DashboardPage() {
             <div style={{ width: 36, height: 4, borderRadius: 2, background: 'var(--border2)', margin: '12px auto 0' }} />
             <div style={{ padding: '12px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
               <span style={{ fontWeight: 700, fontSize: 15, color: 'var(--text)' }}>Notifikasi {unreadCount > 0 && <span style={{ fontSize: 11, fontWeight: 700, color: '#fff', background: 'var(--red)', padding: '2px 7px', borderRadius: 20, marginLeft: 6 }}>{unreadCount}</span>}</span>
-              {unreadCount > 0 && <button onClick={markAllRead} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: 'var(--blue)', fontWeight: 600, fontFamily: "'Outfit',sans-serif" }}>Tandai semua dibaca</button>}
+              {unreadCount > 0 && <button onClick={markAllRead} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: 'var(--blue)', fontWeight: 600, fontFamily: "'Inter',sans-serif" }}>Tandai semua dibaca</button>}
             </div>
             <div style={{ overflowY: 'auto', flex: 1 }} className="ns">
               {notifications.length === 0 ? (
@@ -769,7 +770,7 @@ export default function DashboardPage() {
               style={{
                 display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 3,
                 background: active ? 'var(--blue)' : 'transparent', border: 'none', cursor: 'pointer',
-                color: active ? '#fff' : 'var(--text3)', fontFamily: "'Outfit',sans-serif",
+                color: active ? '#fff' : 'var(--text3)', fontFamily: "'Inter',sans-serif",
                 fontSize: 9.5, fontWeight: 700, padding: '8px 12px', borderRadius: 16,
                 transition: 'all .25s cubic-bezier(.4,0,.2,1)', WebkitTapHighlightColor: 'transparent',
               }}>
