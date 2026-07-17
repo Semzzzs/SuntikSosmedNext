@@ -198,7 +198,10 @@ export default function ViewNewOrder({ user, setMenu }) {
     const CACHE_KEY = 'smm_services_cache_v4';
     const TS_KEY = 'smm_services_cache_ts_v4';
     const INVAL_KEY = 'smm_services_invalidated'; // ✅ FIX 6: flag invalidasi dari admin
-    const TTL = 1000 * 60 * 60 * 6; // 6 jam — anggap masih segar, skip refetch
+    // ✅ FIX HARGA BASI: TTL diturunkan 6 jam -> 10 menit. Dulu selama cache "fresh"
+    //    refetch di-skip total, jadi perubahan markup/kurs dari admin baru kelihatan
+    //    ke user setelah 6 jam. Sekarang maksimal telat 10 menit.
+    const TTL = 1000 * 60 * 10; // 10 menit
 
     // Cek flag invalidasi — admin bisa set localStorage['smm_services_invalidated']='1'
     // (mis. via /api/smm?action=invalidate_service_cache) untuk paksa reload semua client

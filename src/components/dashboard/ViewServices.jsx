@@ -58,9 +58,6 @@ const ListOuter = forwardRef(function ListOuter({ style, ...rest }, ref) {
 
 export default function ViewServices() {
   const [services, setServices] = useState([]);
-  const [rate, setRate] = useState(17687);
-  const [markup, setMarkup] = useState(1);
-  const [rules, setRules] = useState({ categories: {}, services: {}, providers: {} });
   const [stats, setStats] = useState({}); // { [service_id]: { avg_seconds, sample_count } }
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -80,25 +77,19 @@ export default function ViewServices() {
     let on = true;
     (async () => {
       try {
-        const [svcRes, mkRes, rateRes, statRes] = await Promise.all([
+        // ✅ Harga sudah final dari server — tidak perlu lagi fetch markup/kurs di client.
+        const [svcRes, statRes] = await Promise.all([
           fetch('/api/smm?action=services'),
-          fetch('/api/smm?action=get_public_markup'),
-          fetch('/api/rate'),
           fetch('/api/smm?action=service_stats'),
         ]);
 
         const svcData = await svcRes.json();
         if (!svcRes.ok) throw new Error(svcData?.error || 'Gagal memuat layanan');
 
-        const mk = await mkRes.json().catch(() => ({}));
-        const rt = await rateRes.json().catch(() => ({}));
         const st = await statRes.json().catch(() => ({}));
 
         if (!on) return;
         setServices(Array.isArray(svcData) ? svcData : []);
-        if (mk?.markup) setMarkup(parseFloat(mk.markup) || 1);
-        if (mk?.rules) setRules({ categories: mk.rules.categories || {}, services: mk.rules.services || {}, providers: mk.rules.providers || {} });
-        if (rt?.rate) setRate(rt.rate);
         if (st && typeof st === 'object') setStats(st);
       } catch (e) {
         if (on) setError(e.message);
@@ -109,14 +100,13 @@ export default function ViewServices() {
     return () => { on = false; };
   }, []);
 
-  // Markup efektif: service-specific > kategori > global (sama seperti smm.js)
+  // ✅ FIX DOBEL MARKUP: `rate` dari /api/smm?action=services SUDAH final
+  //    (modal × kurs × markup efektif dihitung server-side, currency sudah IDR).
+  //    Dulu di sini dikalikan markup lagi → harga user jadi modal × rule × global.
+  //    Client sekarang murni display — satu-satunya sumber harga adalah server.
   const priceIDR = useCallback((svc) => {
-    const eff = rules.services?.[String(svc.service)] ?? rules.categories?.[svc.category] ?? rules.providers?.[svc._provider || String(svc.service).split(':')[0]] ?? markup;
-    // ⚡ Faktor konversi: service USD (SMMSOC) -> kali kurs USD->IDR.
-    //    Service IDR (BuzzerPanel) -> faktor 1 (harga sudah Rupiah).
-    const fx = String(svc.currency || 'USD').toUpperCase() === 'IDR' ? 1 : rate;
-    return Math.round(parseFloat(svc.rate || 0) * fx * (eff || 1));
-  }, [rules, markup, rate]);
+    return Math.round(parseFloat(svc.rate || 0));
+  }, []);
 
   // Haystack pencarian per service, dihitung SEKALI saat services berubah.
   const searchable = useMemo(() =>
@@ -173,7 +163,7 @@ export default function ViewServices() {
 
     if (item.type === 'header') {
       return (
-        <div style={{ ...style, minWidth: 802, boxSizing: 'border-box', display: 'flex', alignItems: 'center', gap: 8, padding: '0 14px', background: 'var(--bg2)', borderBottom: '1px solid var(--border)', fontFamily: "'Outfit',sans-serif" }}>
+        <div style={{ ...style, minWidth: 802, boxSizing: 'border-box', display: 'flex', alignItems: 'center', gap: 8, padding: '0 14px', background: 'var(--bg2)', borderBottom: '1px solid var(--border)', fontFamily: "'Inter',sans-serif" }}>
           <span style={{ fontWeight: 800, fontSize: 14, color: 'var(--text)' }}>{item.cat}</span>
           <span style={{ fontWeight: 600, fontSize: 12.5, color: 'var(--text3)' }}>({item.count})</span>
         </div>
@@ -216,7 +206,7 @@ export default function ViewServices() {
   return (
     <div className="fu">
       <div style={{ marginBottom: 16 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text)', marginBottom: 3 }}>Service List</h1>
+        <h1 style={{ fontSize: 20, fontWeight: 700, color: 'var(--text)', marginBottom: 2, letterSpacing: '-.3px' }}>Service List</h1>
         <p style={{ fontSize: 13.5, color: 'var(--text2)' }}>
           {loading ? 'Memuat layanan…' : `${totalRows.toLocaleString('id-ID')} layanan · ${totalCats.toLocaleString('id-ID')} kategori`}
         </p>
@@ -232,7 +222,7 @@ export default function ViewServices() {
           style={{
             width: '100%', padding: '11px 14px 11px 40px', borderRadius: 12,
             border: '1.5px solid var(--border)', background: 'var(--bg2)', color: 'var(--text)',
-            fontSize: 13.5, fontFamily: "'Outfit',sans-serif", outline: 'none', boxSizing: 'border-box',
+            fontSize: 13.5, fontFamily: "'Inter',sans-serif", outline: 'none', boxSizing: 'border-box',
           }}
           onFocus={e => { e.target.style.borderColor = 'var(--blue)'; }}
           onBlur={e => { e.target.style.borderColor = 'var(--border)'; }}
